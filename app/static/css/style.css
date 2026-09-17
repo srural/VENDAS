@@ -666,12 +666,24 @@ body {
 }
 
 .pos-table-card {
-  min-height: 400px;
+  min-height: 200px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pos-table-card .table-responsive {
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .pos-cart-table th {
   background: #1e3a8a;
   color: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .pos-cart-table td {

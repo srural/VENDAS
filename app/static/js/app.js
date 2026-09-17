@@ -1986,19 +1986,35 @@ function setPdvViewMode(mode) {
 
   const photoPanel = document.getElementById('pdv-photo-panel');
   const barcodeCard = document.getElementById('pdv-barcode-entry-card');
+  const cartCard = document.getElementById('pdv-cart-table-card');
   const photoGrid = document.getElementById('pdv-photo-grid');
 
   if (mode === 'split') {
     if (photoPanel) photoPanel.style.display = 'flex';
     if (barcodeCard) barcodeCard.style.display = 'block';
+    if (cartCard) {
+      cartCard.style.display = 'flex';
+      cartCard.style.minHeight = '180px';
+      cartCard.style.maxHeight = '280px';
+    }
     if (photoGrid) photoGrid.style.maxHeight = '380px';
   } else if (mode === 'catalog') {
     if (photoPanel) photoPanel.style.display = 'flex';
     if (barcodeCard) barcodeCard.style.display = 'none';
-    if (photoGrid) photoGrid.style.maxHeight = '580px';
+    if (cartCard) {
+      cartCard.style.display = 'flex';
+      cartCard.style.minHeight = '140px';
+      cartCard.style.maxHeight = '220px';
+    }
+    if (photoGrid) photoGrid.style.maxHeight = '560px';
   } else if (mode === 'table') {
     if (photoPanel) photoPanel.style.display = 'none';
     if (barcodeCard) barcodeCard.style.display = 'block';
+    if (cartCard) {
+      cartCard.style.display = 'flex';
+      cartCard.style.minHeight = '420px';
+      cartCard.style.maxHeight = '580px';
+    }
   }
 }
 

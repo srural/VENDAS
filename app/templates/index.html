@@ -358,9 +358,63 @@
 
           <!-- POS Main Grid (Cart vs Summary) -->
           <div class="pos-main-grid">
-            <!-- Left Side: Photo Panel & Cart List -->
+            <!-- Left Side: Barcode, Cart List & Photo Panel -->
             <div class="pos-cart-container" id="pdv-left-container">
               
+              <!-- Item Entry Bar (Leitor de Código de Barras) -->
+              <div class="pos-entry-card" id="pdv-barcode-entry-card">
+                <div class="pos-entry-grid">
+                  <div class="form-group col-7">
+                    <label>Código de Barras / Nome do Produto [F2]:</label>
+                    <div class="search-input-wrapper">
+                      <i class="fa-solid fa-barcode search-icon"></i>
+                      <input type="text" id="pdv-barcode-input" class="search-input barcode-focus" placeholder="Escaneie o código de barras ou digite..." autofocus>
+                    </div>
+                  </div>
+
+                  <div class="form-group col-2">
+                    <label>Qtd:</label>
+                    <input type="number" id="pdv-qty-input" class="form-control" value="1" min="0.001" step="1">
+                  </div>
+
+                  <div class="form-group col-3" style="justify-content: flex-end;">
+                    <button class="btn btn-primary" id="pdv-add-btn" onclick="addPdvItemFromInput()" style="height: 42px;">
+                      <i class="fa-solid fa-plus"></i> Adicionar Item
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Auto-complete product results overlay -->
+                <div class="pos-results-overlay" id="pdv-results-overlay" style="display: none;"></div>
+              </div>
+
+              <!-- Cart Table Card -->
+              <div class="table-card pos-table-card" id="pdv-cart-table-card">
+                <div class="table-responsive">
+                  <table class="data-table pos-cart-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 50px;">Item</th>
+                        <th style="width: 100px;">Cód.</th>
+                        <th>Descrição do Produto</th>
+                        <th style="text-align: right; width: 90px;">Qtd</th>
+                        <th style="text-align: right; width: 120px;">Vlr. Unit</th>
+                        <th style="text-align: right; width: 130px;">Subtotal</th>
+                        <th style="width: 70px; text-align: center;">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pdv-cart-tbody">
+                      <tr>
+                        <td colspan="7" class="loading-td" style="padding: 2.5rem !important;">
+                          <i class="fa-solid fa-cart-shopping fa-3x" style="color: var(--border-color-strong); margin-bottom: 0.75rem;"></i>
+                          <div>Caixa Aberto. Digite ou escaneie o código de barras do produto para iniciar.</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <!-- PAINEL DE VENDA POR FOTOS (CATÁLOGO TOUCH & CLIQUE) -->
               <div class="pdv-photo-panel" id="pdv-photo-panel">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
@@ -395,59 +449,6 @@
                 </div>
               </div>
 
-              <!-- Item Entry Bar (Leitor de Código de Barras) -->
-              <div class="pos-entry-card" id="pdv-barcode-entry-card">
-                <div class="pos-entry-grid">
-                  <div class="form-group col-7">
-                    <label>Código de Barras / Nome do Produto [F2]:</label>
-                    <div class="search-input-wrapper">
-                      <i class="fa-solid fa-barcode search-icon"></i>
-                      <input type="text" id="pdv-barcode-input" class="search-input barcode-focus" placeholder="Escaneie o código de barras ou digite..." autofocus>
-                    </div>
-                  </div>
-
-                  <div class="form-group col-2">
-                    <label>Qtd:</label>
-                    <input type="number" id="pdv-qty-input" class="form-control" value="1" min="0.001" step="1">
-                  </div>
-
-                  <div class="form-group col-3" style="justify-content: flex-end;">
-                    <button class="btn btn-primary" id="pdv-add-btn" onclick="addPdvItemFromInput()" style="height: 42px;">
-                      <i class="fa-solid fa-plus"></i> Adicionar Item
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Auto-complete product results overlay -->
-                <div class="pos-results-overlay" id="pdv-results-overlay" style="display: none;"></div>
-              </div>
-
-              <!-- Cart Table Card -->
-              <div class="table-card pos-table-card">
-                <div class="table-responsive">
-                  <table class="data-table pos-cart-table">
-                    <thead>
-                      <tr>
-                        <th style="width: 50px;">Item</th>
-                        <th style="width: 100px;">Cód.</th>
-                        <th>Descrição do Produto</th>
-                        <th style="text-align: right; width: 90px;">Qtd</th>
-                        <th style="text-align: right; width: 120px;">Vlr. Unit</th>
-                        <th style="text-align: right; width: 130px;">Subtotal</th>
-                        <th style="width: 70px; text-align: center;">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody id="pdv-cart-tbody">
-                      <tr>
-                        <td colspan="7" class="loading-td" style="padding: 4rem !important;">
-                          <i class="fa-solid fa-cart-shopping fa-3x" style="color: var(--border-color-strong); margin-bottom: 0.75rem;"></i>
-                          <div>Caixa Aberto. Digite ou escaneie o código de barras do produto para iniciar.</div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
 
             <!-- Right Side: POS Total Summary & Hotkeys -->
