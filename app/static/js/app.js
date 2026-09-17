@@ -1667,6 +1667,121 @@ function cancelPdvSale() {
   showToast('Venda cancelada', 'error');
 }
 
+let pdvSelectedPayMethod = 'DINHEIRO';
+let pdvSelectedPayMethodName = 'DINHEIRO';
+let pdvSelectedPayMethodTipo = 'DINHEIRO';
+let pdvAllFormasPgto = [];
+
+async function loadPdvPaymentMethods() {
+  try {
+    const res = await fetch('/api/formas-pgto?all=1');
+    if (!res.ok) return;
+    pdvAllFormasPgto = await res.json();
+    
+    const select = document.getElementById('pay-select-outras-formas');
+    if (!select || !Array.isArray(pdvAllFormasPgto)) return;
+
+    select.innerHTML = '<option value="">-- Selecione outra forma de pagamento cadastrada --</option>';
+    
+    pdvAllFormasPgto.forEach(f => {
+      if (f.Ativo === 0) return;
+      const opt = document.createElement('option');
+      opt.value = f.id_forma;
+      const parcels = f.Parcelas && f.Parcelas > 1 ? ` (${f.Parcelas}x)` : '';
+      const days = f.DiasEntreParcelas && f.DiasEntreParcelas > 0 ? ` [${f.DiasEntreParcelas} dias]` : '';
+      opt.textContent = `${f.Nome || f.Codigo}${parcels}${days}`;
+      opt.dataset.codigo = f.Codigo || '';
+      opt.dataset.nome = f.Nome || f.Codigo || '';
+      opt.dataset.tipo = f.Tipo || 'A_VISTA';
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('Erro ao carregar formas de pagamento no PDV:', err);
+  }
+}
+
+function selectPdvPaymentMethod(code, name, tipo) {
+  pdvSelectedPayMethod = code;
+  pdvSelectedPayMethodName = name;
+  pdvSelectedPayMethodTipo = tipo;
+
+  // Atualiza classes ativas nos cards principais
+  document.querySelectorAll('.payment-methods-grid .pay-method-card').forEach(card => {
+    card.classList.remove('active');
+  });
+
+  const activeCard = document.getElementById(`pay-card-${code}`);
+  if (activeCard) {
+    activeCard.classList.add('active');
+  }
+
+  // Reseta select de outras formas
+  const select = document.getElementById('pay-select-outras-formas');
+  if (select && activeCard) {
+    select.value = '';
+  }
+
+  // Atualiza badge visual
+  const badge = document.getElementById('pay-selected-badge');
+  if (badge) {
+    badge.innerHTML = `<i class="fa-solid fa-check"></i> ${escapeHtml(name)}`;
+  }
+
+  // Exibe/oculta campos de dinheiro e troco
+  const isCash = tipo === 'DINHEIRO' || code === 'DINHEIRO' || code === 'A_VISTA';
+  const cashInputs = document.getElementById('pay-cash-inputs');
+  const changePanel = document.getElementById('pay-change-panel');
+  if (cashInputs && changePanel) {
+    cashInputs.style.display = isCash ? 'flex' : 'none';
+    changePanel.style.display = isCash ? 'flex' : 'none';
+  }
+
+  if (isCash) {
+    const valRecEl = document.getElementById('pay-valor-recebido');
+    if (valRecEl) {
+      valRecEl.focus();
+      valRecEl.select();
+    }
+  }
+}
+
+function onOtherPaymentMethodChange(selectEl) {
+  const selectedId = selectEl.value;
+  if (!selectedId) {
+    selectPdvPaymentMethod('DINHEIRO', 'DINHEIRO', 'DINHEIRO');
+    return;
+  }
+
+  const selectedOpt = selectEl.options[selectEl.selectedIndex];
+  const code = selectedOpt.dataset.codigo || selectedOpt.textContent;
+  const name = selectedOpt.dataset.nome || selectedOpt.textContent;
+  const tipo = selectedOpt.dataset.tipo || 'OUTRO';
+
+  pdvSelectedPayMethod = code;
+  pdvSelectedPayMethodName = name;
+  pdvSelectedPayMethodTipo = tipo;
+
+  // Desmarca os 4 cards principais
+  document.querySelectorAll('.payment-methods-grid .pay-method-card').forEach(card => {
+    card.classList.remove('active');
+  });
+
+  // Atualiza badge visual
+  const badge = document.getElementById('pay-selected-badge');
+  if (badge) {
+    badge.innerHTML = `<i class="fa-solid fa-check"></i> ${escapeHtml(name)}`;
+  }
+
+  // Oculta troco se não for dinheiro
+  const isCash = tipo === 'DINHEIRO' || code === 'DINHEIRO' || code === 'A_VISTA';
+  const cashInputs = document.getElementById('pay-cash-inputs');
+  const changePanel = document.getElementById('pay-change-panel');
+  if (cashInputs && changePanel) {
+    cashInputs.style.display = isCash ? 'flex' : 'none';
+    changePanel.style.display = isCash ? 'flex' : 'none';
+  }
+}
+
 function openPaymentModal() {
   if (!pdvCart.length) {
     showToast('O carrinho está vazio. Adicione produtos antes de finalizar.', 'error');
@@ -1682,27 +1797,18 @@ function openPaymentModal() {
   }
 
   calcPdvTotals();
+  loadPdvPaymentMethods();
+  selectPdvPaymentMethod('DINHEIRO', 'DINHEIRO', 'DINHEIRO');
+
   document.getElementById('pdv-payment-modal').classList.add('active');
-  if (valRecEl) valRecEl.focus();
+  if (valRecEl) {
+    valRecEl.focus();
+    valRecEl.select();
+  }
 }
 
 function closePaymentModal() {
   document.getElementById('pdv-payment-modal').classList.remove('active');
-}
-
-function onPaymentMethodChange(method) {
-  document.querySelectorAll('.pay-method-card').forEach(card => {
-    const radio = card.querySelector('input');
-    card.classList.toggle('active', radio && radio.value === method);
-  });
-
-  const cashInputs = document.getElementById('pay-cash-inputs');
-  const changePanel = document.getElementById('pay-change-panel');
-  if (cashInputs && changePanel) {
-    const isCash = method === 'DINHEIRO';
-    cashInputs.style.display = isCash ? 'flex' : 'none';
-    changePanel.style.display = isCash ? 'flex' : 'none';
-  }
 }
 
 let lastSaleData = null;
@@ -1717,9 +1823,7 @@ async function submitPdvSale(emitirNfceFlag = true) {
   const selectedEnt = parseInt(document.getElementById('pdv-select-entidade').value, 10) || 1;
   const selectedVend = parseInt(document.getElementById('pdv-select-vendedor').value, 10) || 1;
 
-  let payMethod = 'DINHEIRO';
-  const checkedRadio = document.querySelector('input[name="pay-method"]:checked');
-  if (checkedRadio) payMethod = checkedRadio.value;
+  const payMethod = pdvSelectedPayMethodName || pdvSelectedPayMethod || 'DINHEIRO';
 
   const payload = {
     CodEntidade: selectedEnt,

@@ -185,9 +185,29 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(transp, "modFrete").text = "9" # Sem Frete
 
     # <pag> (Pagamento)
+    cond_pgto_raw = str(sale.get("CondPgto", "DINHEIRO") or "").upper().strip()
+    if "PIX" in cond_pgto_raw:
+        t_pag = "17" # PIX
+    elif "CRED" in cond_pgto_raw or "CRÉD" in cond_pgto_raw:
+        t_pag = "03" # Cartão de Crédito
+    elif "DEB" in cond_pgto_raw or "DÉB" in cond_pgto_raw:
+        t_pag = "04" # Cartão de Débito
+    elif "BOLETO" in cond_pgto_raw:
+        t_pag = "15" # Boleto Bancário
+    elif any(k in cond_pgto_raw for k in ["30", "60", "90", "PRAZO", "DUPLICATA", "CREDIARIO"]):
+        t_pag = "05" # Crédito Loja / Prazo
+    elif "CHEQUE" in cond_pgto_raw:
+        t_pag = "02" # Cheque
+    elif "VALE" in cond_pgto_raw or "ALIMENTA" in cond_pgto_raw:
+        t_pag = "10" # Vale Alimentação / Refeição
+    elif "DINHEIRO" in cond_pgto_raw or "VISTA" in cond_pgto_raw:
+        t_pag = "01" # Dinheiro
+    else:
+        t_pag = "99" # Outros
+
     pag = ET.SubElement(inf_nfe, "pag")
     det_pag = ET.SubElement(pag, "detPag")
-    ET.SubElement(det_pag, "tPag").text = "01" # Dinheiro / Padrão
+    ET.SubElement(det_pag, "tPag").text = t_pag
     ET.SubElement(det_pag, "vPag").text = f"{v_liquido:.2f}"
 
     # <infAdic>

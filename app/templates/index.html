@@ -2154,31 +2154,47 @@
 
         <!-- Forma de Pagamento -->
         <div>
-          <label class="form-label" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">SELECIONE A FORMA DE PAGAMENTO:</label>
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
-            <label class="pay-method-card active" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 2px solid var(--accent-blue); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
-              <input type="radio" name="pay-method" value="DINHEIRO" checked onchange="onPaymentMethodChange('DINHEIRO')">
-              <i class="fa-solid fa-money-bill-wave" style="color: var(--accent-emerald); font-size: 1.25rem;"></i>
-              <span style="font-weight: 600;">DINHEIRO</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+            <label class="form-label" style="font-weight: 700; margin: 0; font-size: 0.9rem;">
+              <i class="fa-solid fa-wallet" style="color: var(--accent-blue);"></i> PRINCIPAIS FORMAS DE PAGAMENTO:
             </label>
+            <span class="badge badge-active" id="pay-selected-badge" style="font-size: 0.8rem;">
+              <i class="fa-solid fa-check"></i> DINHEIRO
+            </span>
+          </div>
+
+          <!-- Cards em Destaque das Principais Formas -->
+          <div class="payment-methods-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+            <div class="pay-method-card active" id="pay-card-DINHEIRO" onclick="selectPdvPaymentMethod('DINHEIRO', 'DINHEIRO', 'DINHEIRO')">
+              <i class="fa-solid fa-money-bill-wave" style="color: var(--accent-emerald); font-size: 1.5rem;"></i>
+              <span style="font-weight: 700; font-size: 0.9rem;">DINHEIRO</span>
+            </div>
             
-            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
-              <input type="radio" name="pay-method" value="PIX" onchange="onPaymentMethodChange('PIX')">
-              <i class="fa-solid fa-qrcode" style="color: var(--accent-purple); font-size: 1.25rem;"></i>
-              <span style="font-weight: 600;">PIX / DÉBITO</span>
-            </label>
+            <div class="pay-method-card" id="pay-card-PIX" onclick="selectPdvPaymentMethod('PIX', 'PIX / TRANSFERÊNCIA', 'PIX')">
+              <i class="fa-solid fa-qrcode" style="color: var(--accent-purple); font-size: 1.5rem;"></i>
+              <span style="font-weight: 700; font-size: 0.9rem;">PIX / DÉBITO</span>
+            </div>
 
-            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
-              <input type="radio" name="pay-method" value="CARTAO_DEBITO" onchange="onPaymentMethodChange('CARTAO_DEBITO')">
-              <i class="fa-solid fa-credit-card" style="color: var(--accent-cyan); font-size: 1.25rem;"></i>
-              <span style="font-weight: 600;">CARTÃO DÉBITO</span>
-            </label>
+            <div class="pay-method-card" id="pay-card-CARTAO_DEB" onclick="selectPdvPaymentMethod('CARTAO_DEB', 'CARTÃO DE DÉBITO', 'CARTAO')">
+              <i class="fa-solid fa-credit-card" style="color: var(--accent-cyan); font-size: 1.5rem;"></i>
+              <span style="font-weight: 700; font-size: 0.9rem;">CARTÃO DÉBITO</span>
+            </div>
 
-            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
-              <input type="radio" name="pay-method" value="CARTAO_CREDITO" onchange="onPaymentMethodChange('CARTAO_CREDITO')">
-              <i class="fa-solid fa-credit-card" style="color: var(--accent-amber); font-size: 1.25rem;"></i>
-              <span style="font-weight: 600;">CARTÃO CRÉDITO</span>
+            <div class="pay-method-card" id="pay-card-CARTAO_CRED" onclick="selectPdvPaymentMethod('CARTAO_CRED', 'CARTÃO DE CRÉDITO', 'CARTAO')">
+              <i class="fa-solid fa-credit-card" style="color: var(--accent-amber); font-size: 1.5rem;"></i>
+              <span style="font-weight: 700; font-size: 0.9rem;">CARTÃO CRÉDITO</span>
+            </div>
+          </div>
+
+          <!-- Seção de Outras Formas Cadastradas no Banco -->
+          <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-surface-elevated); border: 1px dashed var(--border-color-strong); border-radius: var(--radius-md);">
+            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">
+              <i class="fa-solid fa-list-ul"></i> Outras Formas do Cadastro (Prazo, Boleto, Convênio, etc.):
             </label>
+            <select id="pay-select-outras-formas" class="filter-select" style="width: 100%;" onchange="onOtherPaymentMethodChange(this)">
+              <option value="">-- Selecione outra forma de pagamento cadastrada --</option>
+              <!-- Carregado via JS -->
+            </select>
           </div>
         </div>
 

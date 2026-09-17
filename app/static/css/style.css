@@ -1010,39 +1010,48 @@ body {
   background: var(--bg-surface-elevated);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 0.9rem 0.5rem;
+  padding: 0.95rem 0.75rem;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: center;
-  position: relative;
-}
-
-.pay-method-card input {
-  position: absolute;
-  opacity: 0;
+  user-select: none;
 }
 
 .pay-method-card i {
-  font-size: 1.5rem;
-  color: var(--accent-blue);
+  font-size: 1.6rem;
+  transition: transform var(--transition-fast);
 }
 
 .pay-method-card span {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
-.pay-method-card:hover, .pay-method-card.active {
-  border-color: var(--accent-emerald);
-  background: rgba(5, 150, 105, 0.08);
+.pay-method-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
-.pay-method-card.active i {
-  color: var(--accent-emerald);
+.pay-method-card:hover i {
+  transform: scale(1.1);
+}
+
+.pay-method-card.active {
+  border-color: var(--accent-emerald) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
+}
+
+.pay-method-card.active span {
+  color: var(--accent-emerald) !important;
+  font-weight: 700 !important;
 }
 
 
