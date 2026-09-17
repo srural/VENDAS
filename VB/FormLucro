@@ -1,0 +1,272 @@
+VERSION 5.00
+Object = "{BDC217C8-ED16-11CD-956C-0000C04E4C0A}#1.1#0"; "TABCTL32.OCX"
+Object = "{00028C01-0000-0000-0000-000000000046}#1.0#0"; "DBGRID32.OCX"
+Begin VB.Form FormLucro 
+   BorderStyle     =   1  'Fixed Single
+   ClientHeight    =   7770
+   ClientLeft      =   420
+   ClientTop       =   705
+   ClientWidth     =   11685
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   MDIChild        =   -1  'True
+   MinButton       =   0   'False
+   ScaleHeight     =   7770
+   ScaleWidth      =   11685
+   Begin VB.PictureBox Picture2 
+      Appearance      =   0  'Flat
+      BackColor       =   &H00FFFFFF&
+      ForeColor       =   &H80000008&
+      Height          =   375
+      Left            =   -90
+      ScaleHeight     =   345
+      ScaleWidth      =   11820
+      TabIndex        =   12
+      Top             =   7425
+      Width           =   11850
+   End
+   Begin VB.PictureBox Picture1 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000002&
+      BorderStyle     =   0  'None
+      ForeColor       =   &H80000008&
+      Height          =   555
+      Left            =   0
+      ScaleHeight     =   555
+      ScaleWidth      =   13155
+      TabIndex        =   10
+      Top             =   0
+      Width           =   13155
+      Begin VB.Label Label8 
+         BackStyle       =   0  'Transparent
+         Caption         =   "Estatística da Margem de Lucro"
+         BeginProperty Font 
+            Name            =   "Verdana"
+            Size            =   15.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   -1  'True
+            Strikethrough   =   0   'False
+         EndProperty
+         ForeColor       =   &H80000009&
+         Height          =   465
+         Left            =   225
+         TabIndex        =   11
+         Top             =   45
+         Width           =   8115
+      End
+   End
+   Begin TabDlg.SSTab SSTab1 
+      Height          =   6450
+      Left            =   390
+      TabIndex        =   0
+      Top             =   660
+      Width           =   10815
+      _ExtentX        =   19076
+      _ExtentY        =   11377
+      _Version        =   393216
+      Tabs            =   2
+      TabHeight       =   520
+      Enabled         =   0   'False
+      TabCaption(0)   =   "Tabela"
+      TabPicture(0)   =   "FormLucro.frx":0000
+      Tab(0).ControlEnabled=   -1  'True
+      Tab(0).Control(0)=   "Label1"
+      Tab(0).Control(0).Enabled=   0   'False
+      Tab(0).Control(1)=   "Label2"
+      Tab(0).Control(1).Enabled=   0   'False
+      Tab(0).Control(2)=   "Label3"
+      Tab(0).Control(2).Enabled=   0   'False
+      Tab(0).Control(3)=   "TxtProd"
+      Tab(0).Control(3).Enabled=   0   'False
+      Tab(0).Control(4)=   "TxtMargem"
+      Tab(0).Control(4).Enabled=   0   'False
+      Tab(0).Control(5)=   "DatDados(0)"
+      Tab(0).Control(5).Enabled=   0   'False
+      Tab(0).Control(6)=   "Frame1"
+      Tab(0).Control(6).Enabled=   0   'False
+      Tab(0).Control(7)=   "DBGrid1"
+      Tab(0).Control(7).Enabled=   0   'False
+      Tab(0).ControlCount=   8
+      TabCaption(1)   =   "Gráfico"
+      TabPicture(1)   =   "FormLucro.frx":001C
+      Tab(1).ControlEnabled=   0   'False
+      Tab(1).ControlCount=   0
+      Begin MSDBGrid.DBGrid DBGrid1 
+         Bindings        =   "FormLucro.frx":0038
+         Height          =   5415
+         Left            =   360
+         OleObjectBlob   =   "FormLucro.frx":0052
+         TabIndex        =   6
+         Top             =   720
+         Width           =   7620
+      End
+      Begin VB.Frame Frame1 
+         Caption         =   "Ordem"
+         Height          =   1140
+         Left            =   8280
+         TabIndex        =   7
+         Top             =   765
+         Width           =   1680
+         Begin VB.OptionButton Opt 
+            Caption         =   "Média"
+            Height          =   330
+            Index           =   1
+            Left            =   225
+            TabIndex        =   9
+            Top             =   675
+            Width           =   1095
+         End
+         Begin VB.OptionButton Opt 
+            Caption         =   "Total Itens"
+            Height          =   330
+            Index           =   0
+            Left            =   225
+            TabIndex        =   8
+            Top             =   270
+            Value           =   -1  'True
+            Width           =   1095
+         End
+      End
+      Begin VB.Data DatDados 
+         Caption         =   "Data1"
+         Connect         =   "Access"
+         DatabaseName    =   "C:\AATESTE\Reta\Produtos.mdb"
+         DefaultCursorType=   0  'DefaultCursor
+         DefaultType     =   2  'UseODBC
+         Exclusive       =   0   'False
+         Height          =   390
+         Index           =   0
+         Left            =   8415
+         Options         =   0
+         ReadOnly        =   0   'False
+         RecordsetType   =   1  'Dynaset
+         RecordSource    =   $"FormLucro.frx":0DA5
+         Top             =   5040
+         Visible         =   0   'False
+         Width           =   1950
+      End
+      Begin VB.TextBox TxtMargem 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   18
+            Charset         =   0
+            Weight          =   400
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   555
+         Left            =   8280
+         TabIndex        =   3
+         Top             =   3600
+         Width           =   1545
+      End
+      Begin VB.TextBox TxtProd 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   18
+            Charset         =   0
+            Weight          =   400
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   555
+         Left            =   8280
+         TabIndex        =   1
+         Top             =   2475
+         Width           =   2220
+      End
+      Begin VB.Label Label3 
+         Caption         =   "%"
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   24
+            Charset         =   0
+            Weight          =   400
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   465
+         Left            =   10035
+         TabIndex        =   5
+         Top             =   3645
+         Width           =   465
+      End
+      Begin VB.Label Label2 
+         Caption         =   "Média Margem Lucro"
+         Height          =   285
+         Left            =   8280
+         TabIndex        =   4
+         Top             =   3375
+         Width           =   1680
+      End
+      Begin VB.Label Label1 
+         Caption         =   "Total de Produtos"
+         Height          =   285
+         Left            =   8280
+         TabIndex        =   2
+         Top             =   2205
+         Width           =   1680
+      End
+   End
+End
+Attribute VB_Name = "FormLucro"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Private Sub Form_Activate()
+Set Formulário = Me
+
+Formulário.Left = 300
+Formulário.Top = 0
+
+End Sub
+
+Private Sub Form_Load()
+Dim SomaProd As Double
+Dim SomaMedia As Double
+Dim Cont As Double
+Dim Componentes As Variant
+Dim SQL As String
+
+For Each Componentes In DatDados
+    Componentes.DatabaseName = Caminho & "\Dados.mdb"
+Next
+SQL = "SELECT GRU.Descrição_Grupo, CStr([Grupo]) AS Expr1, Count(PRD.Grupo) AS SomaGrupo, Avg(PRD.Margem) AS MédiaMargem FROM GRU INNER JOIN PRD ON GRU.CodGru = PRD.Grupo GROUP BY GRU.Descrição_Grupo, CStr([Grupo]) ORDER BY Count(PRD.Grupo)"
+' Sql = "SELECT GRU.Descrição_Grupo, CStr([Grupo]) AS Expr1, Count(PRD.Grupo) AS SomaGrupo, Avg(PRD.Margem) AS MédiaMargem, Sum(PRD.Estoque) AS SomaDeEstoque FROM GRU INNER JOIN PRD ON GRU.CodGru = PRD.Grupo GROUP BY GRU.Descrição_Grupo, CStr([Grupo]) HAVING (((Sum(PRD.Estoque))<>0)) ORDER BY Count(PRD.Grupo)"
+
+DatDados(0).RecordSource = SQL
+DatDados(0).Refresh
+
+Cont = 0
+DatDados(0).Recordset.MoveFirst
+Do Until DatDados(0).Recordset.Eof
+    If GetInputState() Then DoEvents
+
+    Cont = Cont + 1
+    SomaProd = SomaProd + DatDados(0).Recordset.Fields("SomaGrupo")
+    SomaMedia = SomaMedia + DatDados(0).Recordset.Fields("MédiaMargem")
+    DatDados(0).Recordset.MoveNext
+Loop
+
+TxtProd = Format(SomaProd, "##,###,###")
+TxtMargem = Format(SomaMedia / Cont, "###,###.##")
+
+End Sub
+
+Private Sub Opt_Click(Index As Integer)
+If Index = 0 Then
+    SQL = "SELECT GRU.Descrição_Grupo, CStr([Grupo]) AS Expr1, Count(PRD.Grupo) AS SomaGrupo, Avg(PRD.Margem) AS MédiaMargem, Sum(PRD.Estoque) AS SomaDeEstoque FROM GRU INNER JOIN PRD ON GRU.CodGru = PRD.Grupo GROUP BY GRU.Descrição_Grupo, CStr([Grupo]) HAVING (((Sum(PRD.Estoque))<>0)) ORDER BY Count(PRD.Grupo)"
+Else
+    SQL = "SELECT GRU.Descrição_Grupo, CStr([Grupo]) AS Expr1, Count(PRD.Grupo) AS SomaGrupo, Avg(PRD.Margem) AS MédiaMargem, Sum(PRD.Estoque) AS SomaDeEstoque FROM GRU INNER JOIN PRD ON GRU.CodGru = PRD.Grupo GROUP BY GRU.Descrição_Grupo, CStr([Grupo]) HAVING (((Sum(PRD.Estoque))<>0)) ORDER BY Avg(PRD.Margem)"
+End If
+DatDados(0).RecordSource = SQL
+DatDados(0).Refresh
+End Sub

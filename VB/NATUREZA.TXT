@@ -1,0 +1,15 @@
+0 - Entrada de Produtos - E
+1 - Venda Vista - S
+2 - Venda Parcelada - S 
+3 - Ordem de Serviço - S
+4 - Orçamento 
+5 - Consignação 
+6 - Retirada/Doação - S
+7 - Consórcio - S
+8 - Transferência (Remessa) - S
+9 - Transferência (Retorno) - E
+10 -Devolução de Venda - E
+11 -Devolução de Compra - S
+
+
+ARQUIVOS - PED - ENT - PRD - ITP

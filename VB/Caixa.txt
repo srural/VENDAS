@@ -1,0 +1,42 @@
+
+                FECHAMENTO CAIXA
+================================================
+Data: 18/11/2025   Hora: 11:04:31
+
+Ref.Cxa: 000009 - 18/11/2025
+
+------------------------------------------------
+Data       Hora  Historico             Valor D/C
+15/07/2022 18:16 ABRE                   0,00  C
+18/11/2025 09:54 ABRE                   0,00  C
+
+------------------------------------------------
+Hora   Nome                     Valor   Desconto
+09:55  ADAO IRMAO DO PAULIN    180,00      0,00
+------------------------------------------
+Recebimento Pix/Transf......       180,00
+Venda Dinheiro .............         2,50
+Venda Pix/Transf. ..........        29,90
+Venda Cartão Débito.........         2,50
+------------------------------------------
+
+------------------------------------------------
+Venda Produtos ..............(+)          44,90
+Entradas Diversas............(+)           0,00
+Recebimento Conta ...........(+)         180,00
+                                   ------------- 
+Receita Bruta................(=)         224,90
+Saidas Diversas..............(-)           0,00
+Outras Formas Recebimento....(-)         212,40
+                                   ------------- 
+Total do Caixa...............(=)           2,50
+
+Retirada do Fechamento.......(-)           0,00
+Diferença..................(+/-)           2,50
+Proximo Caixa...................           0,00
+
+     INFORMACOES ADICIONAIS 
+
+Venda a Prazo..................( )        10,00
+
+<>

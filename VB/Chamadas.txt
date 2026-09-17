@@ -1,0 +1,13 @@
+Gerar XML
+	ERP.IntegraTxt.exe ArquivoModelo.txt 1
+
+Visualizar DANFE - TXT
+	ERP.IntegraTxt.exe ArquivoModelo.txt 2
+
+Visualizar DANFE - XML
+	ERP.IntegraTxt.exe 1155-nfe.xml 3
+
+Enviar XML por E-mail
+	ERP.IntegraTxt.exe 1155-nfe.xml 4
+Cancela XML 
+	ERP.IntegraTxt.exe 1155-Procnfe.xml 5

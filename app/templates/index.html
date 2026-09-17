@@ -1,0 +1,3569 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema Vendas - Gestão Comercial & PDV Multiempresa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.3">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    (function() {
+      var saved = localStorage.getItem('theme_preference') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- App Main Layout Shell -->
+  <div class="app-layout">
+
+    <!-- Left Sidebar Menu (Azul) -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-store" id="brand-main-icon"></i>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title">Sistema Vendas</div>
+          <div class="brand-subtitle">Módulo Multiempresa & PDV</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">NAVEGAÇÃO</div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" id="nav-dashboard" onclick="switchModule('dashboard')">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Dashboard Principal</span>
+        </button>
+        <button class="nav-item nav-highlight" id="nav-pdv" onclick="switchModule('pdv')">
+          <i class="fa-solid fa-cash-register"></i>
+          <span>PDV Frente de Caixa</span>
+        </button>
+        <button class="nav-item nav-highlight-blue" id="nav-pedidos" onclick="switchModule('pedidos')">
+          <i class="fa-solid fa-file-invoice-dollar"></i>
+          <span>Pedidos de Vendas</span>
+        </button>
+        <button class="nav-item" id="nav-entidades" onclick="switchModule('entidades')">
+          <i class="fa-solid fa-users"></i>
+          <span>Entidades</span>
+        </button>
+        <button class="nav-item" id="nav-produtos" onclick="switchModule('produtos')">
+          <i class="fa-solid fa-boxes-stacked"></i>
+          <span>Produtos</span>
+        </button>
+        <button class="nav-item" id="nav-grupos" onclick="switchModule('grupos')">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Grupos de Produtos</span>
+        </button>
+        <button class="nav-item" id="nav-empresas" onclick="switchModule('empresas')">
+          <i class="fa-solid fa-building"></i>
+          <span>Empresas</span>
+        </button>
+        <button class="nav-item" id="nav-cfop" onclick="switchModule('cfop')">
+          <i class="fa-solid fa-file-contract"></i>
+          <span>Tabela CFOP (CFO)</span>
+        </button>
+        <button class="nav-item" id="nav-formas-pgto" onclick="switchModule('formas-pgto')">
+          <i class="fa-solid fa-credit-card"></i>
+          <span>Formas de Pagamento</span>
+        </button>
+        <button class="nav-item" id="nav-natureza-op" onclick="switchModule('natureza-op')">
+          <i class="fa-solid fa-route"></i>
+          <span>Naturezas de Operação</span>
+        </button>
+        <button class="nav-item" id="nav-usuarios" onclick="switchModule('usuarios')">
+          <i class="fa-solid fa-user-shield"></i>
+          <span>Usuários & Perfis</span>
+        </button>
+        <button class="nav-item" id="nav-config-db" onclick="switchModule('config-db')">
+          <i class="fa-solid fa-database"></i>
+          <span>Configuração do Banco</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <span class="status-dot"></span>
+          <span>PostgreSQL 18 Conectado</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area (Fundo Cinza Claro) -->
+    <div class="content-wrapper">
+
+      <!-- Top Header Bar -->
+      <header class="topbar">
+        <div class="topbar-title" id="page-title">
+          <i class="fa-solid fa-chart-pie"></i> <span>Dashboard - Visão Geral do Sistema</span>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="header-actions">
+          <!-- Active Company Selector -->
+          <div class="empresa-selector-wrapper" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-surface-elevated); padding: 0.25rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+            <i class="fa-solid fa-building" style="color: var(--accent-blue);"></i>
+            <select id="select-active-empresa" class="filter-select" onchange="onActiveEmpresaChange(this.value)" style="border: none; background: transparent; padding-right: 1.5rem; font-weight: 600;">
+              <option value="1">1 - KAERU JEANS LTDA</option>
+            </select>
+          </div>
+
+          <!-- Logged User Badge & Logout -->
+          <div id="user-info-wrapper" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-surface-elevated); padding: 0.35rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+            <i class="fa-solid fa-user-circle" style="color: var(--accent-purple); font-size: 1.2rem;"></i>
+            <div style="display: flex; flex-direction: column; font-size: 0.8rem; line-height: 1.1;">
+              <strong id="user-display-name">Carregando...</strong>
+              <span id="user-display-role" class="badge badge-group" style="padding: 0.1rem 0.35rem; font-size: 0.65rem; margin-top: 2px;">ADMIN</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="logout()" title="Encerrar Sessão" style="margin-left: 0.35rem; padding: 0.25rem 0.5rem;">
+              <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" onclick="refreshCurrentModule()" title="Atualizar dados da tela">
+            <i class="fa-solid fa-rotate-right"></i> Atualizar
+          </button>
+
+          <!-- Day/Night Mode Switcher -->
+          <button class="btn btn-secondary btn-sm theme-toggle-btn" id="btn-theme-toggle" onclick="toggleTheme()" title="Alternar Modo Dia / Noite">
+            <i class="fa-solid fa-moon" id="theme-toggle-icon"></i>
+            <span id="theme-toggle-label">Noite</span>
+          </button>
+
+          <!-- Contextual Action Buttons -->
+          <button class="btn btn-primary btn-sm module-btn" id="btn-new-dashboard" onclick="switchModule('pdv')" style="display: inline-flex;">
+            <i class="fa-solid fa-cash-register"></i> Abrir PDV Caixa
+          </button>
+          <button class="btn btn-emerald btn-sm module-btn" id="btn-new-pdv" onclick="openPaymentModal()" style="display: none;">
+            <i class="fa-solid fa-check"></i> [F9] Finalizar Venda
+          </button>
+          <button class="btn btn-primary btn-sm module-btn" id="btn-new-entidade" onclick="openEntityModal()" style="display: none;">
+            <i class="fa-solid fa-plus"></i> Nova Entidade
+          </button>
+          <button class="btn btn-primary btn-sm module-btn" id="btn-new-produto" onclick="openProductModal()" style="display: none;">
+            <i class="fa-solid fa-plus"></i> Novo Produto
+          </button>
+          <button class="btn btn-primary btn-sm module-btn" id="btn-new-grupo" onclick="openGroupModal()" style="display: none;">
+            <i class="fa-solid fa-plus"></i> Novo Grupo
+          </button>
+          <button class="btn btn-primary btn-sm module-btn" id="btn-new-empresa" onclick="openEmpresaModal()" style="display: none;">
+            <i class="fa-solid fa-plus"></i> Nova Empresa
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Container -->
+      <main class="main-container">
+
+        <!-- ==================== MODULE 0: DASHBOARD ==================== -->
+        <section class="module-view active" id="view-dashboard">
+          <!-- Overview KPI Cards -->
+          <div class="stats-grid">
+            <div class="stat-card clickable" onclick="switchModule('entidades')">
+              <div class="stat-info">
+                <h3>Total Entidades</h3>
+                <div class="stat-value" id="dash-ent-total">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-total">
+                <i class="fa-solid fa-users"></i>
+              </div>
+            </div>
+
+            <div class="stat-card clickable" onclick="switchModule('produtos')">
+              <div class="stat-info">
+                <h3>Total Produtos</h3>
+                <div class="stat-value" id="dash-prd-total">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-active">
+                <i class="fa-solid fa-boxes-stacked"></i>
+              </div>
+            </div>
+
+            <div class="stat-card clickable" onclick="switchModule('grupos')">
+              <div class="stat-info">
+                <h3>Grupos de Produtos</h3>
+                <div class="stat-value" id="dash-gru-total">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-clients">
+                <i class="fa-solid fa-layer-group"></i>
+              </div>
+            </div>
+
+            <div class="stat-card clickable" onclick="switchModuleWithEstoque()">
+              <div class="stat-info">
+                <h3>Estoque Baixo</h3>
+                <div class="stat-value" id="dash-prd-baixo">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Valor em Estoque</h3>
+                <div class="stat-value" id="dash-valor-estoque">R$ 0,00</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-money">
+                <i class="fa-solid fa-sack-dollar"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dashboard Panels Grid -->
+          <div class="dashboard-panels-grid">
+            <!-- Left Column -->
+            <div class="dashboard-col">
+              <div class="card-panel">
+                <div class="panel-header">
+                  <h3><i class="fa-solid fa-bolt"></i> Ações Rápidas</h3>
+                </div>
+                <div class="quick-actions-grid">
+                  <button class="action-tile action-emerald" onclick="switchModule('pdv')">
+                    <i class="fa-solid fa-cash-register"></i>
+                    <span>Abrir Caixa PDV</span>
+                  </button>
+                  <button class="action-tile action-blue" onclick="openProductModal()">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>Novo Produto</span>
+                  </button>
+                  <button class="action-tile action-purple" onclick="openEntityModal()">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>Nova Entidade</span>
+                  </button>
+                  <button class="action-tile action-cyan" onclick="openGroupModal()">
+                    <i class="fa-solid fa-folder-plus"></i>
+                    <span>Novo Grupo</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Top Groups Widget -->
+              <div class="card-panel">
+                <div class="panel-header">
+                  <h3><i class="fa-solid fa-chart-column"></i> Top Grupos com Mais Produtos</h3>
+                  <button class="btn-text" onclick="switchModule('grupos')">Ver todos</button>
+                </div>
+                <div class="top-groups-list" id="dash-top-grupos">
+                  <div class="loading-td">Carregando grupos...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="dashboard-col">
+              <!-- Latest Products Widget -->
+              <div class="card-panel">
+                <div class="panel-header">
+                  <h3><i class="fa-solid fa-clock-rotate-left"></i> Últimos Produtos Cadastrados</h3>
+                  <button class="btn-text" onclick="switchModule('produtos')">Ver todos</button>
+                </div>
+                <div class="table-responsive">
+                  <table class="mini-data-table">
+                    <thead>
+                      <tr>
+                        <th>Cód.</th>
+                        <th>Descrição</th>
+                        <th style="text-align: right;">Preço</th>
+                        <th style="text-align: right;">Estoque</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dash-recentes-produtos">
+                      <tr><td colspan="4" class="loading-td">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Latest Entities Widget -->
+              <div class="card-panel">
+                <div class="panel-header">
+                  <h3><i class="fa-solid fa-address-book"></i> Últimas Entidades Cadastradas</h3>
+                  <button class="btn-text" onclick="switchModule('entidades')">Ver todas</button>
+                </div>
+                <div class="table-responsive">
+                  <table class="mini-data-table">
+                    <thead>
+                      <tr>
+                        <th>Cód.</th>
+                        <th>Nome / Razão</th>
+                        <th>Cidade</th>
+                        <th>Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dash-recentes-entidades">
+                      <tr><td colspan="4" class="loading-td">Carregando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE: PDV / FRENTE DE CAIXA ==================== -->
+        <section class="module-view" id="view-pdv">
+          <!-- POS Toolbar Header -->
+          <div class="toolbar-card pos-header-card">
+            <div class="pos-config-group">
+              <div class="pos-config-item" style="position: relative; min-width: 360px;">
+                <label><i class="fa-solid fa-user-tag"></i> Cliente / Consumidor [F4]:</label>
+                <div class="search-input-wrapper" style="width: 100%;">
+                  <i class="fa-solid fa-user search-icon"></i>
+                  <input type="text" id="pdv-client-search-input" class="search-input" placeholder="1 - CONSUMIDOR FINAL (digite para buscar...)" style="padding-right: 2rem;">
+                  <input type="hidden" id="pdv-select-entidade" value="1">
+                  <button type="button" class="btn-text" onclick="resetPdvClient()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--text-muted);" title="Resetar para Consumidor Final">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                <div class="pos-results-overlay" id="pdv-client-results-overlay" style="display: none; width: 420px; top: 100%;"></div>
+              </div>
+
+              <div class="pos-config-item">
+                <label><i class="fa-solid fa-user-tie"></i> Vendedor:</label>
+                <select id="pdv-select-vendedor" class="filter-select">
+                  <option value="1">1 - OPERADOR CAIXA</option>
+                </select>
+              </div>
+
+              <button class="btn btn-secondary btn-sm" onclick="openPdvConfigModal()" title="Configurações do PDV e Fiscal" style="height: 38px;">
+                <i class="fa-solid fa-gear"></i> Configurações
+              </button>
+
+              <div class="pos-clock-badge">
+                <i class="fa-regular fa-clock"></i>
+                <span id="pdv-clock-display">00/00/0000 00:00:00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- POS Main Grid (Cart vs Summary) -->
+          <div class="pos-main-grid">
+            <!-- Left Side: Barcode Scanner & Cart List -->
+            <div class="pos-cart-container">
+              <!-- Item Entry Bar -->
+              <div class="pos-entry-card">
+                <div class="pos-entry-grid">
+                  <div class="form-group col-7">
+                    <label>Código de Barras / Nome do Produto [F2]:</label>
+                    <div class="search-input-wrapper">
+                      <i class="fa-solid fa-barcode search-icon"></i>
+                      <input type="text" id="pdv-barcode-input" class="search-input barcode-focus" placeholder="Escaneie o código de barras ou digite..." autofocus>
+                    </div>
+                  </div>
+
+                  <div class="form-group col-2">
+                    <label>Qtd:</label>
+                    <input type="number" id="pdv-qty-input" class="form-control" value="1" min="0.001" step="1">
+                  </div>
+
+                  <div class="form-group col-3" style="justify-content: flex-end;">
+                    <button class="btn btn-primary" id="pdv-add-btn" onclick="addPdvItemFromInput()" style="height: 42px;">
+                      <i class="fa-solid fa-plus"></i> Adicionar Item
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Auto-complete product results overlay -->
+                <div class="pos-results-overlay" id="pdv-results-overlay" style="display: none;"></div>
+              </div>
+
+              <!-- Cart Table Card -->
+              <div class="table-card pos-table-card">
+                <div class="table-responsive">
+                  <table class="data-table pos-cart-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 50px;">Item</th>
+                        <th style="width: 100px;">Cód.</th>
+                        <th>Descrição do Produto</th>
+                        <th style="text-align: right; width: 90px;">Qtd</th>
+                        <th style="text-align: right; width: 120px;">Vlr. Unit</th>
+                        <th style="text-align: right; width: 130px;">Subtotal</th>
+                        <th style="width: 70px; text-align: center;">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pdv-cart-tbody">
+                      <tr>
+                        <td colspan="7" class="loading-td" style="padding: 4rem !important;">
+                          <i class="fa-solid fa-cart-shopping fa-3x" style="color: var(--border-color-strong); margin-bottom: 0.75rem;"></i>
+                          <div>Caixa Aberto. Digite ou escaneie o código de barras do produto para iniciar.</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: POS Total Summary & Hotkeys -->
+            <div class="pos-summary-container">
+              <div class="card-panel pos-totals-card">
+                <div class="panel-header">
+                  <h3><i class="fa-solid fa-receipt"></i> Resumo da Venda</h3>
+                  <span class="badge badge-group" id="pdv-items-count">0 itens</span>
+                </div>
+
+                <div class="pos-totals-list">
+                  <div class="pos-total-row">
+                    <span>Subtotal R$:</span>
+                    <strong id="pdv-subtotal-display">R$ 0,00</strong>
+                  </div>
+
+                  <div class="pos-total-row">
+                    <span>Desconto R$:</span>
+                    <input type="number" id="pdv-desconto-input" class="form-control pos-discount-input" value="0.00" min="0" step="0.5" oninput="calcPdvTotals()">
+                  </div>
+
+                  <div class="pos-grand-total">
+                    <span class="lbl">TOTAL A PAGAR</span>
+                    <span class="val" id="pdv-total-display">R$ 0,00</span>
+                  </div>
+                </div>
+
+                <div class="pos-hotkeys-grid">
+                  <button class="btn btn-emerald pos-btn-xl" onclick="openPaymentModal()">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <div>
+                      <strong>[F9] FINALIZAR VENDA</strong>
+                      <small>Opções de Impressão & NFC-e</small>
+                    </div>
+                  </button>
+
+                  <button class="btn btn-danger pos-btn-sm" onclick="cancelPdvSale()">
+                    <i class="fa-solid fa-trash-can"></i> [F8] Cancelar Venda
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE 1: ENTIDADES ==================== -->
+        <section class="module-view" id="view-entidades">
+          <!-- Stats KPI Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Total Entidades</h3>
+                <div class="stat-value" id="stat-ent-total">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-total">
+                <i class="fa-solid fa-users"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Ativos</h3>
+                <div class="stat-value" id="stat-ent-ativos">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-active">
+                <i class="fa-solid fa-user-check"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Clientes</h3>
+                <div class="stat-value" id="stat-ent-clientes">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-clients">
+                <i class="fa-solid fa-user-tie"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Fornecedores</h3>
+                <div class="stat-value" id="stat-ent-fornecedores">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-suppliers">
+                <i class="fa-solid fa-truck-ramp-box"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Toolbar Filters -->
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-ent" class="search-input" placeholder="Pesquisar por nome, CPF/CNPJ, cidade, telefone ou código...">
+              </div>
+
+              <select id="select-tipo-ent" class="filter-select" onchange="onEntityFilterChange()">
+                <option value="all">Todos os Tipos</option>
+                <option value="1">Clientes</option>
+                <option value="2">Fornecedores</option>
+                <option value="3">Vendedores</option>
+                <option value="4">Transportadoras</option>
+              </select>
+
+              <select id="select-ativo-ent" class="filter-select" onchange="onEntityFilterChange()">
+                <option value="all">Todos os Status</option>
+                <option value="1" selected>Apenas Ativos</option>
+                <option value="0">Inativos</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Entities Table -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">Cód.</th>
+                    <th>Nome / Razão Social</th>
+                    <th>Nome Fantasia</th>
+                    <th>Tipo</th>
+                    <th>CPF / CNPJ</th>
+                    <th>Cidade / UF</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th style="width: 110px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-entidades">
+                  <tr>
+                    <td colspan="9" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando entidades...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-wrapper">
+              <div class="pagination-info" id="pagination-info-ent">
+                Exibindo 0 registros
+              </div>
+              <div class="pagination-controls">
+                <button class="btn btn-secondary btn-sm" id="btn-prev-ent" onclick="changeEntityPage(-1)">
+                  <i class="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <span id="page-number-ent" class="page-span">Página 1 de 1</span>
+                <button class="btn btn-secondary btn-sm" id="btn-next-ent" onclick="changeEntityPage(1)">
+                  Próximo <i class="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 2: PRODUTOS ==================== -->
+        <section class="module-view" id="view-produtos">
+          <!-- Stats KPI Cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Total Produtos</h3>
+                <div class="stat-value" id="stat-prd-total">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-total">
+                <i class="fa-solid fa-boxes-stacked"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Ativos</h3>
+                <div class="stat-value" id="stat-prd-ativos">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-active">
+                <i class="fa-solid fa-check-double"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Estoque Baixo</h3>
+                <div class="stat-value" id="stat-prd-baixo">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Total Grupos</h3>
+                <div class="stat-value" id="stat-prd-grupos">0</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-clients">
+                <i class="fa-solid fa-layer-group"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Toolbar Filters -->
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-prd" class="search-input" placeholder="Pesquisar por descrição, código de barras, código ou marca...">
+              </div>
+
+              <select id="select-grupo-prd" class="filter-select" onchange="onProductFilterChange()">
+                <option value="all">Todos os Grupos</option>
+              </select>
+
+              <select id="select-ativo-prd" class="filter-select" onchange="onProductFilterChange()">
+                <option value="all">Todos os Status</option>
+                <option value="1" selected>Apenas Ativos</option>
+                <option value="0">Inativos</option>
+              </select>
+
+              <select id="select-estoque-prd" class="filter-select" onchange="onProductFilterChange()">
+                <option value="all">Todos os Estoques</option>
+                <option value="1">Estoque Baixo / Mínimo</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Products Table -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">Cód.</th>
+                    <th>Descrição do Produto</th>
+                    <th>Grupo</th>
+                    <th>Cód. Barras</th>
+                    <th style="text-align: right;">Preço Custo</th>
+                    <th style="text-align: right;">Preço Venda</th>
+                    <th style="text-align: right;">Margem %</th>
+                    <th style="text-align: right;">Estoque</th>
+                    <th>Status</th>
+                    <th style="width: 110px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-produtos">
+                  <tr>
+                    <td colspan="10" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando produtos...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-wrapper">
+              <div class="pagination-info" id="pagination-info-prd">
+                Exibindo 0 registros
+              </div>
+              <div class="pagination-controls">
+                <button class="btn btn-secondary btn-sm" id="btn-prev-prd" onclick="changeProductPage(-1)">
+                  <i class="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <span id="page-number-prd" class="page-span">Página 1 de 1</span>
+                <button class="btn btn-secondary btn-sm" id="btn-next-prd" onclick="changeProductPage(1)">
+                  Próximo <i class="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 3: GRUPOS ==================== -->
+        <section class="module-view" id="view-grupos">
+          <!-- Toolbar Filters -->
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-gru" class="search-input" placeholder="Pesquisar grupos por nome ou código...">
+              </div>
+            </div>
+          </div>
+
+          <!-- Groups Table -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 90px;">Cód. Grupo</th>
+                    <th>Descrição do Grupo</th>
+                    <th>Família</th>
+                    <th style="text-align: right;">Desconto Padrão (%)</th>
+                    <th>Baixa de Estoque Automática</th>
+                    <th style="text-align: center;">Total Produtos Vinculados</th>
+                    <th style="width: 110px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-grupos">
+                  <tr>
+                    <td colspan="6" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando grupos...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 4: EMPRESAS (MULTIEMPRESA) ==================== -->
+        <section class="module-view" id="view-empresas">
+          <!-- Toolbar Filters -->
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-emp" class="search-input" placeholder="Pesquisar empresas por Razão Social, CNPJ ou cidade...">
+              </div>
+            </div>
+          </div>
+
+          <!-- Empresas Table -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th>Razão Social / Emitente</th>
+                    <th>Nome Fantasia</th>
+                    <th>CNPJ</th>
+                    <th>Inscrição Estadual</th>
+                    <th>Cidade / UF</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                    <th style="width: 120px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-empresas">
+                  <tr>
+                    <td colspan="9" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando empresas...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 5: PEDIDOS DE VENDAS ==================== -->
+        <section class="module-view" id="view-pedidos">
+          <!-- Toolbar Filters -->
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-pedidos" class="search-input" placeholder="Pesquisar por Nº Pedido, Cliente, CPF/CNPJ..." oninput="debounceOrdersSearch(this.value)">
+              </div>
+
+              <select id="select-status-pedidos" class="filter-select" onchange="applyOrdersFilters()">
+                <option value="all">Todos os Status NF-e</option>
+                <option value="nfe">NF-e Emitida (Modelo 55)</option>
+                <option value="pendente">Sem NF-e / Pendente</option>
+              </select>
+            </div>
+
+            <button class="btn btn-primary" onclick="openOrderModal()">
+              <i class="fa-solid fa-plus-circle"></i> Novo Pedido de Vendas
+            </button>
+          </div>
+
+          <!-- Orders Table Card -->
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 100px;">Cód. Pedido</th>
+                    <th style="width: 110px;">Emissão</th>
+                    <th>Cliente / Razão Social</th>
+                    <th>Vendedor</th>
+                    <th>Condição Pgto</th>
+                    <th style="text-align: right;">Valor Total</th>
+                    <th style="text-align: center;">Status NF-e 55</th>
+                    <th style="width: 180px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-pedidos">
+                  <tr>
+                    <td colspan="8" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando pedidos de vendas...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Orders Pagination -->
+            <div class="pagination-wrapper" id="pedidos-pagination"></div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE 6: TABELA CFOP (CFO) ==================== -->
+        <section class="module-view" id="view-cfop">
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-cfop" class="search-input" placeholder="Pesquisar CFOP por Código ou Descrição..." oninput="debounceCfopSearch(this.value)">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="openCfopModal()">
+              <i class="fa-solid fa-plus-circle"></i> Novo CFOP (CFO)
+            </button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 130px;">Código CFOP</th>
+                    <th>Descrição da Natureza de Operação</th>
+                    <th style="width: 140px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-cfop">
+                  <tr>
+                    <td colspan="3" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando tabela CFO...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE 7: FORMAS DE PAGAMENTO ==================== -->
+        <section class="module-view" id="view-formas-pgto">
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-formas-pgto" class="search-input" placeholder="Pesquisar Forma de Pagamento..." oninput="debounceFormasPgtoSearch(this.value)">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="openFormaPgtoModal()">
+              <i class="fa-solid fa-plus-circle"></i> Nova Forma de Pagamento
+            </button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th style="width: 130px;">Código</th>
+                    <th>Nome / Descrição</th>
+                    <th>Tipo</th>
+                    <th style="text-align: right; width: 100px;">Parcelas</th>
+                    <th style="text-align: right; width: 120px;">Dias p/ Parc.</th>
+                    <th style="text-align: center; width: 100px;">Status</th>
+                    <th style="width: 140px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-formas-pgto">
+                  <tr>
+                    <td colspan="8" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando formas de pagamento...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE 8: NATUREZAS DE OPERAÇÃO ==================== -->
+        <section class="module-view" id="view-natureza-op">
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-natureza-op" class="search-input" placeholder="Pesquisar Natureza de Operação..." oninput="debounceNaturezaOpSearch(this.value)">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="openNaturezaOpModal()">
+              <i class="fa-solid fa-plus-circle"></i> Nova Natureza de Operação
+            </button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th style="width: 130px;">Código</th>
+                    <th>Descrição da Natureza de Operação</th>
+                    <th style="width: 120px;">CFOP Padrão</th>
+                    <th style="text-align: center; width: 100px;">Status</th>
+                    <th style="width: 140px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-natureza-op">
+                  <tr>
+                    <td colspan="6" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando naturezas de operação...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE 9: USUÁRIOS E PERFIS ==================== -->
+        <section class="module-view" id="view-usuarios">
+          <div class="toolbar-card">
+            <div class="search-filter-group">
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="input-search-usuarios" class="search-input" placeholder="Pesquisar Usuário ou Perfil..." oninput="debounceUsuariosSearch(this.value)">
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="openUsuarioModal()">
+              <i class="fa-solid fa-user-plus"></i> Novo Usuário
+            </button>
+          </div>
+
+          <div class="table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th style="width: 140px;">Login</th>
+                    <th>Nome do Usuário</th>
+                    <th style="width: 130px; text-align: center;">Perfil / Acesso</th>
+                    <th style="width: 130px;">Data Cadastro</th>
+                    <th style="text-align: center; width: 100px;">Status</th>
+                    <th style="width: 140px; text-align: center;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-usuarios">
+                  <tr>
+                    <td colspan="7" class="loading-td">
+                      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                      <div style="margin-top: 0.5rem;">Carregando usuários...</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== MODULE 10: CONFIGURAÇÃO DO BANCO DE DADOS & FISCAL ==================== -->
+        <section class="module-view" id="view-config-db">
+          <div class="toolbar-card" style="margin-bottom: 1.25rem;">
+            <div class="modal-tabs" style="border-bottom: none; width: 100%; margin: 0;">
+              <button class="tab-btn active" onclick="switchDbConfigTab('tab-cfg-db-postgres', this)">
+                <i class="fa-solid fa-server"></i> Conexão PostgreSQL
+              </button>
+              <button class="tab-btn" onclick="switchDbConfigTab('tab-cfg-db-nfe', this)">
+                <i class="fa-solid fa-file-invoice-dollar"></i> Parâmetros NF-e (Modelo 55)
+              </button>
+              <button class="tab-btn" onclick="switchDbConfigTab('tab-cfg-db-nfce', this)">
+                <i class="fa-solid fa-receipt"></i> Parâmetros NFC-e (Modelo 65)
+              </button>
+              <button class="tab-btn" onclick="switchDbConfigTab('tab-cfg-db-cert', this)">
+                <i class="fa-solid fa-key"></i> Certificado Digital (A1/A3)
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB 1: CONEXÃO POSTGRESQL & CONFIGURAÇÃO NF-E COM CERTIFICADO DIGITAL -->
+          <div class="db-config-tab-content active" id="tab-cfg-db-postgres">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem;">
+              <!-- Connection Form Card -->
+              <div class="table-card" style="padding: 1.5rem;">
+                <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fa-solid fa-server" style="color: var(--accent-blue);"></i> Parâmetros de Conexão PostgreSQL 18
+                </h3>
+
+                <form id="form-config-db" onsubmit="saveDbConfig(event)">
+                  <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Host / Servidor *</label>
+                    <input type="text" id="Cfg_Host" name="host" class="form-control" value="localhost" required>
+                  </div>
+
+                  <div class="form-grid" style="margin-bottom: 1rem;">
+                    <div class="form-group col-6">
+                      <label>Porta TCP *</label>
+                      <input type="number" id="Cfg_Port" name="port" class="form-control" value="5432" required>
+                    </div>
+
+                    <div class="form-group col-6">
+                      <label>Nome do Banco *</label>
+                      <input type="text" id="Cfg_DbName" name="dbname" class="form-control" value="vendas_db" required>
+                    </div>
+                  </div>
+
+                  <div class="form-grid" style="margin-bottom: 1rem;">
+                    <div class="form-group col-6">
+                      <label>Usuário *</label>
+                      <input type="text" id="Cfg_User" name="user" class="form-control" value="postgres" required>
+                    </div>
+
+                    <div class="form-group col-6">
+                      <label>Senha de Acesso</label>
+                      <input type="password" id="Cfg_Password" name="password" class="form-control" value="masterkey">
+                    </div>
+                  </div>
+
+                  <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 1.25rem;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                      <button type="button" class="btn btn-secondary btn-sm" onclick="testDbConnection()">
+                        <i class="fa-solid fa-plug-circle-check"></i> Testar Conexão
+                      </button>
+                      <button type="button" class="btn btn-warning btn-sm" onclick="openDbSyncModal()" style="font-weight: 600; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #fff; border: none; box-shadow: 0 2px 8px rgba(59,130,246,0.35);">
+                        <i class="fa-solid fa-arrows-rotate"></i> Sincronizar Teste ➔ Produção
+                      </button>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                      <i class="fa-solid fa-floppy-disk"></i> Salvar Configurações
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Diagnostics & Status Card -->
+              <div class="table-card" style="padding: 1.5rem;">
+                <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fa-solid fa-heart-pulse" style="color: var(--accent-emerald);"></i> Status e Diagnóstico do Banco
+                </h3>
+
+                <div id="db-status-card-body">
+                  <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                    <div style="margin-top: 0.5rem;">Consultando métricas do PostgreSQL 18...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- UNIFIED NF-E & DIGITAL CERTIFICATE CONFIGURATION CARD -->
+            <div class="table-card" style="padding: 1.5rem;">
+              <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fa-solid fa-file-shield" style="color: var(--accent-amber);"></i> Parâmetros da NF-e & Certificado Digital
+                </span>
+                <button type="button" class="btn btn-warning btn-sm" onclick="openCertificadoModal()" style="font-weight: 600;">
+                  <i class="fa-solid fa-key"></i> Configurar Certificado Digital
+                </button>
+              </h3>
+
+              <form id="form-config-nfe-cert-main" onsubmit="saveNfeAndCertMain(event)">
+                <div class="form-grid">
+                  <div class="form-group col-4">
+                    <label style="font-weight: 600; color: var(--text-primary);">Série da NF-e *</label>
+                    <input type="text" id="Cfg_Main_Nfe_Serie" name="Nfe.SerieNfe" class="form-control" value="1" placeholder="Ex: 1" required>
+                  </div>
+
+                  <div class="form-group col-4">
+                    <label style="font-weight: 600; color: var(--text-primary);">Número Sequência da NF-e *</label>
+                    <input type="number" id="Cfg_Main_Nfe_Numero" name="Nfe.NroNfe" class="form-control" value="1" min="1" placeholder="Ex: 100" required>
+                  </div>
+
+                  <div class="form-group col-4">
+                    <label style="font-weight: 600; color: var(--text-primary);">Ambiente SEFAZ</label>
+                    <select id="Cfg_Main_Nfe_Ambiente" name="Nfe.Ambiente" class="form-control">
+                      <option value="2" selected>2 - Homologação / Simulação</option>
+                      <option value="1">1 - Produção Oficial SEFAZ</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group col-8">
+                    <label style="font-weight: 600; color: var(--text-primary);">Caminho do Arquivo (.pfx / .p12) do Certificado</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <input type="text" id="Cfg_Main_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx">
+                      <button type="button" class="btn btn-secondary" onclick="openCertificadoModal()" title="Abrir Central de Upload e Configuração do Certificado">
+                        <i class="fa-solid fa-folder-open"></i> Configurar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="form-group col-4">
+                    <label style="font-weight: 600; color: var(--text-primary);">Senha do Certificado Digital</label>
+                    <input type="password" id="Cfg_Main_Cert_Senha" name="Certificado.Senha" class="form-control" placeholder="••••••••">
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; justify-content: space-between; align-items: center; margin-top: 1.25rem;">
+                  <button type="button" class="btn btn-secondary" onclick="testDigitalCertMain()">
+                    <i class="fa-solid fa-vial"></i> Testar Certificado Digital
+                  </button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> Salvar Série, Sequência & Certificado
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- TAB 2: CONFIGURAÇÕES NF-E (MODELO 55) -->
+          <div class="db-config-tab-content" id="tab-cfg-db-nfe" style="display: none;">
+            <div class="table-card" style="padding: 1.5rem;">
+              <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-file-invoice" style="color: var(--accent-emerald);"></i> Parâmetros da Nota Fiscal Eletrônica (NF-e Modelo 55)
+              </h3>
+              <form id="form-config-nfe-page" onsubmit="saveNfeConfigPage(event)">
+                <div class="form-grid">
+                  <div class="form-group col-4">
+                    <label>Série NF-e (SerieNfe)</label>
+                    <input type="text" id="Cfg_Page_Nfe_Serie" name="Nfe.SerieNfe" class="form-control" value="1">
+                  </div>
+                  <div class="form-group col-4">
+                    <label>Próximo Nº NF-e (NroNfe)</label>
+                    <input type="number" id="Cfg_Page_Nfe_Numero" name="Nfe.NroNfe" class="form-control" value="1" min="1">
+                  </div>
+                  <div class="form-group col-4">
+                    <label>Ambiente de Emissão SEFAZ</label>
+                    <select id="Cfg_Page_Nfe_Ambiente" name="Nfe.Ambiente" class="form-control">
+                      <option value="2" selected>2 - Homologação / Simulação SEFAZ</option>
+                      <option value="1">1 - Produção Oficial</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-12">
+                    <label>Chave de Acesso Padrão / Última NF-e Modelo 55</label>
+                    <input type="text" id="Cfg_Page_Nfe_Chave" name="Nfe.Chave" class="form-control" placeholder="Chave de 44 dígitos gerada na emissão (Ex: 3526...)">
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> Salvar Parâmetros NF-e
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- TAB 3: CONFIGURAÇÕES NFC-E (MODELO 65) -->
+          <div class="db-config-tab-content" id="tab-cfg-db-nfce" style="display: none;">
+            <div class="table-card" style="padding: 1.5rem;">
+              <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-receipt" style="color: var(--accent-amber);"></i> Parâmetros da Nota Fiscal de Consumidor (NFC-e Modelo 65)
+              </h3>
+              <form id="form-config-nfce-page" onsubmit="saveNfceConfigPage(event)">
+                <div class="form-grid">
+                  <div class="form-group col-4">
+                    <label>Série NFC-e (SerieNfce) *</label>
+                    <input type="text" id="Cfg_Page_Nfce_Serie" name="Nfce.SerieNfce" class="form-control" value="1" required>
+                  </div>
+                  <div class="form-group col-4">
+                    <label>Próximo Nº NFC-e (NroNfce) *</label>
+                    <input type="number" id="Cfg_Page_Nfce_Numero" name="Nfce.NroNfce" class="form-control" value="16" min="1" required>
+                  </div>
+                  <div class="form-group col-4">
+                    <label>Ambiente de Emissão NFC-e</label>
+                    <select id="Cfg_Page_Nfce_Ambiente" name="Nfce.Ambiente" class="form-control">
+                      <option value="2" selected>2 - Homologação / Simulação SEFAZ</option>
+                      <option value="1">1 - Produção Oficial</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-4">
+                    <label>ID do Token CSC (CodigoID) *</label>
+                    <input type="text" id="Cfg_Page_Nfce_CodigoID" name="Nfce.CodigoID" class="form-control" placeholder="000001" value="000001" required>
+                  </div>
+                  <div class="form-group col-8">
+                    <label>Chave / Token de Segurança CSC (CodigoSeg) *</label>
+                    <input type="text" id="Cfg_Page_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a" value="1317bbaf-264c-41d9-9c71-c75215211f2a" required>
+                  </div>
+                  <div class="form-group col-12">
+                    <label>Chave de Acesso Padrão / Última NFC-e Emitida</label>
+                    <input type="text" id="Cfg_Page_Nfce_Chave" name="Nfce.Chave" class="form-control" placeholder="Chave de 44 dígitos (Ex: 3526...)">
+                  </div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> Salvar Parâmetros NFC-e
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- TAB 4: CERTIFICADO DIGITAL -->
+          <div class="db-config-tab-content" id="tab-cfg-db-cert" style="display: none;">
+            <div class="table-card" style="padding: 1.5rem;">
+              <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-key" style="color: var(--accent-rose);"></i> Configuração do Certificado Digital (A1 / A3)
+              </h3>
+              <form id="form-config-cert-page" onsubmit="saveCertConfigPage(event)">
+                <div class="form-grid">
+                  <div class="form-group col-4">
+                    <label>Tipo de Certificado</label>
+                    <select id="Cfg_Page_Cert_Tipo" name="Certificado.Tipo" class="form-control" onchange="onCertTipoChange('Cfg_Page')">
+                      <option value="A1">A1 - Arquivo em Disco (.PFX / .P12)</option>
+                      <option value="A3">A3 - Cartão / Token / Opções da Internet</option>
+                    </select>
+                  </div>
+                  <div class="form-group col-8">
+                    <label id="lbl_Cfg_Page_Cert_Caminho">Caminho / Local do Arquivo (.pfx / .p12) no Servidor</label>
+                    <div style="display: flex; gap: 6px;">
+                      <input type="text" id="Cfg_Page_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx">
+                      <button type="button" class="btn btn-secondary" id="btn_Cfg_Page_Cert_Browse" onclick="handleCertBrowse('Cfg_Page')" title="Buscar certificado nas pastas (A1) ou Opções da Internet (A3)" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-folder-open" id="icon_Cfg_Page_Cert_Browse"></i> <span id="txt_Cfg_Page_Cert_Browse">Procurar Pasta...</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="form-group col-6">
+                    <label>Senha do Certificado Digital</label>
+                    <input type="password" id="Cfg_Page_Cert_Senha" name="Certificado.Senha" class="form-control" placeholder="Digite a senha do certificado...">
+                  </div>
+                  <div class="form-group col-6">
+                    <label>Validade do Certificado Digital</label>
+                    <input type="text" id="Cfg_Page_Cert_Validade" name="Certificado.Validade" class="form-control" value="2027-12-31" placeholder="AAAA-MM-DD">
+                  </div>
+                </div>
+
+                <div id="cert-status-alert-box" style="margin-top: 1.25rem; padding: 1rem; border-radius: var(--radius-md); background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <i class="fa-solid fa-shield-halved fa-2x" style="color: var(--accent-blue);"></i>
+                    <div>
+                      <div style="font-weight: 600; color: var(--text-primary);" id="cert-status-title-text">Certificado Digital Configurado</div>
+                      <div style="font-size: 0.85rem; color: var(--text-muted);" id="cert-status-desc-text">Pronto para assinaturas digitais de NF-e (Modelo 55) e NFC-e (Modelo 65).</div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="testDigitalCert()">
+                    <i class="fa-solid fa-vial"></i> Validar Certificado
+                  </button>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> Salvar Certificado Digital
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 1: ENTIDADE ==================== -->
+  <div class="modal-backdrop" id="entity-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-ent">
+          <i class="fa-solid fa-user-pen"></i> Cadastro de Entidade
+        </div>
+        <button class="modal-close" onclick="closeEntityModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-ent-basicos', this)">Dados Básicos</button>
+        <button class="tab-btn" onclick="switchTab('tab-ent-enderecos', this)">Endereços</button>
+        <button class="tab-btn" onclick="switchTab('tab-ent-financeiro', this)">Financeiro & Gerencial</button>
+        <button class="tab-btn" onclick="switchTab('tab-ent-pessoal', this)">Pessoal & Contato</button>
+        <button class="tab-btn" onclick="switchTab('tab-ent-obs', this)">Observações</button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="entity-form" onsubmit="saveEntity(event)">
+        <div class="modal-body">
+          <input type="hidden" id="CodEntidade" name="CodEntidade">
+
+          <!-- TAB 1: DADOS BÁSICOS -->
+          <div class="tab-content active" id="tab-ent-basicos">
+            <div class="form-grid">
+              <div class="form-group col-2">
+                <label>Tipo *</label>
+                <select id="Tipo" name="Tipo" class="form-control" required>
+                  <option value="1">Cliente</option>
+                  <option value="2">Fornecedor</option>
+                  <option value="3">Vendedor</option>
+                  <option value="4">Transportadora</option>
+                  <option value="5">Cliente / Fornecedor</option>
+                  <option value="7">Todos</option>
+                  <option value="0">Outros</option>
+                </select>
+              </div>
+
+              <div class="form-group col-2">
+                <label>Pessoa *</label>
+                <select id="Classificacao" name="Classificacao" class="form-control">
+                  <option value="1">Física</option>
+                  <option value="2">Jurídica</option>
+                </select>
+              </div>
+
+              <div class="form-group col-6">
+                <label>Nome / Razão Social *</label>
+                <input type="text" id="Nome" name="Nome" class="form-control" required placeholder="Nome completo ou Razão Social">
+              </div>
+
+              <div class="form-group col-2">
+                <div class="form-check">
+                  <input type="checkbox" id="Ativo" name="Ativo" value="-1" checked>
+                  <label for="Ativo" style="color: var(--text-primary);">Cadastro Ativo</label>
+                </div>
+              </div>
+
+              <div class="form-group col-6">
+                <label>Nome Fantasia / Apelido</label>
+                <input type="text" id="Fantasia" name="Fantasia" class="form-control">
+              </div>
+
+              <div class="form-group col-6">
+                <label>CPF / CNPJ</label>
+                <div style="display: flex; gap: 6px;">
+                  <input type="text" id="CPF" name="CPF" class="form-control" placeholder="CPF ou CNPJ" onkeydown="if(event.key==='Enter'){event.preventDefault();consultarCNPJ('CPF');}">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-buscar-cnpj-ent" onclick="consultarCNPJ('CPF')" title="Buscar dados da empresa pelo CNPJ" style="white-space: nowrap; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-magnifying-glass"></i> Buscar CNPJ
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group col-3">
+                <label>RG / Inscrição Estadual</label>
+                <input type="text" id="RG" name="RG" class="form-control" placeholder="RG ou IE">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Telefone Principal</label>
+                <input type="text" id="Fone" name="Fone" class="form-control" placeholder="(00) 0000-0000">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Celular</label>
+                <input type="text" id="Celular" name="Celular" class="form-control" placeholder="(00) 90000-0000">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Fax</label>
+                <input type="text" id="Fax" name="Fax" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>E-mail</label>
+                <input type="email" id="Email" name="Email" class="form-control" placeholder="email@exemplo.com">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Home Page / Site</label>
+                <input type="text" id="HomePage" name="HomePage" class="form-control" placeholder="www.exemplo.com">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Data Nascimento</label>
+                <input type="date" id="DtNasc" name="DtNasc" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Data Cadastro</label>
+                <input type="date" id="DtCadastro" name="DtCadastro" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: ENDEREÇOS -->
+          <div class="tab-content" id="tab-ent-enderecos">
+            <h4 style="color: var(--accent-blue); margin-bottom: 0.75rem;">Endereço Principal</h4>
+            <div class="form-grid">
+              <div class="form-group col-6">
+                <label>Logradouro / Rua</label>
+                <input type="text" id="Endereco" name="Endereco" class="form-control">
+              </div>
+
+              <div class="form-group col-2">
+                <label>Número</label>
+                <input type="text" id="Nro" name="Nro" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Complemento</label>
+                <input type="text" id="Complemento" name="Complemento" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Bairro</label>
+                <input type="text" id="Bairro" name="Bairro" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Cidade</label>
+                <input type="text" id="Cidade" name="Cidade" class="form-control">
+              </div>
+
+              <div class="form-group col-2">
+                <label>UF</label>
+                <input type="text" id="Uf" name="Uf" class="form-control" maxlength="2" style="text-transform: uppercase;">
+              </div>
+
+              <div class="form-group col-2">
+                <label>CEP</label>
+                <input type="text" id="Cep" name="Cep" class="form-control">
+              </div>
+            </div>
+
+            <h4 style="color: var(--accent-amber); margin: 1.5rem 0 0.75rem 0;">Endereço de Entrega</h4>
+            <div class="form-grid">
+              <div class="form-group col-6">
+                <label>Logradouro Entrega</label>
+                <input type="text" id="Endereço_Entrega" name="Endereço_Entrega" class="form-control">
+              </div>
+
+              <div class="form-group col-2">
+                <label>Número</label>
+                <input type="text" id="Nro_Entrega" name="Nro_Entrega" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Bairro</label>
+                <input type="text" id="Bairro_Entrega" name="Bairro_Entrega" class="form-control">
+              </div>
+
+              <div class="form-group col-5">
+                <label>Cidade Entrega</label>
+                <input type="text" id="Cidade_Entrega" name="Cidade_Entrega" class="form-control">
+              </div>
+
+              <div class="form-group col-2">
+                <label>UF</label>
+                <input type="text" id="Uf_Entrega" name="Uf_Entrega" class="form-control" maxlength="2">
+              </div>
+
+              <div class="form-group col-5">
+                <label>CEP Entrega</label>
+                <input type="text" id="Cep_Entrega" name="Cep_Entrega" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: FINANCEIRO -->
+          <div class="tab-content" id="tab-ent-financeiro">
+            <div class="form-grid">
+              <div class="form-group col-3">
+                <label>Limite de Crédito (R$)</label>
+                <input type="number" step="0.01" id="Credito" name="Credito" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Salário (R$)</label>
+                <input type="number" step="0.01" id="Salario" name="Salario" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Comissão Vendedor (%)</label>
+                <input type="number" step="0.01" id="Comissao" name="Comissao" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Prazo de Pagamento</label>
+                <input type="text" id="Prazo" name="Prazo" class="form-control" placeholder="Ex: 30/60 dias">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Dia Bom para Pagamento</label>
+                <input type="number" id="DiaBomPgto" name="DiaBomPgto" class="form-control" min="1" max="31">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Status Financeiro</label>
+                <select id="Status" name="Status" class="form-control">
+                  <option value="0">Em Dia</option>
+                  <option value="1">Atrasado / Atenção</option>
+                  <option value="2">Bloqueado</option>
+                </select>
+              </div>
+
+              <div class="form-group col-6">
+                <label>Vendedor Responsável</label>
+                <input type="text" id="NomeVendedor" name="NomeVendedor" class="form-control">
+              </div>
+
+              <div class="form-group col-12">
+                <label>Pessoas Autorizadas a Comprar no Nome</label>
+                <input type="text" id="PesAut" name="PesAut" class="form-control" placeholder="Nomes dos autorizados...">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: PESSOAL & CONTATO -->
+          <div class="tab-content" id="tab-ent-pessoal">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>Estado Civil</label>
+                <select id="EstadoCivil" name="EstadoCivil" class="form-control">
+                  <option value="">Selecione...</option>
+                  <option value="Solteiro">Solteiro(a)</option>
+                  <option value="Casado">Casado(a)</option>
+                  <option value="Divorciado">Divorciado(a)</option>
+                  <option value="Viuvo">Viúvo(a)</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+
+              <div class="form-group col-4">
+                <label>Data de Casamento</label>
+                <input type="date" id="DtCasamento" name="DtCasamento" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Cônjuge</label>
+                <input type="text" id="Conjuge" name="Conjuge" class="form-control">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Filiação (Pai / Mãe)</label>
+                <input type="text" id="Filiacao" name="Filiacao" class="form-control">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Profissão</label>
+                <input type="text" id="Profissao" name="Profissao" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: OBSERVAÇÕES -->
+          <div class="tab-content" id="tab-ent-obs">
+            <div class="form-group col-12">
+              <label>Observações Gerais</label>
+              <textarea id="Obs" name="Obs" class="form-control" rows="8" placeholder="Digite anotações ou dados adicionais sobre a entidade..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEntityModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Cadastro
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 2: PRODUTO ==================== -->
+  <div class="modal-backdrop" id="product-modal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-prd">
+          <i class="fa-solid fa-box"></i> Cadastro de Produto
+        </div>
+        <button class="modal-close" onclick="closeProductModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Tabs (FormProdutos.frm inspired) -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-prd-principais', this)">Dados Principais</button>
+        <button class="tab-btn" onclick="switchTab('tab-prd-precos', this)">Preços & Margem</button>
+        <button class="tab-btn" onclick="switchTab('tab-prd-estoque', this)">Estoque & Medidas</button>
+        <button class="tab-btn" onclick="switchTab('tab-prd-fiscal', this)">Fiscal & Impostos</button>
+        <button class="tab-btn" onclick="switchTab('tab-prd-obs', this)">Observações</button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="product-form" onsubmit="saveProduct(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Prd_CodPrd" name="CodPrd">
+
+          <!-- TAB 1: DADOS PRINCIPAIS -->
+          <div class="tab-content active" id="tab-prd-principais">
+            <div class="form-grid">
+              <div class="form-group col-8">
+                <label>Descrição do Produto *</label>
+                <input type="text" id="Prd_Descricao_Produto" name="Descricao_Produto" class="form-control" required placeholder="Nome / Descrição completa do produto">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Grupo de Produto *</label>
+                <select id="Prd_Grupo" name="Grupo" class="form-control" required>
+                  <option value="">Selecione um grupo...</option>
+                </select>
+              </div>
+
+              <div class="form-group col-4">
+                <label>Código de Barras (EAN)</label>
+                <input type="text" id="Prd_CodBar" name="CodBar" class="form-control" placeholder="7890000000000">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Embalagem / Unidade</label>
+                <input type="text" id="Prd_Embalagem" name="Embalagem" class="form-control" placeholder="UN, KG, CX, PC">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Marca / Fabricante</label>
+                <input type="text" id="Prd_Marca" name="Marca" class="form-control" placeholder="Marca do produto">
+              </div>
+
+              <div class="form-group col-2">
+                <div class="form-check" style="margin-top: 1.5rem;">
+                  <input type="checkbox" id="Prd_Ativo" name="Ativo" value="-1" checked>
+                  <label for="Prd_Ativo" style="color: var(--text-primary);">Ativo</label>
+                </div>
+              </div>
+
+              <div class="form-group col-6">
+                <label>Complemento / Referência</label>
+                <input type="text" id="Prd_Complemento" name="Complemento" class="form-control">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Localização no Estoque</label>
+                <input type="text" id="Prd_Local" name="Local" class="form-control" placeholder="Prateleira A1, Corredor 2...">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: PREÇOS & MARGEM -->
+          <div class="tab-content" id="tab-prd-precos">
+            <div class="form-grid">
+              <div class="form-group col-3">
+                <label>Preço Custo (R$) *</label>
+                <input type="number" step="0.01" id="Prd_Custo" name="Custo" class="form-control" required value="0.00" oninput="calcMargin()">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Margem Lucro (%)</label>
+                <input type="number" step="0.01" id="Prd_Margem" name="Margem" class="form-control" value="0.00" oninput="calcSalePrice()">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Preço Venda (R$) *</label>
+                <input type="number" step="0.01" id="Prd_Venda" name="Venda" class="form-control" required value="0.00" oninput="calcMargin()">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Preço a Prazo (R$)</label>
+                <input type="number" step="0.01" id="Prd_PcoPrazo" name="PcoPrazo" class="form-control" value="0.00">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Comissão Vendedor (%)</label>
+                <input type="number" step="0.01" id="Prd_Comissao" name="Comissao" class="form-control" value="0.00">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Preço Promoção (R$)</label>
+                <input type="number" step="0.01" id="Prd_Venda_Promocao" name="Venda_Promocao" class="form-control" value="0.00">
+              </div>
+
+              <div class="form-group col-3">
+                <div class="form-check" style="margin-top: 1.5rem;">
+                  <input type="checkbox" id="Prd_Promocao" name="Promocao" value="-1">
+                  <label for="Prd_Promocao" style="color: var(--accent-emerald);">Em Promoção</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: ESTOQUE & MEDIDAS -->
+          <div class="tab-content" id="tab-prd-estoque">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>Estoque Atual *</label>
+                <input type="number" step="0.001" id="Prd_Estoque" name="Estoque" class="form-control" required value="0">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Estoque Mínimo</label>
+                <input type="number" step="0.001" id="Prd_Minimo" name="Minimo" class="form-control" value="0">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Estoque Ideal</label>
+                <input type="number" step="0.001" id="Prd_Est_Ideal" name="Est_Ideal" class="form-control" value="0">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Peso Líquido (kg)</label>
+                <input type="number" step="0.001" id="Prd_PesoLiquido" name="PesoLiquido" class="form-control" value="0">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Peso Bruto (kg)</label>
+                <input type="number" step="0.001" id="Prd_PesoBruto" name="PesoBruto" class="form-control" value="0">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: FISCAL & IMPOSTOS -->
+          <div class="tab-content" id="tab-prd-fiscal">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>NCM / Classe Fiscal</label>
+                <input type="text" id="Prd_ClasseFiscal" name="ClasseFiscal" class="form-control" placeholder="0000.00.00">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Situação Tributária (CSOSN / CST)</label>
+                <input type="text" id="Prd_SitTrib" name="SitTrib" class="form-control" placeholder="102, 500, 00...">
+              </div>
+
+              <div class="form-group col-4">
+                <label>CFOP Padrão</label>
+                <input type="text" id="Prd_CfOpPrd" name="CfOpPrd" class="form-control" placeholder="5102">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Alíquota ICMS (%)</label>
+                <input type="number" step="0.01" id="Prd_Icm" name="Icm" class="form-control" value="18.00">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Alíquota IPI (%)</label>
+                <input type="number" step="0.01" id="Prd_Ipi" name="Ipi" class="form-control" value="0.00">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Alíquota Geral (%)</label>
+                <input type="number" step="0.01" id="Prd_Aliquota" name="Aliquota" class="form-control" value="0.00">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: OBSERVAÇÕES -->
+          <div class="tab-content" id="tab-prd-obs">
+            <div class="form-group col-12">
+              <label>Observações do Produto</label>
+              <textarea id="Prd_Obs" name="Obs" class="form-control" rows="6" placeholder="Ficha técnica, detalhes de aplicação ou observações fiscais..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeProductModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Produto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 3: GRUPO ==================== -->
+  <div class="modal-backdrop" id="group-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-gru">
+          <i class="fa-solid fa-layer-group"></i> Cadastro de Grupo de Produto
+        </div>
+        <button class="modal-close" onclick="closeGroupModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="group-form" onsubmit="saveGroup(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Gru_CodGru" name="CodGru">
+
+          <div class="form-grid">
+            <div class="form-group col-6">
+              <label>Descrição do Grupo *</label>
+              <input type="text" id="Gru_Descricao_Grupo" name="Descricao_Grupo" class="form-control" required placeholder="Ex: BEBIDAS, LIMPEZA, ALIMENTOS">
+            </div>
+
+            <div class="form-group col-3">
+              <label>Família / Categoria ID</label>
+              <input type="number" id="Gru_Familia" name="Familia" class="form-control" value="1">
+            </div>
+
+            <div class="form-group col-3">
+              <label>Desconto Padrão (%)</label>
+              <input type="number" step="0.01" min="0" max="100" id="Gru_Desconto" name="Desconto" class="form-control" value="0.00" placeholder="0.00">
+            </div>
+
+            <div class="form-group col-12">
+              <div class="form-check" style="margin-top: 0.5rem;">
+                <input type="checkbox" id="Gru_BaixarEstoque" name="BaixarEstoque" value="-1" checked>
+                <label for="Gru_BaixarEstoque" style="color: var(--text-primary);">Baixar Estoque Automático nas Vendas</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeGroupModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Grupo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 4: CADASTRO / ALTERAÇÃO DE EMPRESA ==================== -->
+  <div class="modal-backdrop" id="empresa-modal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-emp">
+          <i class="fa-solid fa-building-pen"></i> Alterar Dados da Empresa
+        </div>
+        <button class="modal-close" onclick="closeEmpresaModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-emp-geral', this)">Dados Gerais</button>
+        <button class="tab-btn" onclick="switchTab('tab-emp-endereco', this)">Endereço & Contato</button>
+        <button class="tab-btn" onclick="switchTab('tab-emp-fiscal', this)">Fiscal & Tributos (NFe)</button>
+      </div>
+
+      <form id="empresa-form" onsubmit="saveEmpresa(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Emp_id_empresa" name="id_empresa">
+
+          <!-- TAB 1: DADOS GERAIS -->
+          <div class="tab-content active" id="tab-emp-geral">
+            <div class="form-grid">
+              <div class="form-group col-6">
+                <label>Razão Social *</label>
+                <input type="text" id="Emp_RazaoSocial" name="RazaoSocial" class="form-control" required placeholder="Nome empresarial completo">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Nome Fantasia</label>
+                <input type="text" id="Emp_Fantasia" name="Fantasia" class="form-control" placeholder="Nome de exibição">
+              </div>
+
+              <div class="form-group col-6">
+                <label>CNPJ *</label>
+                <div style="display: flex; gap: 6px;">
+                  <input type="text" id="Emp_CNPJ" name="CNPJ" class="form-control" required placeholder="00.000.000/0000-00" onkeydown="if(event.key==='Enter'){event.preventDefault();consultarCNPJ('Emp_CNPJ');}">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-buscar-cnpj-emp" onclick="consultarCNPJ('Emp_CNPJ')" title="Buscar dados da empresa pelo CNPJ" style="white-space: nowrap; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-magnifying-glass"></i> Buscar CNPJ
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group col-4">
+                <label>Inscrição Estadual (IE)</label>
+                <input type="text" id="Emp_InscEst" name="InscEst" class="form-control" placeholder="Inscrição estadual...">
+              </div>
+
+              <div class="form-group col-4">
+                <div class="form-check" style="margin-top: 1.5rem;">
+                  <input type="checkbox" id="Emp_Ativo" name="Ativo" value="1" checked>
+                  <label for="Emp_Ativo" style="color: var(--text-primary);">Empresa Ativa</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: ENDEREÇO & CONTATO -->
+          <div class="tab-content" id="tab-emp-endereco">
+            <div class="form-grid">
+              <div class="form-group col-6">
+                <label>Logradouro / Rua</label>
+                <input type="text" id="Emp_Logradouro" name="Logradouro" class="form-control" placeholder="Rua, Av, Praça...">
+              </div>
+
+              <div class="form-group col-2">
+                <label>Número</label>
+                <input type="text" id="Emp_Nro" name="Nro" class="form-control" placeholder="123">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Bairro</label>
+                <input type="text" id="Emp_Bairro" name="Bairro" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Cidade</label>
+                <input type="text" id="Emp_Cidade" name="Cidade" class="form-control">
+              </div>
+
+              <div class="form-group col-2">
+                <label>UF</label>
+                <input type="text" id="Emp_UF" name="UF" class="form-control" maxlength="2" style="text-transform: uppercase;" value="SP">
+              </div>
+
+              <div class="form-group col-3">
+                <label>CEP</label>
+                <input type="text" id="Emp_CEP" name="CEP" class="form-control" placeholder="00000-000">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Telefone</label>
+                <input type="text" id="Emp_Fone" name="Fone" class="form-control" placeholder="(00) 0000-0000">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: FISCAL & TRIBUTOS (base nfe.ini) -->
+          <div class="tab-content" id="tab-emp-fiscal">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>Código IBGE Município (CODIGOIBGE)</label>
+                <input type="text" id="Emp_CodigoIBGE" name="CodigoIBGE" class="form-control" placeholder="Ex: 3556008">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Regime Tributário (REGIMETRIB)</label>
+                <select id="Emp_RegimeTrib" name="RegimeTrib" class="form-control">
+                  <option value="1">1 - Simples Nacional</option>
+                  <option value="2">2 - Simples - excesso de sublimite</option>
+                  <option value="3">3 - Regime Normal (Lucro Presumido/Real)</option>
+                </select>
+              </div>
+
+              <div class="form-group col-4">
+                <label>CFOP Padrão (Cfop)</label>
+                <input type="text" id="Emp_CFOP" name="CFOP" class="form-control" placeholder="5102">
+              </div>
+
+              <div class="form-group col-3">
+                <label>CST PIS (Pis)</label>
+                <input type="text" id="Emp_PIS" name="PIS" class="form-control" value="01">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Alíquota PIS (%) (aliqPis)</label>
+                <input type="text" id="Emp_AliqPIS" name="AliqPIS" class="form-control" value="0,65">
+              </div>
+
+              <div class="form-group col-3">
+                <label>CST COFINS (Cofins)</label>
+                <input type="text" id="Emp_COFINS" name="COFINS" class="form-control" value="01">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Alíquota COFINS (%) (aliqCofins)</label>
+                <input type="text" id="Emp_AliqCOFINS" name="AliqCOFINS" class="form-control" value="3">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Situação Tributária (SitTrib)</label>
+                <input type="text" id="Emp_SitTrib" name="SitTrib" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>SitTrib Fixo (SitTribFixo)</label>
+                <input type="text" id="Emp_SitTribFixo" name="SitTribFixo" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Percentual Dedução (%) (Deducao)</label>
+                <input type="text" id="Emp_Deducao" name="Deducao" class="form-control" value="33,33">
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEmpresaModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Dados da Empresa
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL: PAGAMENTO E FINALIZAÇÃO PDV ==================== -->
+  <div class="modal-backdrop" id="pdv-payment-modal">
+    <div class="modal-container">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-cash-register"></i> Finalizar Venda & Pagamento
+        </div>
+        <button class="modal-close" onclick="closePaymentModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Total Banner -->
+        <div style="background: var(--bg-surface-elevated); border: 2px solid var(--accent-emerald); padding: 1.25rem; border-radius: var(--radius-md); text-align: center;">
+          <div style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">VALOR TOTAL DA VENDA</div>
+          <div id="pay-modal-total-display" style="font-size: 2.25rem; font-weight: 800; color: var(--accent-emerald); margin-top: 0.25rem;">R$ 0,00</div>
+        </div>
+
+        <!-- Forma de Pagamento -->
+        <div>
+          <label class="form-label" style="font-weight: 600; margin-bottom: 0.5rem; display: block;">SELECIONE A FORMA DE PAGAMENTO:</label>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+            <label class="pay-method-card active" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 2px solid var(--accent-blue); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
+              <input type="radio" name="pay-method" value="DINHEIRO" checked onchange="onPaymentMethodChange('DINHEIRO')">
+              <i class="fa-solid fa-money-bill-wave" style="color: var(--accent-emerald); font-size: 1.25rem;"></i>
+              <span style="font-weight: 600;">DINHEIRO</span>
+            </label>
+            
+            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
+              <input type="radio" name="pay-method" value="PIX" onchange="onPaymentMethodChange('PIX')">
+              <i class="fa-solid fa-qrcode" style="color: var(--accent-purple); font-size: 1.25rem;"></i>
+              <span style="font-weight: 600;">PIX / DÉBITO</span>
+            </label>
+
+            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
+              <input type="radio" name="pay-method" value="CARTAO_DEBITO" onchange="onPaymentMethodChange('CARTAO_DEBITO')">
+              <i class="fa-solid fa-credit-card" style="color: var(--accent-cyan); font-size: 1.25rem;"></i>
+              <span style="font-weight: 600;">CARTÃO DÉBITO</span>
+            </label>
+
+            <label class="pay-method-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-surface-elevated);">
+              <input type="radio" name="pay-method" value="CARTAO_CREDITO" onchange="onPaymentMethodChange('CARTAO_CREDITO')">
+              <i class="fa-solid fa-credit-card" style="color: var(--accent-amber); font-size: 1.25rem;"></i>
+              <span style="font-weight: 600;">CARTÃO CRÉDITO</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Cash Details & Troco -->
+        <div id="pay-cash-inputs" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div class="form-group">
+            <label for="pay-valor-recebido" class="form-label" style="font-weight: 600;">VALOR RECEBIDO (R$):</label>
+            <input type="number" id="pay-valor-recebido" class="form-control form-control-lg" step="0.01" min="0" placeholder="0.00" oninput="calcPdvChange()" style="font-size: 1.25rem; font-weight: 700;">
+          </div>
+        </div>
+
+        <div id="pay-change-panel" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-weight: 600; color: var(--text-muted);">TROCO DO CLIENTE:</label>
+          <input type="text" id="pay-troco-display" class="form-control" readonly value="R$ 0,00" style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue); background: transparent; border: none; padding: 0;">
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" onclick="closePaymentModal()">
+          <i class="fa-solid fa-xmark"></i> Cancelar (Esc)
+        </button>
+
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="submitPdvSale(false)">
+            <i class="fa-solid fa-receipt"></i> Venda Simples
+          </button>
+          
+          <button type="button" class="btn btn-emerald btn-lg" onclick="submitPdvSale(true)" style="padding: 0.6rem 1.25rem; font-weight: 700;">
+            <i class="fa-solid fa-check"></i> Emitir NFC-e (F9)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 5: CONFIGURAÇÕES DO PDV ==================== -->
+  <div class="modal-backdrop" id="pdv-config-modal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-sliders"></i> Configurações do PDV (Tabela CfgPdv - SQLite)
+        </div>
+        <button class="modal-close" onclick="closePdvConfigModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div class="modal-tabs">
+        <button class="tab-btn active" onclick="switchTab('tab-cfg-geral', this)">Geral & Caixas</button>
+        <button class="tab-btn" onclick="switchTab('tab-cfg-operacional', this)">Operacional</button>
+        <button class="tab-btn" onclick="switchTab('tab-cfg-nfce', this)">NFC-e / Fiscal</button>
+        <button class="tab-btn" onclick="switchTab('tab-cfg-boleto', this)">Boleto & Banco</button>
+      </div>
+
+      <form id="pdv-config-form" onsubmit="savePdvConfig(event)">
+        <div class="modal-body">
+          
+          <!-- TAB 1: GERAL & CAIXAS -->
+          <div class="tab-content active" id="tab-cfg-geral">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>Porta de Impressão (Porta)</label>
+                <input type="text" id="cfg_Config_Porta" name="Config.Porta" class="form-control" placeholder="TELA, COM1, LPT1, CUSTOM">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Arquivo de Impressão (PortaNf)</label>
+                <input type="text" id="cfg_Config_PortaNf" name="Config.PortaNf" class="form-control" placeholder="c:\lixo.txt">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Tipo de Leitor (Leitor)</label>
+                <input type="text" id="cfg_Config_Leitor" name="Config.Leitor" class="form-control" placeholder="TECLADO">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Local de Estoque (LocalEst)</label>
+                <input type="text" id="cfg_Config_LocalEst" name="Config.LocalEst" class="form-control" placeholder="LOJA">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Nº de Vias / Cópias (Copias)</label>
+                <input type="number" id="cfg_Config_Copias" name="Config.Copias" class="form-control" value="2" min="1">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Linhas Spacing (QtdLinhas)</label>
+                <input type="number" id="cfg_Config_QtdLinhas" name="Config.QtdLinhas" class="form-control" value="7">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Número do Caixa (NroCaixa)</label>
+                <input type="number" id="cfg_Sat_NroCaixa" name="Sat.NroCaixa" class="form-control" value="1">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: OPERACIONAL -->
+          <div class="tab-content" id="tab-cfg-operacional">
+            <div class="form-grid">
+              <div class="form-group col-6">
+                <div class="form-check">
+                  <input type="checkbox" id="cfg_Config_BaixaAuto" name="Config.BaixaAuto" value="1">
+                  <label for="cfg_Config_BaixaAuto" style="color: var(--text-primary);">Baixar Estoque Automático nas Vendas (BaixaAuto)</label>
+                </div>
+              </div>
+
+              <div class="form-group col-6">
+                <div class="form-check">
+                  <input type="checkbox" id="cfg_Config_MostraEstoque" name="Config.MostraEstoque" value="1">
+                  <label for="cfg_Config_MostraEstoque" style="color: var(--text-primary);">Exibir Quantidade em Estoque no Caixa (MostraEstoque)</label>
+                </div>
+              </div>
+
+              <div class="form-group col-6">
+                <div class="form-check">
+                  <input type="checkbox" id="cfg_Config_MostraCusto" name="Config.MostraCusto" value="1">
+                  <label for="cfg_Config_MostraCusto" style="color: var(--text-primary);">Exibir Preço de Custo dos Produtos (MostraCusto)</label>
+                </div>
+              </div>
+
+              <div class="form-group col-6">
+                <div class="form-check">
+                  <input type="checkbox" id="cfg_Config_Desconto" name="Config.Desconto" value="1">
+                  <label for="cfg_Config_Desconto" style="color: var(--text-primary);">Permitir Concessão de Descontos no Caixa (Desconto)</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: NFC-E / FISCAL -->
+          <div class="tab-content" id="tab-cfg-nfce">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label>Série NFC-e (SerieNfce)</label>
+                <input type="text" id="cfg_Nfce_SerieNfce" name="Nfce.SerieNfce" class="form-control" value="1">
+              </div>
+
+              <div class="form-group col-4">
+                <label>Próximo Nº NFC-e (NroNfce)</label>
+                <input type="number" id="cfg_Nfce_NroNfce" name="Nfce.NroNfce" class="form-control">
+              </div>
+
+              <div class="form-group col-4">
+                <label>ID do Token CSC (CodigoID)</label>
+                <input type="text" id="cfg_Nfce_CodigoID" name="Nfce.CodigoID" class="form-control" placeholder="000001">
+              </div>
+
+              <div class="form-group col-12">
+                <label>Token de Segurança CSC (CodigoSeg)</label>
+                <input type="text" id="cfg_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a">
+              </div>
+
+              <div class="form-group col-6">
+                <label>CNPJ Desenvolvedor (CnpjDesenvolvedor)</label>
+                <input type="text" id="cfg_Sat_CnpjDesenvolvedor" name="Sat.CnpjDesenvolvedor" class="form-control">
+              </div>
+
+              <div class="form-group col-6">
+                <label>Caminho ACBrMonitor (LocalAcbr)</label>
+                <input type="text" id="cfg_Sat_LocalAcbr" name="Sat.LocalAcbr" class="form-control" placeholder="c:\AcbrMonitorPlus">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: DADOS BANCÁRIOS / BOLETOS -->
+          <div class="tab-content" id="tab-cfg-boleto">
+            <div class="form-grid">
+              <div class="form-group col-3">
+                <label>Banco (Banco)</label>
+                <input type="text" id="cfg_boleto_Banco" name="boleto.Banco" class="form-control" placeholder="Ex: 001, 237">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Agência (AGENCIA)</label>
+                <input type="text" id="cfg_boleto_AGENCIA" name="boleto.AGENCIA" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Conta Corrente (CONTA)</label>
+                <input type="text" id="cfg_boleto_CONTA" name="boleto.CONTA" class="form-control">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Convênio (Convenio)</label>
+                <input type="text" id="cfg_boleto_Convenio" name="boleto.Convenio" class="form-control">
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closePdvConfigModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Configurações (Tabela CfgPdv)
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 6: DANFE NFC-E / COMPROVANTE RECEIPT ==================== -->
+  <div class="modal-backdrop" id="pdv-receipt-modal">
+    <div class="modal-container" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="rec-modal-header-title">
+          <i class="fa-solid fa-receipt"></i> Comprovante da Venda
+        </div>
+        <button class="modal-close" onclick="closeReceiptModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="background: var(--bg-surface-elevated); padding: 1.25rem;">
+        <!-- Printable Receipt Thermal Area -->
+        <div class="thermal-receipt" id="thermal-receipt-printable">
+          <div class="receipt-header">
+            <h2 id="rec-company-name">SIDCOMP VENDAS LTDA</h2>
+            <p id="rec-company-sub">FRENTE DE CAIXA - PDV</p>
+            <p id="rec-company-cnpj">CNPJ: 11.054.174/0001-53 | IE: 123456789110</p>
+            <div class="receipt-divider">------------------------------------------------</div>
+            <h3 class="receipt-title" id="rec-doc-title">DANFE NFC-e</h3>
+            <p class="receipt-subtitle" id="rec-doc-subtitle">Nota Fiscal de Consumidor Eletrônica</p>
+            <p class="receipt-subtitle" id="rec-doc-extra">Não Permite Crédito de ICMS</p>
+            <div class="receipt-divider">------------------------------------------------</div>
+          </div>
+
+          <!-- Bloco de Identificação do Cliente (Quando não for consumidor genérico) -->
+          <div class="receipt-client-info" id="rec-client-block" style="display: none;">
+            <p><strong>CLIENTE:</strong> <span id="rec-cli-nome"></span></p>
+            <p id="rec-cli-doc-row" style="display: none;"><strong>CPF/CNPJ:</strong> <span id="rec-cli-doc"></span></p>
+            <p id="rec-cli-end-row" style="display: none;"><strong>ENDEREÇO:</strong> <span id="rec-cli-end"></span></p>
+            <p id="rec-cli-cid-row" style="display: none;"><strong>CIDADE/UF:</strong> <span id="rec-cli-cid"></span></p>
+            <p id="rec-cli-fone-row" style="display: none;"><strong>FONE:</strong> <span id="rec-cli-fone"></span></p>
+            <div class="receipt-divider">------------------------------------------------</div>
+          </div>
+
+          <table class="receipt-items-table">
+            <thead>
+              <tr>
+                <th>CÓD. DESCRIÇÃO</th>
+                <th style="text-align: right;">QTD UN</th>
+                <th style="text-align: right;">VLR (R$)</th>
+              </tr>
+            </thead>
+            <tbody id="rec-items-tbody"></tbody>
+          </table>
+
+          <div class="receipt-divider">------------------------------------------------</div>
+
+          <div class="receipt-totals">
+            <div class="rec-row"><span>QTD. TOTAL DE ITENS:</span><strong id="rec-total-items">0</strong></div>
+            <div class="rec-row"><span>SUBTOTAL R$:</span><strong id="rec-subtotal">0,00</strong></div>
+            <div class="rec-row"><span>DESCONTO R$:</span><strong id="rec-desconto">0,00</strong></div>
+            <div class="rec-row rec-total-bold"><span>TOTAL R$:</span><strong id="rec-total-final">0,00</strong></div>
+            <div class="rec-row"><span>FORMA PAGAMENTO:</span><strong id="rec-forma-pgto">DINHEIRO</strong></div>
+            <div class="rec-row"><span>VALOR RECEBIDO R$:</span><strong id="rec-vlr-pago">0,00</strong></div>
+            <div class="rec-row"><span>TROCO R$:</span><strong id="rec-troco">0,00</strong></div>
+          </div>
+
+          <div class="receipt-divider">------------------------------------------------</div>
+
+          <div class="receipt-nfce-info" id="rec-nfce-block">
+            <p><strong>CONSUMIDOR:</strong> <span id="rec-cliente-nome">CONSUMIDOR FINAL</span></p>
+            <p><strong>NFC-e Nº:</strong> <span id="rec-nfe-num">000001</span> | <strong>Série:</strong> 1 | <span id="rec-nfe-data">00/00/0000</span></p>
+            <p><strong>Protocolo de Autorização:</strong></p>
+            <p class="rec-highlight-code" id="rec-protocolo">135260000000000</p>
+            <p><strong>Chave de Acesso:</strong></p>
+            <p class="rec-key" id="rec-chave-nfe">0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000</p>
+          </div>
+
+          <div class="receipt-qrcode-container" id="rec-qrcode-block">
+            <div id="rec-qrcode-canvas"></div>
+            <p class="rec-consult-url">Consulta via leitor QR Code ou no site oficial SEFAZ</p>
+          </div>
+
+          <div class="receipt-footer">
+            <p id="rec-footer-msg">AGRADECEMOS A PREFERENCIA!</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" onclick="closeReceiptModal()">Fechar</button>
+        
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="printSimpleSaleReceipt()">
+            <i class="fa-solid fa-receipt"></i> Imprimir Recibo Venda
+          </button>
+          
+          <button type="button" class="btn btn-primary btn-sm" onclick="printDanfeNfce()">
+            <i class="fa-solid fa-file-invoice"></i> Imprimir DANFE NFC-e
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 7: CADASTRO / EDIÇÃO DE PEDIDO DE VENDAS ==================== -->
+  <div class="modal-backdrop" id="order-modal">
+    <div class="modal-container modal-lg" style="max-width: 960px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-ped">
+          <i class="fa-solid fa-file-circle-plus"></i> Emissão de Pedido de Vendas (FrmPedidos.frm)
+        </div>
+        <button class="modal-close" onclick="closeOrderModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="order-form" onsubmit="saveOrder(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Ord_CodPed" name="CodPed">
+
+          <!-- Header Grid: Customer, Vendor, Natureza, CFO, Carrier -->
+          <div class="form-grid" style="margin-bottom: 1.25rem;">
+            <div class="form-group col-5" style="position: relative;">
+              <label>Cliente / Entidade (Tipo 1) *</label>
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-user search-icon"></i>
+                <input type="text" id="ord-client-search-input" class="search-input" placeholder="Digite para buscar cliente (Tipo 1)..." required>
+                <input type="hidden" id="Ord_CodEntidade" name="CodEntidade" value="1">
+              </div>
+              <div class="pos-results-overlay" id="ord-client-results-overlay" style="display: none; width: 100%; top: 100%;"></div>
+            </div>
+
+            <div class="form-group col-4">
+              <label>Vendedor (Tipo 3) *</label>
+              <select id="Ord_Vendedor" name="Vendedor" class="form-control" required>
+                <option value="1">1 - OPERADOR CAIXA</option>
+              </select>
+            </div>
+
+            <div class="form-group col-3">
+              <label>Data de Emissão</label>
+              <input type="text" id="Ord_DataEmiss" name="DataEmiss" class="form-control" placeholder="DD/MM/AAAA">
+            </div>
+
+            <div class="form-group col-3">
+              <label>Natureza de Operação</label>
+              <select id="Ord_Operacao" name="Operacao" class="form-control" onchange="onNaturezaOperacaoChange(this.value)">
+                <option value="1">VENDA DE MERCADORIAS</option>
+              </select>
+            </div>
+
+            <div class="form-group col-3">
+              <label>CFOP / CFO (Separado)</label>
+              <input type="text" id="Ord_Cfo" name="Cfo" class="form-control" value="5102 - VENDA DE MERCADORIAS" placeholder="Ex: 5102">
+            </div>
+
+            <div class="form-group col-3">
+              <label>Condição de Pagamento</label>
+              <select id="Ord_CondPgto" name="CondPgto" class="form-control">
+                <option value="A VISTA">A VISTA</option>
+                <option value="DINHEIRO">DINHEIRO</option>
+                <option value="PIX">PIX</option>
+              </select>
+            </div>
+
+            <div class="form-group col-3">
+              <label>Transportadora (Tipo 5)</label>
+              <select id="Ord_Transportadora" name="Transportadora" class="form-control">
+                <option value="1">1 - NOSSO TRANSPORTE / (Nenhum)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Items Grid & Item Addition Input Bar -->
+          <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+            <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+              <span><i class="fa-solid fa-boxes-stacked"></i> Itens do Pedido (ITP)</span>
+              <span id="ord-items-badge" class="badge badge-group">0 itens</span>
+            </div>
+
+            <div class="form-grid" style="align-items: flex-end; margin-bottom: 0.75rem;">
+              <div class="form-group col-5" style="position: relative;">
+                <label>Buscar Produto (Código ou Descrição)</label>
+                <input type="text" id="ord-product-search-input" class="form-control" placeholder="Digite para buscar produto...">
+                <div class="pos-results-overlay" id="ord-product-results-overlay" style="display: none; width: 100%; top: 100%;"></div>
+              </div>
+
+              <div class="form-group col-2">
+                <label>Quantidade</label>
+                <input type="number" id="ord-item-qty" class="form-control" value="1" min="1" step="1">
+              </div>
+
+              <div class="form-group col-2">
+                <label>Valor Unit. (R$)</label>
+                <input type="number" id="ord-item-price" class="form-control" value="0.00" step="0.01">
+              </div>
+
+              <div class="form-group col-3">
+                <button type="button" class="btn btn-emerald" onclick="addOrderItemFromInputs()" style="width: 100%; height: 38px;">
+                  <i class="fa-solid fa-plus"></i> Adicionar Item
+                </button>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+              <table class="mini-data-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40px;">#</th>
+                    <th style="width: 70px;">Cód.</th>
+                    <th>Descrição do Produto</th>
+                    <th style="text-align: right; width: 75px;">Qtd</th>
+                    <th style="text-align: right; width: 95px;">Vlr. Unit</th>
+                    <th style="text-align: right; width: 95px;">Desconto</th>
+                    <th style="text-align: right; width: 105px;">Subtotal</th>
+                    <th style="width: 50px; text-align: center;">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="ord-items-tbody">
+                  <tr>
+                    <td colspan="8" class="loading-td">Nenhum item adicionado ao pedido.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Summary & Totals Grid -->
+          <div class="form-grid">
+            <div class="form-group col-6">
+              <label>Observações do Pedido</label>
+              <textarea id="Ord_Obs" name="Obs" class="form-control" rows="2" placeholder="Informações complementares para a NF-e e entrega..."></textarea>
+            </div>
+
+            <div class="form-group col-2">
+              <label>Desconto (R$)</label>
+              <input type="number" step="0.01" id="Ord_Desconto" name="Desconto" class="form-control" value="0.00" onchange="calcOrderTotals()">
+            </div>
+
+            <div class="form-group col-2">
+              <label>Frete (R$)</label>
+              <input type="number" step="0.01" id="Ord_ValorFrete" name="ValorFrete" class="form-control" value="0.00" onchange="calcOrderTotals()">
+            </div>
+
+            <div class="form-group col-2">
+              <label style="font-weight: 700; color: var(--accent-emerald);">TOTAL (R$)</label>
+              <input type="text" id="Ord_TotalDisplay" class="form-control" style="font-weight: 800; font-size: 1.1rem; color: var(--accent-emerald);" value="R$ 0,00" readonly>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Pedido de Vendas
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 8: VISUALIZAÇÃO DE NF-E MODELO 55 ==================== -->
+  <div class="modal-backdrop" id="nfe-view-modal">
+    <div class="modal-container" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-file-invoice"></i> Detalhes da NF-e (Modelo 55 - SEFAZ 4.00)
+        </div>
+        <button class="modal-close" onclick="closeNfeViewModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">CHAVE DE ACESSO (44 DÍGITOS):</div>
+          <div id="nfe-modal-chave" style="font-family: monospace; font-size: 1.05rem; font-weight: 700; color: var(--accent-blue); word-break: break-all; margin-top: 0.25rem;"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+          <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: var(--radius-md);">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">PROTOCOLO SEFAZ:</div>
+            <div id="nfe-modal-protocolo" style="font-weight: 700; color: var(--text-primary);"></div>
+          </div>
+
+          <div style="background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: var(--radius-md);">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">STATUS DE AUTORIZAÇÃO:</div>
+            <div><span class="badge badge-active" id="nfe-modal-status">100 - Autorizada</span></div>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.35rem; display: block;">CONTEÚDO DO XML SEFAZ NF-E 4.00:</label>
+          <textarea id="nfe-modal-xml-text" class="form-control" rows="8" style="font-family: monospace; font-size: 0.75rem;" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeNfeViewModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL DE VALIDAÇÃO DE NF-E MODELO 55 ==================== -->
+  <div class="modal-backdrop" id="nfe-validation-modal">
+    <div class="modal-container" style="max-width: 720px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-clipboard-check" style="color: var(--accent-amber);"></i> Relatório de Validação da NF-e (Modelo 55)
+        </div>
+        <button class="modal-close" onclick="closeNfeValidationModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Header Banner Status -->
+        <div id="nfe-val-banner" style="padding: 1rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <i id="nfe-val-status-icon" class="fa-solid fa-circle-check fa-2x" style="color: var(--accent-emerald);"></i>
+            <div>
+              <div id="nfe-val-title" style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary);">NF-e Totalmente Válida</div>
+              <div id="nfe-val-subtitle" style="font-size: 0.85rem; color: var(--text-muted);">Pedido #000 - Pronto para emissão na SEFAZ</div>
+            </div>
+          </div>
+          <div id="nfe-val-summary-badges" style="display: flex; gap: 0.5rem;">
+            <span class="badge badge-active" id="nfe-val-badge-ok">0 OK</span>
+            <span class="badge badge-warning" id="nfe-val-badge-warn">0 Alertas</span>
+            <span class="badge badge-danger" id="nfe-val-badge-err" style="display: none;">0 Erros</span>
+          </div>
+        </div>
+
+        <!-- Checklist Section -->
+        <div>
+          <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.75rem;">
+            <i class="fa-solid fa-list-check"></i> Checklist de Auditoria Fiscal SEFAZ v4.00
+          </h4>
+          <div id="nfe-val-checklist-container" style="max-height: 280px; overflow-y: auto; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.75rem;">
+            <!-- Dynamic checks will be injected here -->
+          </div>
+        </div>
+
+        <!-- Errors / Warnings Box -->
+        <div id="nfe-val-alerts-box" style="display: none; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-md); padding: 1rem;">
+          <div style="font-weight: 700; color: var(--accent-rose); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Impedimentos Identificados:
+          </div>
+          <ul id="nfe-val-alerts-list" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--text-primary);"></ul>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" onclick="closeNfeValidationModal()">Fechar</button>
+        <button type="button" class="btn btn-emerald" id="btn-nfe-val-emit-now" onclick="emitNfeFromValidationModal()">
+          <i class="fa-solid fa-paper-plane"></i> Emitir NF-e 55 Agora
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL DE CONFIGURAÇÃO DO CERTIFICADO DIGITAL ==================== -->
+  <div class="modal-backdrop" id="certificado-modal">
+    <div class="modal-container" style="max-width: 620px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-key" style="color: var(--accent-rose);"></i> Central de Configuração do Certificado Digital A1 / A3
+        </div>
+        <button class="modal-close" onclick="closeCertificadoModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="form-config-cert-modal" onsubmit="saveCertModal(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <div class="form-grid">
+            <div class="form-group col-6">
+              <label style="font-weight: 600;">Tipo de Certificado Digital *</label>
+              <select id="Cfg_Modal_Cert_Tipo" name="Certificado.Tipo" class="form-control" onchange="onCertTipoChange('Cfg_Modal')">
+                <option value="A1">A1 - Arquivo em Disco (.PFX / .P12)</option>
+                <option value="A3">A3 - Cartão / Token / Opções da Internet</option>
+              </select>
+            </div>
+
+            <div class="form-group col-6">
+              <label style="font-weight: 600;">Validade Estimada</label>
+              <input type="text" id="Cfg_Modal_Cert_Validade" name="Certificado.Validade" class="form-control" value="2027-12-31" placeholder="AAAA-MM-DD">
+            </div>
+
+            <div class="form-group col-12">
+              <label id="lbl_Cfg_Modal_Cert_Caminho" style="font-weight: 600;">Caminho Completo do Arquivo (.pfx / .p12) *</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="Cfg_Modal_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="Ex: C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx" required>
+                <button type="button" class="btn btn-secondary" id="btn_Cfg_Modal_Cert_Browse" onclick="handleCertBrowse('Cfg_Modal')" title="Buscar certificado nas pastas (A1) ou Opções da Internet (A3)" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-folder-open" id="icon_Cfg_Modal_Cert_Browse"></i> <span id="txt_Cfg_Modal_Cert_Browse">Procurar Pasta...</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group col-12">
+              <label style="font-weight: 600;">Senha do Certificado Digital *</label>
+              <input type="password" id="Cfg_Modal_Cert_Senha" name="Certificado.Senha" class="form-control" placeholder="Digite a senha do arquivo PFX/P12..." required>
+            </div>
+          </div>
+
+          <div style="padding: 1rem; border-radius: var(--radius-md); background: var(--bg-surface-elevated); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <i class="fa-solid fa-shield-check fa-2x" style="color: var(--accent-emerald);"></i>
+              <div>
+                <div style="font-weight: 700; color: var(--text-primary);" id="cert-modal-status-title">Certificado A1 Pronto</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);" id="cert-modal-status-desc">Pronto para emissão e assinatura de NF-e 55 e NFC-e 65.</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="testCertModal()">
+              <i class="fa-solid fa-vial"></i> Testar Validade
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="closeCertificadoModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Certificado Digital
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- INPUT DE ARQUIVO OCULTO PARA SELEÇÃO DE CERTIFICADOS A1 -->
+  <input type="file" id="global-cert-file-input" accept=".pfx,.p12,.cer,.crt" style="display:none;" onchange="onGlobalCertFileSelected(this)">
+
+  <!-- MODAL DE SELEÇÃO DE CERTIFICADOS A3 (OPÇÕES DA INTERNET / WINDOWS STORE) -->
+  <div class="modal-backdrop" id="win32-cert-modal" style="z-index: 1100;">
+    <div class="modal-container" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-globe" style="color: var(--accent-blue);"></i> Certificados A3 (Opções da Internet / Windows)
+        </div>
+        <button class="modal-close" onclick="closeWin32CertModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+        <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">
+          Selecione abaixo o certificado digital A3 instalado na loja do Windows (<strong>Opções da Internet &gt; Conteúdo &gt; Certificados</strong>):
+        </p>
+        <div id="win32-cert-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 4px;">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeWin32CertModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- ==================== MODAL 9: CADASTRO / EDIÇÃO DE CFOP (CFO) ==================== -->
+  <div class="modal-backdrop" id="cfop-modal">
+    <div class="modal-container" style="max-width: 540px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-cfop">
+          <i class="fa-solid fa-file-contract"></i> Cadastro de CFOP (Tabela CFO)
+        </div>
+        <button class="modal-close" onclick="closeCfopModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="cfop-form" onsubmit="saveCfop(event)">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label>Código CFOP (Ex: 5102, 6102) *</label>
+            <input type="text" id="Cfop_Codigo" name="Codigo" class="form-control" placeholder="Digite o código CFOP..." required>
+          </div>
+
+          <div class="form-group">
+            <label>Descrição da Natureza de Operação *</label>
+            <textarea id="Cfop_Descricao" name="Descricao" class="form-control" rows="3" placeholder="Ex: Venda de mercadoria adquirida ou recebida de terceiros" required></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCfopModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar CFOP
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL 10: CADASTRO / EDIÇÃO DE FORMA DE PAGAMENTO ==================== -->
+  <div class="modal-backdrop" id="forma-pgto-modal">
+    <div class="modal-container" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-forma">
+          <i class="fa-solid fa-credit-card"></i> Cadastro de Forma de Pagamento
+        </div>
+        <button class="modal-close" onclick="closeFormaPgtoModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="forma-pgto-form" onsubmit="saveFormaPgto(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Fpg_id_forma" name="id_forma">
+
+          <div class="form-grid">
+            <div class="form-group col-4">
+              <label>Código Identificador *</label>
+              <input type="text" id="Fpg_Codigo" name="Codigo" class="form-control" placeholder="Ex: DINHEIRO" required>
+            </div>
+
+            <div class="form-group col-8">
+              <label>Nome / Descrição Exibida *</label>
+              <input type="text" id="Fpg_Nome" name="Nome" class="form-control" placeholder="Ex: CARTÃO DE CRÉDITO 3X" required>
+            </div>
+
+            <div class="form-group col-4">
+              <label>Tipo de Pagamento</label>
+              <select id="Fpg_Tipo" name="Tipo" class="form-control">
+                <option value="DINHEIRO">DINHEIRO</option>
+                <option value="PIX">PIX</option>
+                <option value="CARTAO">CARTÃO DE CRÉDITO / DÉBITO</option>
+                <option value="PRAZO">PRAZO / CREDIÁRIO</option>
+                <option value="BOLETO">BOLETO BANCÁRIO</option>
+                <option value="OUTROS">OUTROS</option>
+              </select>
+            </div>
+
+            <div class="form-group col-4">
+              <label>Nº de Parcelas</label>
+              <input type="number" id="Fpg_Parcelas" name="Parcelas" class="form-control" value="1" min="1">
+            </div>
+
+            <div class="form-group col-4">
+              <label>Intervalo (Dias)</label>
+              <input type="number" id="Fpg_DiasEntreParcelas" name="DiasEntreParcelas" class="form-control" value="0" min="0">
+            </div>
+
+            <div class="form-group col-12" style="margin-top: 0.5rem;">
+              <label class="custom-checkbox-container">
+                <input type="checkbox" id="Fpg_Ativo" name="Ativo" value="1" checked>
+                <span class="custom-checkbox-mark"></span>
+                <span>Forma de Pagamento Ativa e Disponível nos Selects</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeFormaPgtoModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Forma de Pagamento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 11: CADASTRO / EDIÇÃO DE NATUREZA DE OPERAÇÃO ==================== -->
+  <div class="modal-backdrop" id="natureza-op-modal">
+    <div class="modal-container" style="max-width: 560px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-nat">
+          <i class="fa-solid fa-route"></i> Cadastro de Natureza de Operação
+        </div>
+        <button class="modal-close" onclick="closeNaturezaOpModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="natureza-op-form" onsubmit="saveNaturezaOp(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Nat_id_natureza" name="id_natureza">
+
+          <div class="form-grid">
+            <div class="form-group col-4">
+              <label>Código Identificador *</label>
+              <input type="text" id="Nat_Codigo" name="Codigo" class="form-control" placeholder="Ex: VENDA_MERC" required>
+            </div>
+
+            <div class="form-group col-8">
+              <label>Descrição da Natureza de Operação *</label>
+              <input type="text" id="Nat_Descricao" name="Descricao" class="form-control" placeholder="Ex: VENDA DE MERCADORIAS" required>
+            </div>
+
+            <div class="form-group col-6">
+              <label>CFOP Padrão Associado</label>
+              <input type="text" id="Nat_CFOP" name="CFOP" class="form-control" value="5102" placeholder="Ex: 5102">
+            </div>
+
+            <div class="form-group col-6" style="display: flex; align-items: flex-end;">
+              <label class="custom-checkbox-container" style="margin-bottom: 0.5rem;">
+                <input type="checkbox" id="Nat_Ativo" name="Ativo" value="1" checked>
+                <span class="custom-checkbox-mark"></span>
+                <span>Natureza de Operação Ativa</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeNaturezaOpModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Natureza
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 12: CADASTRO / EDIÇÃO DE USUÁRIO ==================== -->
+  <div class="modal-backdrop" id="usuario-modal">
+    <div class="modal-container" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-usr">
+          <i class="fa-solid fa-user-shield"></i> Cadastro de Usuário
+        </div>
+        <button class="modal-close" onclick="closeUsuarioModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="usuario-form" onsubmit="saveUsuario(event)">
+        <div class="modal-body">
+          <input type="hidden" id="Usr_id_usuario" name="id_usuario">
+
+          <div class="form-grid">
+            <div class="form-group col-6">
+              <label>Login de Acesso *</label>
+              <input type="text" id="Usr_Login" name="Login" class="form-control" placeholder="Ex: joao.silva" required>
+            </div>
+
+            <div class="form-group col-6">
+              <label>Perfil de Acesso / Permissão *</label>
+              <select id="Usr_Perfil" name="Perfil" class="form-control" required>
+                <option value="ADMIN">ADMIN (Acesso Total ao Sistema)</option>
+                <option value="GERENTE">GERENTE (Gestão, Relatórios e Cadastros)</option>
+                <option value="OPERADOR">OPERADOR (PDV e Pedidos de Venda)</option>
+                <option value="VENDEDOR">VENDEDOR (Emissão de Pedidos)</option>
+              </select>
+            </div>
+
+            <div class="form-group col-12">
+              <label>Nome Completo do Usuário *</label>
+              <input type="text" id="Usr_Nome" name="Nome" class="form-control" placeholder="Ex: João da Silva" required>
+            </div>
+
+            <div class="form-group col-6">
+              <label>Senha de Acesso</label>
+              <input type="password" id="Usr_Senha" name="Senha" class="form-control" placeholder="Deixe em branco para manter a atual">
+            </div>
+
+            <div class="form-group col-6" style="display: flex; align-items: flex-end;">
+              <label class="custom-checkbox-container" style="margin-bottom: 0.5rem;">
+                <input type="checkbox" id="Usr_Ativo" name="Ativo" value="1" checked>
+                <span class="custom-checkbox-mark"></span>
+                <span>Usuário Ativo e Permite Login</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeUsuarioModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Usuário
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL DE RESULTADO DA VALIDAÇÃO SEFAZ ==================== -->
+  <div class="modal-backdrop" id="frmnota-val-overlay" style="z-index: 99990;">
+    <div class="modal-container" style="max-width: 920px; width: 95%;">
+      <div style="background: var(--bg-surface-elevated); border-radius: var(--radius-lg); padding: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 40px; height: 40px; background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+              <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div>
+              <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);">Resultado da Validação SEFAZ 4.00</h3>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Auditoria Completa de Regras Fiscais, Certificado e XML</span>
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeFrmNotaValOverlay()">
+            <i class="fa-solid fa-xmark"></i> Fechar / Voltar à Nota
+          </button>
+        </div>
+
+        <!-- Status Banner -->
+        <div id="frmnota-val-banner" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <i class="fa-solid fa-circle-check fa-2x" id="frmnota-val-icon" style="color: var(--accent-emerald);"></i>
+            <div>
+              <strong style="font-size: 1.05rem; color: var(--text-primary);" id="frmnota-val-title">NF-e Totalmente Válida para Transmissão!</strong>
+              <div style="font-size: 0.85rem; color: var(--text-muted);" id="frmnota-val-subtitle">Todos os parâmetros SEFAZ 4.00 foram auditados e aprovados.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap;">
+            <span class="badge badge-active" id="frmnota-val-badge-ok">0 Regras Auditadas</span>
+            <span class="badge badge-warning" id="frmnota-val-badge-warn">0 Alertas</span>
+            <span class="badge badge-danger" id="frmnota-val-badge-err">0 Erros</span>
+          </div>
+        </div>
+
+        <!-- Lista de Alertas / Erros se houver -->
+        <div id="frmnota-val-alerts-box" style="display: none; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--accent-rose);">
+          <strong style="display: block; margin-bottom: 0.4rem;"><i class="fa-solid fa-circle-exclamation"></i> Impedimentos / Alertas Encontrados:</strong>
+          <ul id="frmnota-val-alerts-list" style="margin: 0; padding-left: 1.25rem;"></ul>
+        </div>
+
+        <!-- Checklist Completo -->
+        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; font-size: 0.9rem;">
+          <i class="fa-solid fa-list-check" style="color: var(--accent-blue);"></i> Checklist de Auditoria Fiscais SEFAZ:
+        </div>
+        <div id="frmnota-val-checklist-container" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface);">
+          <div style="text-align: center; color: var(--text-muted); padding: 1rem;">Carregando relatório de validação...</div>
+        </div>
+
+        <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeFrmNotaValOverlay()">
+            <i class="fa-solid fa-pen-to-square"></i> Voltar e Corrigir Campos
+          </button>
+          <button type="button" class="btn btn-emerald" onclick="closeFrmNotaValOverlay(); transmitirNfeFrmNota();" style="font-weight: 700;">
+            <i class="fa-solid fa-paper-plane"></i> Transmitir NF-e Agora
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 13: TELA DE EMISSÃO DE NF-E (BASEADA NO FRMNOTA.FRM) ==================== -->
+  <div class="modal-backdrop" id="nfe-emissao-modal">
+    <div class="modal-container" style="max-width: 1050px; width: 95%;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 40px; height: 40px; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            <i class="fa-solid fa-file-invoice"></i>
+          </div>
+          <div>
+            <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-primary);" id="frmnota-modal-title">Emissão de Nota Fiscal Eletrônica (NF-e Modelo 55)</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);" id="frmnota-modal-subtitle">Formulário Oficial de Emissão Direta SEFAZ 4.00 (Baseado no FrmNota.frm)</span>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeNfeEmissaoModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Action Toolbar SEFAZ -->
+      <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border-color); display: flex; gap: 0.5rem; justify-content: space-between; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="validarNfeFrmNota()">
+            <i class="fa-solid fa-clipboard-check" style="color: var(--accent-amber);"></i> Validar Regras SEFAZ
+          </button>
+          <button type="button" class="btn btn-emerald btn-sm" onclick="transmitirNfeFrmNota()" style="font-weight: 700;">
+            <i class="fa-solid fa-paper-plane"></i> Transmitir NF-e (Direto SEFAZ)
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="imprimirDanfeFrmNota()">
+            <i class="fa-solid fa-print"></i> DANFE (PDF)
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="baixarXmlFrmNota()">
+            <i class="fa-solid fa-file-code"></i> Baixar XML
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cceNfeFrmNota()" title="Carta de Correção Eletrônica">
+            <i class="fa-solid fa-pen-to-square"></i> CC-e
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="cancelarNfeFrmNota()">
+            <i class="fa-solid fa-ban"></i> Cancelar NF-e
+          </button>
+        </div>
+      </div>
+
+      <!-- Status Banner -->
+      <div id="frmnota-status-banner" style="background: rgba(59, 130, 246, 0.1); border-bottom: 1px solid rgba(59, 130, 246, 0.2); padding: 0.6rem 1.25rem; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fa-solid fa-circle-info" id="frmnota-status-icon" style="color: var(--accent-blue);"></i>
+          <span id="frmnota-status-text" style="font-weight: 600; color: var(--text-primary);">Status: Digitação da NF-e (Aguardando Emissão)</span>
+        </div>
+        <span class="badge badge-group" id="frmnota-chave-badge">Chave: Gerada na Emissão</span>
+      </div>
+
+      <form id="frmnota-form" onsubmit="salvarEDeclararFrmNota(event)">
+        <div class="modal-body" style="padding: 1.25rem; max-height: calc(85vh - 200px); overflow-y: auto;">
+          <input type="hidden" id="FrmNota_CodPed" name="CodPed">
+
+          <!-- Abas de Navegação (FrmNota) -->
+          <div class="pos-tabs-header" style="margin-bottom: 1.25rem;">
+            <button type="button" class="tab-btn active" onclick="switchFrmNotaTab('tab-frmnota-cabecalho', this)">
+              <i class="fa-solid fa-file-signature"></i> 1. Cabeçalho & Cliente
+            </button>
+            <button type="button" class="tab-btn" onclick="switchFrmNotaTab('tab-frmnota-transporte', this)">
+              <i class="fa-solid fa-truck"></i> 2. Transporte & Volumes
+            </button>
+            <button type="button" class="tab-btn" onclick="switchFrmNotaTab('tab-frmnota-itens', this)">
+              <i class="fa-solid fa-boxes-stacked"></i> 3. Itens da Nota
+            </button>
+            <button type="button" class="tab-btn" onclick="switchFrmNotaTab('tab-frmnota-totais', this)">
+              <i class="fa-solid fa-calculator"></i> 4. Totais & Observações
+            </button>
+          </div>
+
+          <!-- ABA 1: CABEÇALHO & CLIENTE -->
+          <div class="frmnota-tab-content active" id="tab-frmnota-cabecalho">
+            <!-- Dados da Nota Fiscal -->
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-receipt" style="color: var(--accent-blue);"></i> Identificação da Nota Fiscal (Modelo 55)
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-3">
+                  <label>Número do Pedido</label>
+                  <input type="text" id="FrmNota_CodPed_Disp" class="form-control" readonly style="font-weight: 700; background: var(--bg-surface);">
+                </div>
+                <div class="form-group col-3">
+                  <label>Número da NF-e (NroNfe) *</label>
+                  <input type="number" id="FrmNota_NroNfe" name="NroNfe" class="form-control" value="1" required style="font-weight: 700;">
+                </div>
+                <div class="form-group col-2">
+                  <label>Série *</label>
+                  <input type="text" id="FrmNota_SerieNfe" name="SerieNfe" class="form-control" value="1" required style="font-weight: 700;">
+                </div>
+                <div class="form-group col-4">
+                  <label>Natureza de Operação (CFO) *</label>
+                  <select id="FrmNota_Cfo" name="Cfo" class="form-control" required>
+                    <option value="5102 - VENDA DE MERCADORIA ADQUIRIDA OU RECEBIDA DE TERCEIROS">5102 - Venda de Mercadoria Terceiros</option>
+                    <option value="5101 - VENDA DE PRODUÇÃO DO ESTABELECIMENTO">5101 - Venda de Produção Própria</option>
+                    <option value="5405 - VENDA DE MERCADORIA COM ST">5405 - Venda com Substituição Tributária</option>
+                    <option value="5915 - REMESSA PARA CONSERTO OU REPARO">5915 - Remessa para Conserto</option>
+                  </select>
+                </div>
+
+                <div class="form-group col-4">
+                  <label>Data de Emissão</label>
+                  <input type="text" id="FrmNota_Emissao" name="Emissao" class="form-control" placeholder="DD/MM/AAAA">
+                </div>
+                <div class="form-group col-4">
+                  <label>Data de Saída</label>
+                  <input type="text" id="FrmNota_Saida" name="Saida" class="form-control" placeholder="DD/MM/AAAA">
+                </div>
+                <div class="form-group col-4">
+                  <label>Hora da Saída</label>
+                  <input type="text" id="FrmNota_Hora" name="Hora" class="form-control" placeholder="HH:MM:SS">
+                </div>
+              </div>
+            </div>
+
+            <!-- Dados do Cliente / Destinatário -->
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-user-tag" style="color: var(--accent-emerald);"></i> Destinatário / Cliente
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-2">
+                  <label>Cód. Cliente</label>
+                  <input type="text" id="FrmNota_CodEntidade" name="CodEntidade" class="form-control" readonly>
+                </div>
+                <div class="form-group col-6">
+                  <label>Razão Social / Nome Completo *</label>
+                  <input type="text" id="FrmNota_NomeCliente" name="NomeCliente" class="form-control" required style="font-weight: 600;">
+                </div>
+                <div class="form-group col-6">
+                  <label>CPF / CNPJ *</label>
+                  <div style="display: flex; gap: 6px;">
+                    <input type="text" id="FrmNota_CpfCnpj" name="CpfCnpj" class="form-control" required placeholder="CPF ou CNPJ" onkeydown="if(event.key==='Enter'){event.preventDefault();consultarCNPJ('FrmNota_CpfCnpj');}">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-buscar-cnpj-nota" onclick="consultarCNPJ('FrmNota_CpfCnpj')" title="Buscar dados pelo CNPJ" style="white-space: nowrap; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <i class="fa-solid fa-magnifying-glass"></i> Buscar CNPJ
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group col-4">
+                  <label>Inscrição Estadual (IE)</label>
+                  <input type="text" id="FrmNota_InscEst" name="InscEst" class="form-control" placeholder="Isento se não houver">
+                </div>
+                <div class="form-group col-6">
+                  <label>Logradouro / Endereço</label>
+                  <input type="text" id="FrmNota_Endereco" name="Endereco" class="form-control">
+                </div>
+                <div class="form-group col-2">
+                  <label>Número</label>
+                  <input type="text" id="FrmNota_Nro" name="Nro" class="form-control" placeholder="SN">
+                </div>
+
+                <div class="form-group col-4">
+                  <label>Bairro</label>
+                  <input type="text" id="FrmNota_Bairro" name="Bairro" class="form-control">
+                </div>
+                <div class="form-group col-4">
+                  <label>Cidade</label>
+                  <input type="text" id="FrmNota_Cidade" name="Cidade" class="form-control">
+                </div>
+                <div class="form-group col-2">
+                  <label>UF</label>
+                  <input type="text" id="FrmNota_Uf" name="Uf" class="form-control" maxlength="2">
+                </div>
+                <div class="form-group col-2">
+                  <label>CEP</label>
+                  <input type="text" id="FrmNota_Cep" name="Cep" class="form-control">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 2: TRANSPORTE & VOLUMES -->
+          <div class="frmnota-tab-content" id="tab-frmnota-transporte" style="display: none;">
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-truck" style="color: var(--accent-amber);"></i> Modalidade do Frete & Transportadora
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-6">
+                  <label>Frete Por Conta (Modalidade)</label>
+                  <select id="FrmNota_ModFrete" name="ModFrete" class="form-control">
+                    <option value="0">0 - Contratação por conta do Remetente (CIF)</option>
+                    <option value="1">1 - Contratação por conta do Destinatário (FOB)</option>
+                    <option value="2">2 - Contratação por conta de Terceiros</option>
+                    <option value="9" selected>9 - Sem Ocorrência de Transporte</option>
+                  </select>
+                </div>
+
+                <div class="form-group col-6">
+                  <label>Nome da Transportadora</label>
+                  <input type="text" id="FrmNota_NomeTransp" name="NomeTransp" class="form-control" placeholder="Razão social do transportador">
+                </div>
+
+                <div class="form-group col-4">
+                  <label>CNPJ / CPF Transportador</label>
+                  <input type="text" id="FrmNota_CnpjsTransp" name="CnpjsTransp" class="form-control">
+                </div>
+                <div class="form-group col-4">
+                  <label>Inscrição Estadual (IE) Transp.</label>
+                  <input type="text" id="FrmNota_IeTransp" name="IeTransp" class="form-control">
+                </div>
+                <div class="form-group col-4">
+                  <label>Cidade / UF Transportador</label>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="FrmNota_CidadeTransp" name="CidadeTransp" class="form-control" placeholder="Cidade">
+                    <input type="text" id="FrmNota_UfTransp" name="UfTransp" class="form-control" style="width: 70px;" maxlength="2" placeholder="UF">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Veículo & Volumes Transportados -->
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-boxes-packing" style="color: var(--accent-blue);"></i> Veículo & Volumes Transportados
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-3">
+                  <label>Placa do Veículo</label>
+                  <input type="text" id="FrmNota_PlacaVeic" name="PlacaVeic" class="form-control" placeholder="Ex: ABC-1234">
+                </div>
+                <div class="form-group col-3">
+                  <label>UF do Veículo</label>
+                  <input type="text" id="FrmNota_UfVeic" name="UfVeic" class="form-control" maxlength="2" placeholder="SP">
+                </div>
+                <div class="form-group col-3">
+                  <label>Qtd. de Volumes (QtdVol)</label>
+                  <input type="number" id="FrmNota_QtdVol" name="QtdVol" class="form-control" value="1" min="0">
+                </div>
+                <div class="form-group col-3">
+                  <label>Espécie (Caixas, Pacotes...)</label>
+                  <input type="text" id="FrmNota_EspecieVol" name="EspecieVol" class="form-control" value="VOLUMES">
+                </div>
+
+                <div class="form-group col-4">
+                  <label>Marca dos Volumes</label>
+                  <input type="text" id="FrmNota_MarcaVol" name="MarcaVol" class="form-control" placeholder="Ex: DIVERSAS">
+                </div>
+                <div class="form-group col-4">
+                  <label>Peso Bruto (Kg)</label>
+                  <input type="number" id="FrmNota_PesoBruto" name="PesoBruto" class="form-control" step="0.001" value="0.000">
+                </div>
+                <div class="form-group col-4">
+                  <label>Peso Líquido (Kg)</label>
+                  <input type="number" id="FrmNota_PesoLiquido" name="PesoLiquido" class="form-control" step="0.001" value="0.000">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 3: ITENS DA NOTA FISCAL -->
+          <div class="frmnota-tab-content" id="tab-frmnota-itens" style="display: none;">
+            <div class="table-card" style="padding: 1rem;">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-cubes" style="color: var(--accent-emerald);"></i> Itens do Pedido / Nota Fiscal</span>
+                <span class="badge badge-group" id="frmnota-total-items-badge">0 Itens</span>
+              </div>
+
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 50px;">Item</th>
+                      <th style="width: 80px;">Cód.</th>
+                      <th>Descrição do Produto</th>
+                      <th style="width: 100px;">NCM</th>
+                      <th style="width: 80px;">CFOP</th>
+                      <th style="width: 60px;">UN</th>
+                      <th style="width: 80px; text-align: right;">Qtd</th>
+                      <th style="width: 110px; text-align: right;">Vlr. Unit</th>
+                      <th style="width: 110px; text-align: right;">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody id="frmnota-items-tbody">
+                    <tr>
+                      <td colspan="9" class="loading-td">Carregando itens da nota...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ABA 4: TOTAIS & OBSERVAÇÕES -->
+          <div class="frmnota-tab-content" id="tab-frmnota-totais" style="display: none;">
+            <!-- Totais Fiscais -->
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-coins" style="color: var(--accent-amber);"></i> Resumo de Totais Fiscais (R$)
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-3">
+                  <label>Base Cálculo ICMS</label>
+                  <input type="number" id="FrmNota_BaseIcms" name="BaseIcms" class="form-control" value="0.00" step="0.01">
+                </div>
+                <div class="form-group col-3">
+                  <label>Valor do ICMS</label>
+                  <input type="number" id="FrmNota_ValorIcms" name="ValorIcms" class="form-control" value="0.00" step="0.01">
+                </div>
+                <div class="form-group col-3">
+                  <label>Base ICMS ST</label>
+                  <input type="number" id="FrmNota_BaseSt" name="BaseSt" class="form-control" value="0.00" step="0.01">
+                </div>
+                <div class="form-group col-3">
+                  <label>Valor ICMS ST</label>
+                  <input type="number" id="FrmNota_ValorSt" name="ValorSt" class="form-control" value="0.00" step="0.01">
+                </div>
+
+                <div class="form-group col-3">
+                  <label>Total dos Produtos</label>
+                  <input type="number" id="FrmNota_TotalProdutos" class="form-control" readonly style="font-weight: 700;">
+                </div>
+                <div class="form-group col-3">
+                  <label>Valor Frete (R$)</label>
+                  <input type="number" id="FrmNota_ValorFrete" name="ValorFrete" class="form-control" value="0.00" step="0.01">
+                </div>
+                <div class="form-group col-3">
+                  <label>Valor Desconto (R$)</label>
+                  <input type="number" id="FrmNota_Desconto" name="Desconto" class="form-control" value="0.00" step="0.01">
+                </div>
+                <div class="form-group col-3">
+                  <label style="color: var(--accent-emerald); font-weight: 700;">VALOR TOTAL DA NOTA (R$)</label>
+                  <input type="number" id="FrmNota_TotalNota" class="form-control" readonly style="font-weight: 800; font-size: 1.1rem; color: var(--accent-emerald); background: var(--bg-surface);">
+                </div>
+              </div>
+            </div>
+
+            <!-- Observações & Informações Complementares -->
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-comment-dots" style="color: var(--accent-blue);"></i> Observações & Informações Complementares
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group col-12">
+                  <label>Observação no Rodapé da Nota Fiscal (infCpl)</label>
+                  <textarea id="FrmNota_ObsRodape" name="ObsRodape" class="form-control" rows="3" placeholder="Informações de interesse do contribuinte, impostos aproximados, chave do pedido..."></textarea>
+                </div>
+                <div class="form-group col-12">
+                  <label>Observação no Corpo da Nota Fiscal</label>
+                  <textarea id="FrmNota_ObsCorpo" name="ObsCorpo" class="form-control" rows="2" placeholder="Observações impressas no corpo do DANFE..."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="closeNfeEmissaoModal()">Fechar Tela</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar Dados da Nota
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL DE SINCRONIZAÇÃO DE BANCO (TESTE <-> PRODUÇÃO) ==================== -->
+  <div class="modal-backdrop" id="db-sync-modal">
+    <div class="modal-container modal-lg" style="max-width: 950px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding: 1.25rem 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 42px; height: 42px; border-radius: var(--radius-md); background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.2) 100%); display: flex; align-items: center; justify-content: center; color: var(--accent-blue); font-size: 1.25rem;">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </div>
+          <div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">Sincronização de Banco de Dados</h3>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Sincronize alterações de estrutura (DDL) e dados entre o Ambiente de Teste e Produção</div>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeDbSyncModal()" style="background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+        <!-- Card de Origem e Destino -->
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center;">
+          <!-- Origem / Teste -->
+          <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <strong style="color: var(--accent-blue); font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-solid fa-vial"></i> Origem (Teste / Dev)
+              </strong>
+              <span class="badge" style="background: rgba(59,130,246,0.15); color: var(--accent-blue); font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 9999px;">Referência</span>
+            </div>
+            <div class="form-grid">
+              <div class="form-group col-12" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Banco de Dados Origem</label>
+                <input type="text" id="Sync_Src_DbName" class="form-control form-control-sm" value="vendas_db">
+              </div>
+              <div class="form-group col-7" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Host / Servidor</label>
+                <input type="text" id="Sync_Src_Host" class="form-control form-control-sm" value="localhost">
+              </div>
+              <div class="form-group col-5" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Porta</label>
+                <input type="number" id="Sync_Src_Port" class="form-control form-control-sm" value="5432">
+              </div>
+            </div>
+          </div>
+
+          <!-- Seta Indicativa -->
+          <div style="display: flex; flex-direction: column; align-items: center; color: var(--accent-blue); font-size: 1.5rem; padding: 0 0.5rem;">
+            <i class="fa-solid fa-arrow-right"></i>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; font-weight: 600;">MIGRAÇÃO</span>
+          </div>
+
+          <!-- Destino / Produção -->
+          <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <strong style="color: var(--accent-emerald); font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-solid fa-server"></i> Destino (Produção)
+              </strong>
+              <span class="badge" style="background: rgba(16,185,129,0.15); color: var(--accent-emerald); font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 9999px;">Alvo</span>
+            </div>
+            <div class="form-grid">
+              <div class="form-group col-12" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Banco de Dados Destino</label>
+                <input type="text" id="Sync_Tgt_DbName" class="form-control form-control-sm" value="vendas_prod_db" placeholder="vendas_prod_db">
+              </div>
+              <div class="form-group col-7" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Host / Servidor</label>
+                <input type="text" id="Sync_Tgt_Host" class="form-control form-control-sm" value="localhost">
+              </div>
+              <div class="form-group col-5" style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">Porta</label>
+                <input type="number" id="Sync_Tgt_Port" class="form-control form-control-sm" value="5432">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Escopo de Tabelas -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <strong style="color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-table-list" style="color: var(--accent-blue);"></i> Escopo de Tabelas para Sincronização
+            </strong>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+              <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                <input type="radio" name="sync_scope_mode" value="all" checked onchange="toggleSyncTableScope(this.value)"> Todas as Tabelas
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+                <input type="radio" name="sync_scope_mode" value="selected" onchange="toggleSyncTableScope(this.value)"> Escolher Tabelas
+              </label>
+            </div>
+          </div>
+
+          <!-- Container de Seleção de Tabelas (Escondido por padrão) -->
+          <div id="sync-tables-selection-wrapper" style="display: none; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <div style="display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
+              <div class="search-input-wrapper" style="max-width: 320px; flex: 1;">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="sync-table-search-input" class="search-input" placeholder="Filtrar tabela (ex: ENT, PRD, CfgPdv)..." oninput="filterSyncTablesList(this.value)">
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllSyncTables(true)">Marcar Todas</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllSyncTables(false)">Desmarcar Todas</button>
+              </div>
+            </div>
+
+            <div id="sync-tables-list-container" style="max-height: 180px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; padding: 0.5rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+              <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Carregando tabelas do banco...</div>
+            </div>
+          </div>
+
+          <!-- Opções adicionais -->
+          <div style="display: flex; gap: 1.5rem; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+              <input type="checkbox" id="Sync_Opt_CreateTarget" checked> Criar banco de Produção se não existir
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-primary);">
+              <input type="checkbox" id="Sync_Opt_SyncData"> Sincronizar também os dados / registros das tabelas
+            </label>
+          </div>
+        </div>
+
+        <!-- Painel de Ações de Análise e Execução -->
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;">
+          <button type="button" class="btn btn-secondary" onclick="analyzeDbSync()" id="btn-sync-analyze">
+            <i class="fa-solid fa-magnifying-glass-chart"></i> 1. Analisar Diferenças (Preview)
+          </button>
+          <button type="button" class="btn btn-primary" onclick="executeDbSync()" id="btn-sync-execute" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
+            <i class="fa-solid fa-bolt"></i> 2. Executar Sincronização
+          </button>
+        </div>
+
+        <!-- Resultados e Relatório da Análise -->
+        <div id="sync-results-card" style="display: none; background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+          <h4 style="margin: 0 0 1rem 0; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fa-solid fa-clipboard-check" style="color: var(--accent-emerald);"></i> Relatório de Diagnóstico e Migração
+          </h4>
+
+          <div id="sync-summary-badges" style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <!-- Preenchido via JavaScript -->
+          </div>
+
+          <div id="sync-sql-statements-box" style="margin-top: 0.75rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">INSTRUÇÕES SQL A SEREM APLICADAS:</div>
+            <pre id="sync-sql-code" style="background: #0f172a; color: #38bdf8; padding: 1rem; border-radius: var(--radius-sm); font-size: 0.8rem; max-height: 200px; overflow-y: auto; font-family: monospace; border: 1px solid rgba(255,255,255,0.1); margin: 0; white-space: pre-wrap;"></pre>
+          </div>
+
+          <!-- Log de Execução -->
+          <div id="sync-execution-log" style="display: none; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+            <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">LOG DE EXECUÇÃO:</div>
+            <div id="sync-log-content" style="max-height: 180px; overflow-y: auto; font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="border-top: 1px solid var(--border-color); padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Dica: A sincronização compara e replica com segurança DDLs e tipos do PostgreSQL.</span>
+        <button type="button" class="btn btn-secondary" onclick="closeDbSyncModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TELA DE LOGIN OVERLAY ==================== -->
+  <div class="modal-backdrop active" id="login-modal" style="background: rgba(15, 23, 42, 0.95); z-index: 99999;">
+    <div class="modal-container" style="max-width: 420px; border: 1px solid var(--border-color); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+      <div class="modal-header" style="text-align: center; justify-content: center; flex-direction: column; gap: 0.5rem; padding-top: 1.75rem;">
+        <div style="width: 56px; height: 56px; background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.75rem;">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h2 style="font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin: 0;">Sistema Vendas</h2>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">Identifique-se para acessar o sistema</span>
+      </div>
+
+      <form id="login-form" onsubmit="login(event); return false;">
+        <div class="modal-body" style="padding-top: 1rem;">
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label>Usuário / Login *</label>
+            <div class="search-input-wrapper">
+              <i class="fa-solid fa-user search-icon"></i>
+              <input type="text" id="login-input-username" class="search-input" placeholder="Digite seu usuário (Ex: admin)..." required value="admin" style="padding-left: 2.5rem;">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label>Senha de Acesso *</label>
+            <div class="search-input-wrapper">
+              <i class="fa-solid fa-lock search-icon"></i>
+              <input type="password" id="login-input-password" class="search-input" placeholder="Digite sua senha..." required value="admin123" style="padding-left: 2.5rem;">
+            </div>
+          </div>
+
+          <div id="login-error-msg" style="display: none; color: var(--accent-rose); background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); padding: 0.75rem; border-radius: var(--radius-md); font-size: 0.85rem; margin-bottom: 1rem; text-align: center;"></div>
+        </div>
+
+        <div class="modal-footer" style="padding-bottom: 1.5rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 1rem;">
+            <i class="fa-solid fa-right-to-bracket"></i> Entrar no Sistema
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Local QR Code Library -->
+  <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.0.7"></script>
+</body>
+</html>

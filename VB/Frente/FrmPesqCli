@@ -1,0 +1,340 @@
+VERSION 5.00
+Object = "{00028C01-0000-0000-0000-000000000046}#1.0#0"; "DBGRID32.OCX"
+Begin VB.Form FrmPesqCli 
+   BorderStyle     =   1  'Fixed Single
+   ClientHeight    =   7245
+   ClientLeft      =   2475
+   ClientTop       =   3090
+   ClientWidth     =   14055
+   FillColor       =   &H00404040&
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   MinButton       =   0   'False
+   ScaleHeight     =   7245
+   ScaleWidth      =   14055
+   StartUpPosition =   1  'CenterOwner
+   Begin VB.PictureBox Picture1 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000005&
+      ForeColor       =   &H80000008&
+      Height          =   360
+      Left            =   -270
+      ScaleHeight     =   330
+      ScaleWidth      =   14295
+      TabIndex        =   12
+      Top             =   6930
+      Width           =   14325
+   End
+   Begin VB.PictureBox Picture2 
+      Appearance      =   0  'Flat
+      BackColor       =   &H80000002&
+      BorderStyle     =   0  'None
+      ForeColor       =   &H80000008&
+      Height          =   555
+      Left            =   0
+      ScaleHeight     =   555
+      ScaleWidth      =   14055
+      TabIndex        =   10
+      Top             =   0
+      Width           =   14055
+      Begin VB.Label Label20 
+         BackStyle       =   0  'Transparent
+         Caption         =   "Pesquisa de Clientes"
+         BeginProperty Font 
+            Name            =   "Verdana"
+            Size            =   15.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   -1  'True
+            Strikethrough   =   0   'False
+         EndProperty
+         ForeColor       =   &H80000009&
+         Height          =   465
+         Left            =   180
+         TabIndex        =   11
+         Top             =   90
+         Width           =   5325
+      End
+   End
+   Begin VB.Frame Frame1 
+      BackColor       =   &H00FFFFFF&
+      Height          =   645
+      Left            =   225
+      TabIndex        =   4
+      Top             =   6120
+      Width           =   13515
+      Begin VB.TextBox TxtEnd 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   360
+         Left            =   90
+         TabIndex        =   9
+         Top             =   180
+         Width           =   5415
+      End
+      Begin VB.TextBox TxtNro 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   360
+         Left            =   5580
+         TabIndex        =   8
+         Top             =   180
+         Width           =   1275
+      End
+      Begin VB.TextBox TxtFone 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   360
+         Left            =   6930
+         TabIndex        =   7
+         Top             =   180
+         Width           =   2220
+      End
+      Begin VB.TextBox TxtFax 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   360
+         Left            =   9225
+         TabIndex        =   6
+         Top             =   180
+         Width           =   2085
+      End
+      Begin VB.TextBox TxtCelular 
+         Appearance      =   0  'Flat
+         BeginProperty Font 
+            Name            =   "MS Sans Serif"
+            Size            =   9.75
+            Charset         =   0
+            Weight          =   700
+            Underline       =   0   'False
+            Italic          =   0   'False
+            Strikethrough   =   0   'False
+         EndProperty
+         Height          =   360
+         Left            =   11430
+         TabIndex        =   5
+         Top             =   180
+         Width           =   1950
+      End
+   End
+   Begin VB.CommandButton CmbBotao 
+      Caption         =   "&Ok"
+      Default         =   -1  'True
+      Height          =   420
+      Index           =   0
+      Left            =   7065
+      TabIndex        =   3
+      Top             =   810
+      Width           =   1425
+   End
+   Begin VB.CommandButton CmbBotao 
+      Cancel          =   -1  'True
+      Caption         =   "&Cancelar"
+      Height          =   420
+      Index           =   1
+      Left            =   8730
+      TabIndex        =   2
+      Top             =   810
+      Width           =   1425
+   End
+   Begin VB.Data DatDados 
+      Caption         =   "Pesquisa"
+      Connect         =   "Access"
+      DatabaseName    =   ""
+      DefaultCursorType=   0  'DefaultCursor
+      DefaultType     =   2  'UseODBC
+      Exclusive       =   0   'False
+      Height          =   375
+      Left            =   3870
+      Options         =   0
+      ReadOnly        =   0   'False
+      RecordsetType   =   1  'Dynaset
+      RecordSource    =   ""
+      Top             =   3645
+      Visible         =   0   'False
+      Width           =   1935
+   End
+   Begin VB.TextBox TxtPesquisa 
+      Appearance      =   0  'Flat
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   12
+         Charset         =   0
+         Weight          =   700
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
+      Height          =   420
+      Left            =   225
+      TabIndex        =   0
+      Top             =   810
+      Width           =   6690
+   End
+   Begin MSDBGrid.DBGrid DBGProdutos 
+      Bindings        =   "FrmPesqCli.frx":0000
+      Height          =   4545
+      Left            =   210
+      OleObjectBlob   =   "FrmPesqCli.frx":0017
+      TabIndex        =   1
+      Top             =   1380
+      Width           =   13530
+   End
+End
+Attribute VB_Name = "FrmPesqCli"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+
+Private Sub Command1_Click()
+End Sub
+
+Private Sub BtSair_Click()
+Unload Me
+End Sub
+
+Private Sub CmbBotao_Click(Index As Integer)
+If Index = 0 Then
+    If FrmFrente.LblPedido = "" Then
+        FrmFrente.TxtDados(0) = DatDados.Recordset.Fields(0)
+    Else
+        FrmFrente.DbcCliente = DatDados.Recordset.Fields(1)
+    End If
+    Unload Me
+'     If FrmFrente.MebTotal <> "" Then
+'        FrmFrente.DbcCliente.SetFocus
+'    End If
+Else
+    Unload Me
+    If FrmFrente.MebTotal <> "" Then
+        FrmFrente.DbcCliente.SetFocus
+    End If
+End If
+End Sub
+
+Private Sub DatDados_Reposition()
+On Error GoTo erro
+With DatDados.Recordset
+    TxtEnd = .Fields("Endereco")
+    TxtNro = .Fields("Nro")
+    TxtFone = Format(.Fields("Fone"), "(@@)@@@@-@@@@")
+    TxtFax = Format(.Fields("Fax"), "(@@)@@@@-@@@@")
+    TxtCelular = Format(.Fields("Celular"), "(@@)@@@@-@@@@")
+End With
+
+Exit Sub
+
+erro:
+
+'    MsgBox "Campo nulo ou inválido - " & Err.Description & Err.Number, vbInformation, App.Title
+
+End Sub
+
+Private Sub DBGProdutos_KeyPress(KeyAscii As Integer)
+If KeyAscii = 13 Then
+    Unload Me
+End If
+If KeyAscii = 27 Then
+    Unload Me
+End If
+End Sub
+
+Private Sub Form_Activate()
+    
+'DoEvents
+'DBCDados.ListField = "Descrição"
+'DBCDados.BoundColumn = DatDados.Recordset.Fields(0).Name
+'DBCDados.SetFocus
+Flag = 1
+End Sub
+
+
+
+Private Sub Form_Load()
+
+DatDados.DatabaseName = FrmFrente.Caminho & "\Dados.mdb"
+DatDados.RecordSource = "Select Ent.CodEntidade,Ent.Nome,Ent.Endereco, Ent.Nro, Ent.Cidade, Ent.Fone, Ent.Fax, Ent.Celular From Ent WHERE Ent.Ativo = True and (Ent.Tipo = 1 or Ent.Tipo >= 5) Order By Ent.Nome"
+DatDados.Refresh
+
+End Sub
+
+'Private Sub CmdLocalizar_Click(Index As Integer)
+'Dim Criterio As String
+'Dim Terminação As String
+'Terminacao = """"
+'If Index = 0 Then
+'    Criterio = DatDados.Recordset.Fields(0).Name & " = " & Terminacao & DBCDados.BoundText & Terminacao
+'    DatDados.Recordset.FindFirst Criterio
+'    If DatDados.Recordset.NoMatch Then
+'          MsgBox "Informação não Localizada", vbExclamation, App.Title
+'    Else
+'          Unload Me
+'    End If
+'Else
+'    Unload Me
+'End If
+'End Sub
+
+Private Sub Form_Unload(Cancel As Integer)
+'FrmFrente.MnuTotal.Item(2).Enabled = False
+Flag = 0
+End Sub
+
+Private Sub TxtPesquisa_Change()
+Dim Criterio As String
+Dim Terminacao As String
+Terminacao = """"
+If TxtPesquisa <> "" Then
+    Criterio = DatDados.Recordset.Fields(1).Name & " Like " & """" & TxtPesquisa & "*"""
+    DatDados.Recordset.FindFirst Criterio
+    If DatDados.Recordset.NoMatch Then
+'        MsgBox "Informação não Localizada", vbExclamation, App.Title
+        Beep
+        TxtPesquisa.SetFocus
+        SendKeys "{BACKSPACE}"
+    Else
+        TxtPesquisa.SetFocus
+    End If
+End If
+
+End Sub
+
+Private Sub TxtPesquisa_KeyUp(KeyCode As Integer, Shift As Integer)
+If KeyCode = 40 Then
+    DBGProdutos.SetFocus
+End If
+End Sub

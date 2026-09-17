@@ -1,0 +1,67 @@
+# ==========================================
+# AMBIENTES LOCAIS & CREDENCIAIS SENSÍVEIS
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.pfx
+*.pem
+*.key
+*.crt
+
+# ==========================================
+# PYTHON & AMBIENTES VIRTUAIS
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+env/
+
+# ==========================================
+# IDES & EDITORES
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*~
+
+# ==========================================
+# ARQUIVOS TEMPORÁRIOS, LOGS & BASES LOCAIS
+# ==========================================
+*.log
+scratch/
+Dados.mdb
+*.mdb
+*.sqlite
+*.sqlite3
+xmls/temp/
+*.tmp
+
+# ==========================================
+# BINÁRIOS E EXECUTÁVEIS PESADOS (LEGADO VB)
+# ==========================================
+*.exe
+*.ocx
+*.oca
+*.psd
+*.dat

@@ -1,0 +1,12 @@
+0-Entrada de Produtos
+1-Venda Vista
+2-Venda Parcelada
+3-Ordem de Serviço
+4-Orçamento
+5-Consignação
+6-Retirada/Doação
+7-Consórcio
+8-Transferência (Remessa)
+9-Transferência (Retorno)
+10-Devolução de Venda
+11-Devolução de Compra
