@@ -637,7 +637,8 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="width: 80px;">Cód.</th>
+                    <th style="width: 70px;">Cód.</th>
+                    <th style="width: 60px; text-align: center;">Foto</th>
                     <th>Descrição do Produto</th>
                     <th>Grupo</th>
                     <th>Cód. Barras</th>
@@ -651,7 +652,7 @@
                 </thead>
                 <tbody id="table-body-produtos">
                   <tr>
-                    <td colspan="10" class="loading-td">
+                    <td colspan="11" class="loading-td">
                       <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
                       <div style="margin-top: 0.5rem;">Carregando produtos...</div>
                     </td>
@@ -1588,6 +1589,7 @@
       <!-- Modal Tabs (FormProdutos.frm inspired) -->
       <div class="modal-tabs">
         <button class="tab-btn active" onclick="switchTab('tab-prd-principais', this)">Dados Principais</button>
+        <button class="tab-btn" onclick="switchTab('tab-prd-foto', this)">Foto do Produto</button>
         <button class="tab-btn" onclick="switchTab('tab-prd-precos', this)">Preços & Margem</button>
         <button class="tab-btn" onclick="switchTab('tab-prd-estoque', this)">Estoque & Medidas</button>
         <button class="tab-btn" onclick="switchTab('tab-prd-fiscal', this)">Fiscal & Impostos</button>
@@ -1598,52 +1600,135 @@
       <form id="product-form" onsubmit="saveProduct(event)">
         <div class="modal-body">
           <input type="hidden" id="Prd_CodPrd" name="CodPrd">
+          <input type="hidden" id="Prd_Foto" name="Foto">
 
           <!-- TAB 1: DADOS PRINCIPAIS -->
           <div class="tab-content active" id="tab-prd-principais">
-            <div class="form-grid">
-              <div class="form-group col-8">
-                <label>Descrição do Produto *</label>
-                <input type="text" id="Prd_Descricao_Produto" name="Descricao_Produto" class="form-control" required placeholder="Nome / Descrição completa do produto">
+            <div style="display: flex; gap: 1.5rem; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap;">
+              <!-- Mini Card de Foto Lateral -->
+              <div style="width: 140px; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; background: var(--bg-surface-elevated); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div id="prd-photo-preview-mini-container" style="width: 110px; height: 110px; border-radius: var(--radius-md); background: var(--bg-surface); border: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; cursor: pointer;" onclick="triggerProductPhotoUpload()" title="Clique para trocar a foto">
+                  <img id="prd-photo-preview-mini" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                  <div id="prd-photo-placeholder-mini" style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 0.25rem;">
+                    <i class="fa-solid fa-image fa-2x" style="opacity: 0.5;"></i>
+                    <span>Sem Foto</span>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" style="width: 100%; font-size: 0.75rem; padding: 0.25rem 0.5rem;" onclick="triggerProductPhotoUpload()">
+                  <i class="fa-solid fa-camera"></i> Alterar Foto
+                </button>
               </div>
 
-              <div class="form-group col-4">
-                <label>Grupo de Produto *</label>
-                <select id="Prd_Grupo" name="Grupo" class="form-control" required>
-                  <option value="">Selecione um grupo...</option>
-                </select>
-              </div>
+              <!-- Campos Principais -->
+              <div style="flex: 1; min-width: 280px;">
+                <div class="form-grid">
+                  <div class="form-group col-8">
+                    <label>Descrição do Produto *</label>
+                    <input type="text" id="Prd_Descricao_Produto" name="Descricao_Produto" class="form-control" required placeholder="Nome / Descrição completa do produto">
+                  </div>
 
-              <div class="form-group col-4">
-                <label>Código de Barras (EAN)</label>
-                <input type="text" id="Prd_CodBar" name="CodBar" class="form-control" placeholder="7890000000000">
-              </div>
+                  <div class="form-group col-4">
+                    <label>Grupo de Produto *</label>
+                    <select id="Prd_Grupo" name="Grupo" class="form-control" required>
+                      <option value="">Selecione um grupo...</option>
+                    </select>
+                  </div>
 
-              <div class="form-group col-3">
-                <label>Embalagem / Unidade</label>
-                <input type="text" id="Prd_Embalagem" name="Embalagem" class="form-control" placeholder="UN, KG, CX, PC">
-              </div>
+                  <div class="form-group col-5">
+                    <label>Código de Barras (EAN)</label>
+                    <input type="text" id="Prd_CodBar" name="CodBar" class="form-control" placeholder="7890000000000">
+                  </div>
 
-              <div class="form-group col-3">
-                <label>Marca / Fabricante</label>
-                <input type="text" id="Prd_Marca" name="Marca" class="form-control" placeholder="Marca do produto">
-              </div>
+                  <div class="form-group col-4">
+                    <label>Embalagem / Unidade</label>
+                    <input type="text" id="Prd_Embalagem" name="Embalagem" class="form-control" placeholder="UN, KG, CX, PC">
+                  </div>
 
-              <div class="form-group col-2">
-                <div class="form-check" style="margin-top: 1.5rem;">
-                  <input type="checkbox" id="Prd_Ativo" name="Ativo" value="-1" checked>
-                  <label for="Prd_Ativo" style="color: var(--text-primary);">Ativo</label>
+                  <div class="form-group col-3">
+                    <div class="form-check" style="margin-top: 1.5rem;">
+                      <input type="checkbox" id="Prd_Ativo" name="Ativo" value="-1" checked>
+                      <label for="Prd_Ativo" style="color: var(--text-primary);">Ativo</label>
+                    </div>
+                  </div>
+
+                  <div class="form-group col-6">
+                    <label>Marca / Fabricante</label>
+                    <input type="text" id="Prd_Marca" name="Marca" class="form-control" placeholder="Marca do produto">
+                  </div>
+
+                  <div class="form-group col-6">
+                    <label>Localização no Estoque</label>
+                    <input type="text" id="Prd_Local" name="Local" class="form-control" placeholder="Prateleira A1, Corredor 2...">
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div class="form-group col-6">
+            <div class="form-grid">
+              <div class="form-group col-12">
                 <label>Complemento / Referência</label>
                 <input type="text" id="Prd_Complemento" name="Complemento" class="form-control">
               </div>
+            </div>
+          </div>
 
-              <div class="form-group col-6">
-                <label>Localização no Estoque</label>
-                <input type="text" id="Prd_Local" name="Local" class="form-control" placeholder="Prateleira A1, Corredor 2...">
+          <!-- TAB FOTO DO PRODUTO (DEDICADA) -->
+          <div class="tab-content" id="tab-prd-foto">
+            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem; align-items: start;">
+              <!-- Container de Preview Grande -->
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div id="prd-photo-preview-large-container" style="width: 220px; height: 220px; border-radius: var(--radius-md); background: var(--bg-surface); border: 2px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                  <img id="prd-photo-preview-large" src="" alt="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+                  <div id="prd-photo-placeholder-large" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; color: var(--text-muted); text-align: center; padding: 1rem;">
+                    <i class="fa-solid fa-cloud-arrow-up fa-3x" style="color: var(--accent-blue); opacity: 0.7;"></i>
+                    <strong style="color: var(--text-primary); font-size: 0.95rem;">Nenhuma foto selecionada</strong>
+                    <span style="font-size: 0.8rem;">Formatos aceitos: JPG, PNG, WEBP, GIF, SVG</span>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; width: 100%;">
+                  <button type="button" class="btn btn-secondary btn-sm" style="flex: 1;" onclick="triggerProductPhotoUpload()">
+                    <i class="fa-solid fa-upload"></i> Enviar Foto
+                  </button>
+                  <button type="button" class="btn btn-danger btn-sm" onclick="clearProductPhoto()" title="Remover Foto">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Configurações e Upload de Imagem -->
+              <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+                  <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-camera" style="color: var(--accent-blue);"></i> Carregar Arquivo do Computador
+                  </h4>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Selecione uma imagem do seu computador ou arraste e solte o arquivo diretamente no campo.
+                  </p>
+                  
+                  <input type="file" id="Prd_FileInput" accept="image/*" style="display: none;" onchange="handleProductPhotoFileSelect(event)">
+                  
+                  <div id="prd-dropzone" style="border: 2px dashed var(--accent-blue); background: rgba(59,130,246,0.05); padding: 1.5rem; border-radius: var(--radius-md); text-align: center; cursor: pointer;" onclick="triggerProductPhotoUpload()" ondragover="handlePhotoDragOver(event)" ondragleave="handlePhotoDragLeave(event)" ondrop="handlePhotoDrop(event)">
+                    <i class="fa-solid fa-arrow-up-from-bracket fa-2x" style="color: var(--accent-blue); margin-bottom: 0.5rem;"></i>
+                    <div style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">Clique ou arraste a imagem aqui</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">Upload automático e otimização para catálogo e PDV</div>
+                  </div>
+                </div>
+
+                <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
+                  <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-link" style="color: var(--accent-emerald);"></i> Caminho do Arquivo ou URL Externa
+                  </h4>
+                  <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted);">URL / Caminho da Imagem</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <input type="text" id="Prd_Foto_Input_Text" class="form-control" placeholder="https://... ou /static/uploads/produtos/foto.jpg" oninput="handleProductPhotoUrlInput(this.value)">
+                      <button type="button" class="btn btn-secondary" onclick="applyPhotoUrlManual()" title="Aplicar URL">
+                        <i class="fa-solid fa-check"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

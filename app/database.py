@@ -59,6 +59,32 @@ def get_table_column_types(table_name="ENT"):
     finally:
         conn.close()
 
+def ensure_prd_foto_column():
+    try:
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_schema = 'public' AND LOWER(table_name) = 'prd' AND LOWER(column_name) = 'foto'
+                        ) THEN
+                            ALTER TABLE "PRD" ALTER COLUMN "Foto" TYPE TEXT USING "Foto"::TEXT;
+                        ELSE
+                            ALTER TABLE "PRD" ADD COLUMN "Foto" TEXT;
+                        END IF;
+                    END $$;
+                """)
+                conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Aviso ao verificar coluna Foto em PRD: {e}")
+
+ensure_prd_foto_column()
+
 ALL_COLUMNS = get_column_names("ENT")
 GRU_COLUMNS = get_column_names("GRU")
 PRD_COLUMNS = get_column_names("PRD")

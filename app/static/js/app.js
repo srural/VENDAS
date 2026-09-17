@@ -690,9 +690,20 @@ function renderProductsTable(products) {
       ? '<span class="badge badge-active"><i class="fa-solid fa-check"></i> Ativo</span>'
       : '<span class="badge badge-inactive"><i class="fa-solid fa-xmark"></i> Inativo</span>';
 
+    // Thumbnail da Foto do Produto
+    const hasPhoto = isValidPhotoUrl(p.Foto);
+    const photoThumbnail = hasPhoto
+      ? `<div style="width: 38px; height: 38px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-surface); display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="editProduct(${p.CodPrd})" title="Foto do produto - clique para editar">
+           <img src="${escapeHtml(p.Foto)}" alt="" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'fa-solid fa-image\\' style=\\'color: var(--text-muted); opacity: 0.5;\\'></i>';">
+         </div>`
+      : `<div style="width: 38px; height: 38px; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: center; color: var(--text-muted);" title="Sem foto cadastrada">
+           <i class="fa-solid fa-box" style="opacity: 0.35; font-size: 0.85rem;"></i>
+         </div>`;
+
     return `
       <tr>
         <td><strong>#${p.CodPrd}</strong></td>
+        <td style="text-align: center;">${photoThumbnail}</td>
         <td>
           <div style="font-weight: 600;">${escapeHtml(p.Descricao_Produto || '')}</div>
           ${p.Marca ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(p.Marca)}</div>` : ''}
@@ -772,6 +783,9 @@ function openProductModal(data = null) {
   form.reset();
   resetModalTabs('product-modal');
 
+  const fileInput = document.getElementById('Prd_FileInput');
+  if (fileInput) fileInput.value = '';
+
   if (data) {
     document.getElementById('modal-title-prd').innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Editar Produto #${data.CodPrd}`;
     Object.keys(data).forEach(key => {
@@ -781,6 +795,7 @@ function openProductModal(data = null) {
         else field.value = data[key] !== null ? data[key] : '';
       }
     });
+    setProductPhotoPreview(data.Foto || null);
   } else {
     document.getElementById('modal-title-prd').innerHTML = `<i class="fa-solid fa-box"></i> Novo Produto`;
     document.getElementById('Prd_CodPrd').value = '';
@@ -791,12 +806,134 @@ function openProductModal(data = null) {
     document.getElementById('Prd_Estoque').value = '0';
     document.getElementById('Prd_Minimo').value = '0';
     document.getElementById('Prd_Icm').value = '18.00';
+    setProductPhotoPreview(null);
   }
   document.getElementById('product-modal').classList.add('active');
 }
 
 function closeProductModal() {
   document.getElementById('product-modal').classList.remove('active');
+}
+
+// Funções de Gestão de Foto de Produto
+function triggerProductPhotoUpload() {
+  const fileInput = document.getElementById('Prd_FileInput');
+  if (fileInput) fileInput.click();
+}
+
+async function handleProductPhotoFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  await uploadProductPhotoFile(file);
+}
+
+async function uploadProductPhotoFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showToast('Por favor, selecione um arquivo de imagem válido (JPG, PNG, WEBP, GIF, SVG).', 'warning');
+    return;
+  }
+
+  showToast('Enviando foto do produto...', 'info');
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/produtos/upload-foto', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao enviar foto');
+
+    setProductPhotoPreview(data.url);
+    showToast('Foto do produto carregada com sucesso!', 'success');
+  } catch (err) {
+    showToast(`Falha no upload da foto: ${err.message}`, 'error');
+  }
+}
+
+function handleProductPhotoUrlInput(url) {
+  setProductPhotoPreview(url, false);
+}
+
+function applyPhotoUrlManual() {
+  const textInput = document.getElementById('Prd_Foto_Input_Text');
+  const url = textInput ? textInput.value.trim() : '';
+  setProductPhotoPreview(url);
+  if (url) showToast('URL da foto aplicada!', 'info');
+}
+
+function clearProductPhoto() {
+  setProductPhotoPreview(null);
+  const fileInput = document.getElementById('Prd_FileInput');
+  if (fileInput) fileInput.value = '';
+  showToast('Foto removida.', 'info');
+}
+
+function isValidPhotoUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const s = url.trim();
+  if (s === '' || s === '0' || s === '-1' || s === '1' || s.toLowerCase() === 'null') return false;
+  return s.startsWith('/') || s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:image/') || /\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?.*)?$/i.test(s);
+}
+
+function setProductPhotoPreview(url, syncTextInput = true) {
+  const cleanUrl = isValidPhotoUrl(url) ? url.trim() : '';
+  
+  const hiddenInput = document.getElementById('Prd_Foto');
+  if (hiddenInput) hiddenInput.value = cleanUrl;
+
+  const textInput = document.getElementById('Prd_Foto_Input_Text');
+  if (textInput && syncTextInput) textInput.value = cleanUrl;
+
+  const imgMini = document.getElementById('prd-photo-preview-mini');
+  const placeholderMini = document.getElementById('prd-photo-placeholder-mini');
+  const imgLarge = document.getElementById('prd-photo-preview-large');
+  const placeholderLarge = document.getElementById('prd-photo-placeholder-large');
+
+  if (cleanUrl) {
+    if (imgMini) {
+      imgMini.src = cleanUrl;
+      imgMini.style.display = 'block';
+      imgMini.onerror = () => { imgMini.style.display = 'none'; if (placeholderMini) placeholderMini.style.display = 'flex'; };
+    }
+    if (placeholderMini) placeholderMini.style.display = 'none';
+
+    if (imgLarge) {
+      imgLarge.src = cleanUrl;
+      imgLarge.style.display = 'block';
+      imgLarge.onerror = () => { imgLarge.style.display = 'none'; if (placeholderLarge) placeholderLarge.style.display = 'flex'; };
+    }
+    if (placeholderLarge) placeholderLarge.style.display = 'none';
+  } else {
+    if (imgMini) { imgMini.src = ''; imgMini.style.display = 'none'; }
+    if (placeholderMini) placeholderMini.style.display = 'flex';
+
+    if (imgLarge) { imgLarge.src = ''; imgLarge.style.display = 'none'; }
+    if (placeholderLarge) placeholderLarge.style.display = 'flex';
+  }
+}
+
+function handlePhotoDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('prd-dropzone');
+  if (dz) dz.style.background = 'rgba(59,130,246,0.15)';
+}
+
+function handlePhotoDragLeave(e) {
+  e.preventDefault();
+  const dz = document.getElementById('prd-dropzone');
+  if (dz) dz.style.background = 'rgba(59,130,246,0.05)';
+}
+
+function handlePhotoDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('prd-dropzone');
+  if (dz) dz.style.background = 'rgba(59,130,246,0.05)';
+
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    uploadProductPhotoFile(e.dataTransfer.files[0]);
+  }
 }
 
 async function editProduct(id) {
@@ -820,6 +957,9 @@ async function saveProduct(event) {
 
   data['Ativo'] = document.getElementById('Prd_Ativo').checked ? -1 : 0;
   data['Promocao'] = document.getElementById('Prd_Promocao').checked ? -1 : 0;
+  
+  const fotoVal = document.getElementById('Prd_Foto') ? document.getElementById('Prd_Foto').value.trim() : '';
+  data['Foto'] = fotoVal || null;
 
   ['Grupo'].forEach(k => {
     if (data[k] !== '' && data[k] !== undefined) data[k] = parseInt(data[k], 10);

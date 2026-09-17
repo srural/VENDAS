@@ -3,6 +3,8 @@ import urllib.request
 import json
 import re
 import os
+import uuid
+import datetime
 import subprocess
 from app import database as db
 
@@ -231,6 +233,85 @@ def update_produto(cod_prd):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@main_bp.route('/api/produtos/upload-foto', methods=['POST'])
+def upload_produto_foto_temp():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "Nenhum arquivo de imagem enviado"}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Nenhum arquivo selecionado"}), 400
+
+        allowed_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp'}
+        _, ext = os.path.splitext(file.filename.lower())
+        if ext not in allowed_extensions:
+            return jsonify({"error": f"Formato inválido. Extensões permitidas: {', '.join(allowed_extensions)}"}), 400
+
+        upload_dir = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'produtos')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        unique_name = f"prd_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = os.path.join(upload_dir, unique_name)
+        file.save(filepath)
+
+        photo_url = f"/static/uploads/produtos/{unique_name}"
+        return jsonify({
+            "message": "Foto enviada com sucesso!",
+            "url": photo_url,
+            "filename": unique_name
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar imagem: {str(e)}"}), 500
+
+@main_bp.route('/api/produtos/<int:cod_prd>/foto', methods=['POST', 'DELETE'])
+def produto_foto_manage(cod_prd):
+    try:
+        produto = db.get_product_by_id(cod_prd)
+        if not produto:
+            return jsonify({"error": "Produto não encontrado"}), 404
+
+        if request.method == 'DELETE':
+            # Remove foto do produto
+            old_foto = produto.get('Foto')
+            if old_foto and old_foto.startswith('/static/uploads/produtos/'):
+                filename = os.path.basename(old_foto)
+                filepath = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'produtos', filename)
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except Exception:
+                        pass
+
+            db.update_product(cod_prd, {'Foto': None})
+            return jsonify({"message": "Foto removida com sucesso!"})
+
+        # POST: Upload ou Atualização de Foto
+        photo_url = None
+        if 'file' in request.files and request.files['file'].filename != '':
+            file = request.files['file']
+            allowed_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp'}
+            _, ext = os.path.splitext(file.filename.lower())
+            if ext not in allowed_extensions:
+                return jsonify({"error": "Formato de arquivo não suportado"}), 400
+
+            upload_dir = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'produtos')
+            os.makedirs(upload_dir, exist_ok=True)
+
+            unique_name = f"prd_{cod_prd}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
+            filepath = os.path.join(upload_dir, unique_name)
+            file.save(filepath)
+            photo_url = f"/static/uploads/produtos/{unique_name}"
+        elif request.json and request.json.get('foto_url'):
+            photo_url = request.json.get('foto_url')
+        else:
+            return jsonify({"error": "Nenhum arquivo ou URL de foto informada"}), 400
+
+        db.update_product(cod_prd, {'Foto': photo_url})
+        return jsonify({"message": "Foto do produto atualizada com sucesso!", "foto_url": photo_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @main_bp.route('/api/produtos/<int:cod_prd>', methods=['DELETE'])
 def delete_produto(cod_prd):
     try:
@@ -241,6 +322,8 @@ def delete_produto(cod_prd):
         return jsonify({"message": f"Produto {cod_prd} removido com sucesso!"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
 
 
 # --- PDV & NFC-E ENDPOINTS ---
