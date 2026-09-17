@@ -1495,16 +1495,17 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(4px);
   z-index: 150;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: 1rem;
   opacity: 0;
   visibility: hidden;
   transition: all var(--transition-normal);
+  overflow-y: auto;
 }
 
 .modal-backdrop.active {
@@ -1518,16 +1519,19 @@ body {
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 800px;
-  max-height: 90vh;
+  max-height: calc(100vh - 2.5rem);
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
   transform: scale(0.95);
   transition: transform var(--transition-normal);
+  overflow: hidden;
+  position: relative;
+  margin: auto;
 }
 
 .modal-container.modal-lg {
-  max-width: 920px;
+  max-width: 960px;
 }
 
 .modal-backdrop.active .modal-container {
@@ -1535,11 +1539,14 @@ body {
 }
 
 .modal-header {
-  padding: 1.25rem 1.75rem;
+  flex-shrink: 0;
+  padding: 1.15rem 1.75rem;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--bg-surface);
+  z-index: 10;
 }
 
 .modal-title {
@@ -1573,12 +1580,17 @@ body {
 
 /* Modal Tabs */
 .modal-tabs {
+  flex-shrink: 0;
   display: flex;
   gap: 0.5rem;
   padding: 0 1.75rem;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-surface-elevated);
   overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  z-index: 10;
 }
 
 .tab-btn {
@@ -1603,10 +1615,19 @@ body {
   border-bottom-color: var(--accent-blue);
 }
 
+.modal-container > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-body {
-  padding: 1.75rem;
+  padding: 1.5rem 1.75rem;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
 
 .tab-content {
@@ -1697,13 +1718,15 @@ textarea.form-control {
 }
 
 .modal-footer {
-  padding: 1.25rem 1.75rem;
+  flex-shrink: 0;
+  padding: 1rem 1.75rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   background: var(--bg-surface);
+  z-index: 10;
 }
 
 /* Toast Notifications */
