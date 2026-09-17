@@ -850,8 +850,8 @@ body {
 
 .pdv-photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  gap: 0.6rem;
   max-height: 420px;
   overflow-y: auto;
   padding: 0.25rem;
@@ -873,9 +873,9 @@ body {
 }
 
 .pdv-product-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: var(--accent-blue);
-  box-shadow: 0 8px 16px -4px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 6px 14px -3px rgba(59, 130, 246, 0.25);
 }
 
 .pdv-product-card:active {
@@ -884,7 +884,7 @@ body {
 
 .pdv-product-img-wrapper {
   width: 100%;
-  height: 105px;
+  height: 80px;
   background: var(--bg-surface);
   position: relative;
   display: flex;
@@ -909,59 +909,64 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.15rem;
   color: var(--text-muted);
   opacity: 0.6;
 }
 
+.pdv-product-placeholder i {
+  font-size: 1.5rem !important;
+}
+
 .pdv-product-price-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
   font-weight: 700;
-  font-size: 0.78rem;
-  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 9999px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   z-index: 2;
   font-family: monospace;
 }
 
 .pdv-product-info {
-  padding: 0.65rem 0.75rem;
+  padding: 0.45rem 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   flex: 1;
   justify-content: space-between;
 }
 
 .pdv-product-name {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.25;
+  line-height: 1.2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 2.1rem;
+  min-height: 1.85rem;
 }
 
 .pdv-product-meta-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 
 .pdv-product-stock-tag {
   font-weight: 600;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
 }
 
 
