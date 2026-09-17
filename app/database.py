@@ -917,25 +917,65 @@ def get_next_itp_id():
     finally:
         conn.close()
 
-def search_pdv_products(query, limit=15):
-    if not query or not query.strip():
-        return []
-    search = f"%{query.strip()}%"
-    exact = query.strip()
+def search_pdv_products(query="", grupo=None, limit=60):
+    where_clauses = ['(PRD."Ativo" IS NULL OR PRD."Ativo" != 0)']
+    params = []
 
+    if grupo is not None and str(grupo) != "" and str(grupo).lower() != "all":
+        try:
+            where_clauses.append('PRD."Grupo" = %s')
+            params.append(int(grupo))
+        except (ValueError, TypeError):
+            pass
+
+    if query and query.strip():
+        search = f"%{query.strip()}%"
+        exact = query.strip()
+        where_clauses.append(f"""(
+            PRD."CodBar" ILIKE %s OR 
+            CAST(PRD."CodPrd" AS TEXT) = %s OR 
+            PRD."{DESC_PRD_COL}" ILIKE %s OR 
+            PRD."Marca" ILIKE %s
+        )""")
+        params.extend([search, exact, search, search])
+        
+        # Ordem inteligente
+        order_sql = f"""
+            ORDER BY 
+                CASE 
+                    WHEN PRD."CodBar" = %s THEN 1 
+                    WHEN CAST(PRD."CodPrd" AS TEXT) = %s THEN 2 
+                    ELSE 3 
+                END, 
+                PRD."{DESC_PRD_COL}" ASC
+        """
+        order_params = [exact, exact]
+    else:
+        # Quando busca vazia: prioriza itens com fotos e ordem alfabética
+        order_sql = f"""
+            ORDER BY 
+                CASE 
+                    WHEN PRD."Foto" IS NOT NULL AND PRD."Foto" != '' AND PRD."Foto" != '0' AND PRD."Foto" != '-1' THEN 1 
+                    ELSE 2 
+                END, 
+                PRD."{DESC_PRD_COL}" ASC
+        """
+        order_params = []
+
+    where_sql = " WHERE " + " AND ".join(where_clauses)
     sql = f'''
         SELECT PRD.*, GRU."{DESC_GRU_COL}" as Nome_Grupo, COALESCE(GRU."Desconto", 0.0) as DescontoGrupo
         FROM "PRD" PRD
         LEFT JOIN "GRU" GRU ON PRD."Grupo" = GRU."CodGru"
-        WHERE PRD."CodBar" ILIKE %s OR CAST(PRD."CodPrd" AS TEXT) = %s OR PRD."{DESC_PRD_COL}" ILIKE %s OR PRD."Marca" ILIKE %s
-        ORDER BY CASE WHEN PRD."CodBar" = %s THEN 1 WHEN CAST(PRD."CodPrd" AS TEXT) = %s THEN 2 ELSE 3 END, PRD."CodPrd" ASC
+        {where_sql}
+        {order_sql}
         LIMIT %s
     '''
 
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute(sql, (search, exact, search, search, exact, exact, limit))
+            cursor.execute(sql, params + order_params + [limit])
             rows = []
             for r in cursor.fetchall():
                 item = normalize_prd_row(r)

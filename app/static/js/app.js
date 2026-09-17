@@ -183,6 +183,7 @@ function switchModule(moduleName) {
     titleEl.innerHTML = `<i class="fa-solid fa-chart-pie"></i> <span>Dashboard - Visão Geral do Sistema</span>`;
   } else if (moduleName === 'pdv') {
     titleEl.innerHTML = `<i class="fa-solid fa-cash-register"></i> <span>PDV - Frente de Caixa</span>`;
+    loadPdvPhotoCatalog();
     setTimeout(() => {
       const bc = document.getElementById('pdv-barcode-input');
       if (bc) bc.focus();
@@ -1214,11 +1215,17 @@ function resetModalTabs(modalId) {
 
 let pdvCart = [];
 let pdvSelectedProduct = null;
+let pdvCatalogProducts = [];
+let pdvCurrentGroupFilter = 'all';
+let pdvCurrentPhotoSearch = '';
+let pdvViewMode = 'split';
 
 onReady(() => {
   // Live POS Clock
   setInterval(updatePdvClock, 1000);
   updatePdvClock();
+  loadPdvPhotoCatalog();
+
 
 
 
@@ -1959,6 +1966,234 @@ function closeReceiptModal() {
 
 function printReceipt() {
   window.print();
+}
+
+/* ==========================================================================
+   PAINEL DE VENDA POR FOTOS (CATÁLOGO TOUCH & CLIQUE NO PDV)
+   ========================================================================== */
+
+function setPdvViewMode(mode) {
+  pdvViewMode = mode;
+  
+  // Atualiza botões seletores de modo
+  const btnSplit = document.getElementById('btn-pdv-mode-split');
+  const btnCat = document.getElementById('btn-pdv-mode-catalog');
+  const btnTab = document.getElementById('btn-pdv-mode-table');
+  
+  if (btnSplit) btnSplit.classList.toggle('active', mode === 'split');
+  if (btnCat) btnCat.classList.toggle('active', mode === 'catalog');
+  if (btnTab) btnTab.classList.toggle('active', mode === 'table');
+
+  const photoPanel = document.getElementById('pdv-photo-panel');
+  const barcodeCard = document.getElementById('pdv-barcode-entry-card');
+  const photoGrid = document.getElementById('pdv-photo-grid');
+
+  if (mode === 'split') {
+    if (photoPanel) photoPanel.style.display = 'flex';
+    if (barcodeCard) barcodeCard.style.display = 'block';
+    if (photoGrid) photoGrid.style.maxHeight = '380px';
+  } else if (mode === 'catalog') {
+    if (photoPanel) photoPanel.style.display = 'flex';
+    if (barcodeCard) barcodeCard.style.display = 'none';
+    if (photoGrid) photoGrid.style.maxHeight = '580px';
+  } else if (mode === 'table') {
+    if (photoPanel) photoPanel.style.display = 'none';
+    if (barcodeCard) barcodeCard.style.display = 'block';
+  }
+}
+
+let pdvPhotoSearchDebounceTimer = null;
+function onPdvPhotoSearchInput(val) {
+  clearTimeout(pdvPhotoSearchDebounceTimer);
+  pdvPhotoSearchDebounceTimer = setTimeout(() => {
+    pdvCurrentPhotoSearch = (val || '').trim();
+    renderPdvPhotoGrid();
+  }, 180);
+}
+
+async function loadPdvPhotoCatalog() {
+  try {
+    // 1. Carregar grupos para a barra de categorias/chips
+    const resGrupos = await fetch('/api/grupos');
+    if (resGrupos.ok) {
+      const grupos = await resGrupos.json();
+      renderPdvCategoryChips(grupos);
+    }
+
+    // 2. Carregar catálogo inicial de produtos com prioridade de fotos
+    const resPrd = await fetch('/api/pdv/produtos?limit=120');
+    if (resPrd.ok) {
+      pdvCatalogProducts = await resPrd.json();
+      renderPdvPhotoGrid();
+    }
+  } catch (err) {
+    console.error('Erro ao carregar catálogo de fotos no PDV:', err);
+    const grid = document.getElementById('pdv-photo-grid');
+    if (grid) {
+      grid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--accent-rose);">
+          <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+          <div style="margin-top: 0.5rem;">Falha ao carregar produtos no catálogo.</div>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderPdvCategoryChips(grupos = []) {
+  const container = document.getElementById('pdv-category-chips-container');
+  if (!container) return;
+
+  let html = `
+    <button type="button" class="pdv-category-chip ${pdvCurrentGroupFilter === 'all' ? 'active' : ''}" onclick="filterPdvCatalogByGroup('all', this)">
+      <i class="fa-solid fa-boxes-stacked"></i> Todos
+    </button>
+  `;
+
+  if (Array.isArray(grupos)) {
+    grupos.forEach(g => {
+      const nome = g.Descricao_Grupo || g.Nome_Grupo || g.Descricao || `Grupo #${g.CodGru}`;
+      const isActive = String(pdvCurrentGroupFilter) === String(g.CodGru);
+      html += `
+        <button type="button" class="pdv-category-chip ${isActive ? 'active' : ''}" onclick="filterPdvCatalogByGroup(${g.CodGru}, this)">
+          <i class="fa-solid fa-tag"></i> ${escapeHtml(nome)}
+        </button>
+      `;
+    });
+  }
+
+  container.innerHTML = html;
+}
+
+async function filterPdvCatalogByGroup(groupId, element) {
+  pdvCurrentGroupFilter = groupId;
+  
+  // Atualizar estilo ativo nos chips
+  const container = document.getElementById('pdv-category-chips-container');
+  if (container) {
+    container.querySelectorAll('.pdv-category-chip').forEach(chip => chip.classList.remove('active'));
+    if (element) {
+      element.classList.add('active');
+    }
+  }
+
+  try {
+    const url = groupId === 'all'
+      ? `/api/pdv/produtos?limit=120`
+      : `/api/pdv/produtos?grupo=${encodeURIComponent(groupId)}&limit=120`;
+    const res = await fetch(url);
+    if (res.ok) {
+      pdvCatalogProducts = await res.json();
+    }
+  } catch (e) {
+    console.warn('Erro ao filtrar catálogo por grupo:', e);
+  }
+
+  renderPdvPhotoGrid();
+}
+
+function isPdvValidPhoto(foto) {
+  if (!foto) return false;
+  const str = String(foto).trim();
+  if (!str || str === '0' || str === '-1' || str === 'null' || str === 'undefined') return false;
+  return true;
+}
+
+function renderPdvPhotoGrid() {
+  const grid = document.getElementById('pdv-photo-grid');
+  const countBadge = document.getElementById('pdv-catalog-count');
+  if (!grid) return;
+
+  let filtered = pdvCatalogProducts || [];
+
+  // Filtragem por grupo local se aplicável
+  if (pdvCurrentGroupFilter && pdvCurrentGroupFilter !== 'all') {
+    filtered = filtered.filter(p => String(p.Grupo) === String(pdvCurrentGroupFilter));
+  }
+
+  // Filtragem instantânea por texto (nome, código, ean, marca)
+  if (pdvCurrentPhotoSearch) {
+    const term = pdvCurrentPhotoSearch.toLowerCase();
+    filtered = filtered.filter(p => {
+      const nome = (p.Descricao_Produto || '').toLowerCase();
+      const cod = String(p.CodPrd || '');
+      const ean = (p.CodBar || '').toLowerCase();
+      const marca = (p.Marca || '').toLowerCase();
+      return nome.includes(term) || cod.includes(term) || ean.includes(term) || marca.includes(term);
+    });
+  }
+
+  if (countBadge) {
+    countBadge.innerText = `${filtered.length} produto(s)`;
+  }
+
+  if (!filtered.length) {
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 2.5rem; color: var(--text-muted);">
+        <i class="fa-solid fa-box-open fa-3x" style="opacity: 0.35; margin-bottom: 0.5rem;"></i>
+        <div style="font-weight: 500; font-size: 0.95rem;">Nenhum produto encontrado neste filtro.</div>
+        <div style="font-size: 0.8rem; margin-top: 0.25rem;">Tente outro termo de busca ou selecione a categoria "Todos".</div>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => {
+    const temFoto = isPdvValidPhoto(p.Foto);
+    const preco = floatOrZero(p.Venda);
+    const descGrupo = floatOrZero(p.DescontoGrupo || p.descontogrupo || p.Desconto_Grupo);
+    const precoFinal = descGrupo > 0 ? (preco * (1 - descGrupo / 100)) : preco;
+    const estoque = floatOrZero(p.Estoque);
+    const stockClass = estoque <= 0 ? 'badge-stock-out' : (estoque <= 5 ? 'badge-stock-low' : 'badge-stock-ok');
+
+    const imgHtml = temFoto
+      ? `<img src="${escapeHtml(p.Foto)}" alt="${escapeHtml(p.Descricao_Produto)}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'pdv-product-placeholder\\'><i class=\\'fa-solid fa-box-open fa-2x\\'></i><span style=\\'font-size:0.7rem;\\'>Sem foto</span></div>';">`
+      : `<div class="pdv-product-placeholder">
+           <i class="fa-solid fa-box fa-2x"></i>
+           <span style="font-size: 0.7rem; font-weight: 500;">Sem foto</span>
+         </div>`;
+
+    const priceBadge = descGrupo > 0
+      ? `<div class="pdv-product-price-badge" title="Desconto de Grupo ${descGrupo}%">R$ ${precoFinal.toFixed(2)}</div>`
+      : `<div class="pdv-product-price-badge">R$ ${preco.toFixed(2)}</div>`;
+
+    return `
+      <div class="pdv-product-card" id="pdv-card-prd-${p.CodPrd}" onclick="onPdvPhotoCardClick(${p.CodPrd}, this)" title="Clique para adicionar ao carrinho">
+        ${priceBadge}
+        <div class="pdv-product-img-wrapper">
+          ${imgHtml}
+        </div>
+        <div class="pdv-product-info">
+          <div class="pdv-product-name" title="${escapeHtml(p.Descricao_Produto)}">${escapeHtml(p.Descricao_Produto)}</div>
+          <div class="pdv-product-meta-row">
+            <span style="font-family: monospace; font-weight: 600; color: var(--text-secondary);">#${p.CodPrd}</span>
+            <span class="badge ${stockClass} pdv-product-stock-tag" title="Estoque disponível">${estoque} ${escapeHtml(p.Embalagem || 'UN')}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function onPdvPhotoCardClick(codPrd, cardElement) {
+  const prod = (pdvCatalogProducts || []).find(p => p.CodPrd === codPrd);
+  if (!prod) {
+    showToast('Produto não localizado no catálogo', 'error');
+    return;
+  }
+
+  // Animação de feedback táctil e visual
+  if (cardElement) {
+    cardElement.style.transform = 'scale(0.92)';
+    cardElement.style.borderColor = 'var(--accent-emerald)';
+    setTimeout(() => {
+      cardElement.style.transform = '';
+      cardElement.style.borderColor = '';
+    }, 180);
+  }
+
+  // Adiciona item ao carrinho do PDV
+  addPdvItemToCart(prod, 1.0);
 }
 
 function floatOrZero(v) {

@@ -336,6 +336,19 @@
                 <i class="fa-solid fa-gear"></i> Configurações
               </button>
 
+              <!-- Seletor de Modo de Exibição do PDV -->
+              <div class="pdv-view-toggles" title="Alternar modo de visualização do caixa">
+                <button type="button" class="btn-toggle active" id="btn-pdv-mode-split" onclick="setPdvViewMode('split')">
+                  <i class="fa-solid fa-table-columns"></i> Fotos + Carrinho
+                </button>
+                <button type="button" class="btn-toggle" id="btn-pdv-mode-catalog" onclick="setPdvViewMode('catalog')">
+                  <i class="fa-solid fa-border-all"></i> Catálogo de Fotos
+                </button>
+                <button type="button" class="btn-toggle" id="btn-pdv-mode-table" onclick="setPdvViewMode('table')">
+                  <i class="fa-solid fa-barcode"></i> Leitor / Lista
+                </button>
+              </div>
+
               <div class="pos-clock-badge">
                 <i class="fa-regular fa-clock"></i>
                 <span id="pdv-clock-display">00/00/0000 00:00:00</span>
@@ -345,10 +358,45 @@
 
           <!-- POS Main Grid (Cart vs Summary) -->
           <div class="pos-main-grid">
-            <!-- Left Side: Barcode Scanner & Cart List -->
-            <div class="pos-cart-container">
-              <!-- Item Entry Bar -->
-              <div class="pos-entry-card">
+            <!-- Left Side: Photo Panel & Cart List -->
+            <div class="pos-cart-container" id="pdv-left-container">
+              
+              <!-- PAINEL DE VENDA POR FOTOS (CATÁLOGO TOUCH & CLIQUE) -->
+              <div class="pdv-photo-panel" id="pdv-photo-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <strong style="color: var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+                      <i class="fa-solid fa-images" style="color: var(--accent-blue);"></i> Painel de Venda por Fotos
+                    </strong>
+                    <span class="badge" id="pdv-catalog-count" style="background: rgba(59,130,246,0.15); color: var(--accent-blue); font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 9999px;">0 produtos</span>
+                  </div>
+
+                  <!-- Busca Rápida no Catálogo de Fotos -->
+                  <div class="search-input-wrapper" style="max-width: 280px; flex: 1;">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="pdv-photo-search-input" class="search-input" placeholder="Filtrar por nome ou código..." oninput="onPdvPhotoSearchInput(this.value)">
+                  </div>
+                </div>
+
+                <!-- Barra de Categorias / Grupos (Chips) -->
+                <div class="pdv-category-bar" id="pdv-category-chips-container">
+                  <button type="button" class="pdv-category-chip active" onclick="filterPdvCatalogByGroup('all', this)">
+                    <i class="fa-solid fa-boxes-stacked"></i> Todos
+                  </button>
+                  <!-- Grupos carregados via JavaScript -->
+                </div>
+
+                <!-- Grade de Cards de Produtos com Foto -->
+                <div class="pdv-photo-grid" id="pdv-photo-grid">
+                  <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--text-muted);">
+                    <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+                    <div style="margin-top: 0.5rem;">Carregando catálogo de fotos...</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Item Entry Bar (Leitor de Código de Barras) -->
+              <div class="pos-entry-card" id="pdv-barcode-entry-card">
                 <div class="pos-entry-grid">
                   <div class="form-group col-7">
                     <label>Código de Barras / Nome do Produto [F2]:</label>

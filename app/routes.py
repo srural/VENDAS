@@ -332,10 +332,13 @@ def delete_produto(cod_prd):
 def pdv_search_produtos():
     try:
         q = request.args.get('q', '')
-        results = db.search_pdv_products(q)
+        grupo = request.args.get('grupo', None)
+        limit = request.args.get('limit', 60, type=int)
+        results = db.search_pdv_products(query=q, grupo=grupo, limit=limit)
         return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @main_bp.route('/api/pdv/venda', methods=['POST'])
 def pdv_process_sale():
