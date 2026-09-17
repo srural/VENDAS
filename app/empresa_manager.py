@@ -1,58 +1,122 @@
 import os
 import configparser
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-PG_HOST = os.environ.get("PG_HOST", "localhost")
-PG_PORT = int(os.environ.get("PG_PORT", 5432))
-PG_USER = os.environ.get("PG_USER", "postgres")
-PG_PASS = os.environ.get("PG_PASS", "masterkey")
-PG_DB = os.environ.get("PG_DB", "vendas_db")
+from app.database import get_connection
 
 NFE_INI_PATH = os.path.join(os.path.dirname(__file__), '..', 'VB', 'nfe.ini')
 
-def get_db_connection():
-    return psycopg2.connect(
-        host=PG_HOST,
-        port=PG_PORT,
-        user=PG_USER,
-        password=PG_PASS,
-        dbname=PG_DB,
-        cursor_factory=RealDictCursor
-    )
+def normalize_empresa_row(row):
+    if not row:
+        return None
+    d = dict(row)
+    norm = {k.lower(): v for k, v in d.items()}
+
+    keys_map = {
+        'id_empresa': ['id_empresa', 'id', 'idempresa'],
+        'RazaoSocial': ['RazaoSocial', 'razaosocial', 'NomeEmpresa', 'nomeempresa', 'nome', 'razao'],
+        'Fantasia': ['Fantasia', 'fantasia', 'NomeFantasia', 'nomefantasia'],
+        'CNPJ': ['CNPJ', 'cnpj', 'CGC', 'cgc'],
+        'InscEst': ['InscEst', 'inscest', 'IE', 'ie'],
+        'Logradouro': ['Logradouro', 'logradouro', 'Endereco', 'endereco', 'rua'],
+        'Nro': ['Nro', 'nro', 'Numero', 'numero'],
+        'Bairro': ['Bairro', 'bairro'],
+        'Cidade': ['Cidade', 'cidade', 'Municipio', 'municipio'],
+        'UF': ['UF', 'uf', 'Estado', 'estado'],
+        'CEP': ['CEP', 'cep'],
+        'Fone': ['Fone', 'fone', 'Telefone', 'telefone'],
+        'CodigoIBGE': ['CodigoIBGE', 'codigoibge', 'CodIbge', 'codibge', 'ibge'],
+        'RegimeTrib': ['RegimeTrib', 'regimetrib', 'Regime', 'regime', 'crt'],
+        'PIS': ['PIS', 'pis'],
+        'AliqPIS': ['AliqPIS', 'aliqpis'],
+        'COFINS': ['COFINS', 'cofins'],
+        'AliqCOFINS': ['AliqCOFINS', 'aliqcofins'],
+        'SitTrib': ['SitTrib', 'sittrib'],
+        'CFOP': ['CFOP', 'cfop'],
+        'SitTribFixo': ['SitTribFixo', 'sittribfixo'],
+        'Deducao': ['Deducao', 'deducao'],
+        'Ativo': ['Ativo', 'ativo'],
+        'DtCadastro': ['DtCadastro', 'dtcadastro']
+    }
+    result = {}
+    for std_key, aliases in keys_map.items():
+        val = None
+        for a in aliases:
+            if a in d:
+                val = d[a]
+                break
+            elif a.lower() in norm:
+                val = norm[a.lower()]
+                break
+        result[std_key] = val
+    
+    if result.get('id_empresa') is None and 'id_empresa' in d:
+        result['id_empresa'] = d['id_empresa']
+    return result
 
 def init_empresa_table():
-    conn = get_db_connection()
+    conn = get_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS "EMP" (
-                    id_empresa BIGINT PRIMARY KEY,
-                    RazaoSocial TEXT NOT NULL,
-                    Fantasia TEXT,
-                    CNPJ TEXT,
-                    InscEst TEXT,
-                    Logradouro TEXT,
-                    Nro TEXT,
-                    Bairro TEXT,
-                    Cidade TEXT,
-                    UF VARCHAR(2),
-                    CEP TEXT,
-                    Fone TEXT,
-                    CodigoIBGE TEXT,
-                    RegimeTrib TEXT,
-                    PIS TEXT,
-                    AliqPIS TEXT,
-                    COFINS TEXT,
-                    AliqCOFINS TEXT,
-                    SitTrib TEXT,
-                    CFOP TEXT,
-                    SitTribFixo TEXT,
-                    Deducao TEXT,
-                    Ativo INTEGER DEFAULT 1,
-                    DtCadastro TEXT
+                    "id_empresa" BIGINT PRIMARY KEY,
+                    "RazaoSocial" TEXT NOT NULL,
+                    "Fantasia" TEXT,
+                    "CNPJ" TEXT,
+                    "InscEst" TEXT,
+                    "Logradouro" TEXT,
+                    "Nro" TEXT,
+                    "Bairro" TEXT,
+                    "Cidade" TEXT,
+                    "UF" VARCHAR(2),
+                    "CEP" TEXT,
+                    "Fone" TEXT,
+                    "CodigoIBGE" TEXT,
+                    "RegimeTrib" TEXT,
+                    "PIS" TEXT,
+                    "AliqPIS" TEXT,
+                    "COFINS" TEXT,
+                    "AliqCOFINS" TEXT,
+                    "SitTrib" TEXT,
+                    "CFOP" TEXT,
+                    "SitTribFixo" TEXT,
+                    "Deducao" TEXT,
+                    "Ativo" INTEGER DEFAULT 1,
+                    "DtCadastro" TEXT
                 )
             """)
+            conn.commit()
+
+            # Ensure all columns exist in EMP
+            expected_columns = [
+                ("RazaoSocial", "TEXT"),
+                ("Fantasia", "TEXT"),
+                ("CNPJ", "TEXT"),
+                ("InscEst", "TEXT"),
+                ("Logradouro", "TEXT"),
+                ("Nro", "TEXT"),
+                ("Bairro", "TEXT"),
+                ("Cidade", "TEXT"),
+                ("UF", "VARCHAR(2)"),
+                ("CEP", "TEXT"),
+                ("Fone", "TEXT"),
+                ("CodigoIBGE", "TEXT"),
+                ("RegimeTrib", "TEXT"),
+                ("PIS", "TEXT"),
+                ("AliqPIS", "TEXT"),
+                ("COFINS", "TEXT"),
+                ("AliqCOFINS", "TEXT"),
+                ("SitTrib", "TEXT"),
+                ("CFOP", "TEXT"),
+                ("SitTribFixo", "TEXT"),
+                ("Deducao", "TEXT"),
+                ("Ativo", "INTEGER DEFAULT 1"),
+                ("DtCadastro", "TEXT")
+            ]
+            for col_name, col_type in expected_columns:
+                try:
+                    cursor.execute(f'ALTER TABLE "EMP" ADD COLUMN IF NOT EXISTS "{col_name}" {col_type}')
+                except Exception:
+                    pass
             conn.commit()
 
             cursor.execute('SELECT COUNT(*) as cnt FROM "EMP"')
@@ -116,9 +180,9 @@ def init_empresa_table():
 
                 cursor.execute("""
                     INSERT INTO "EMP" (
-                        id_empresa, RazaoSocial, Fantasia, CNPJ, InscEst, Logradouro, Nro, Bairro,
-                        Cidade, UF, CEP, Fone, CodigoIBGE, RegimeTrib, PIS, AliqPIS, COFINS, AliqCOFINS,
-                        SitTrib, CFOP, SitTribFixo, Deducao, Ativo, DtCadastro
+                        "id_empresa", "RazaoSocial", "Fantasia", "CNPJ", "InscEst", "Logradouro", "Nro", "Bairro",
+                        "Cidade", "UF", "CEP", "Fone", "CodigoIBGE", "RegimeTrib", "PIS", "AliqPIS", "COFINS", "AliqCOFINS",
+                        "SitTrib", "CFOP", "SitTribFixo", "Deducao", "Ativo", "DtCadastro"
                     ) VALUES (
                         1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, CURRENT_DATE::text
                     )
@@ -132,7 +196,7 @@ def init_empresa_table():
 
 def migrate_all_tables_multiempresa():
     init_empresa_table()
-    conn = get_db_connection()
+    conn = get_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name != 'EMP'")
@@ -159,32 +223,32 @@ def migrate_all_tables_multiempresa():
 
 def get_empresas(include_inactive=False):
     init_empresa_table()
-    conn = get_db_connection()
+    conn = get_connection()
     try:
         with conn.cursor() as cursor:
             sql = 'SELECT * FROM "EMP"'
             if not include_inactive:
-                sql += ' WHERE "Ativo" = 1'
+                sql += ' WHERE "Ativo" = 1 OR "Ativo" IS NULL'
             sql += ' ORDER BY "id_empresa" ASC'
             cursor.execute(sql)
-            return [dict(r) for r in cursor.fetchall()]
+            return [normalize_empresa_row(r) for r in cursor.fetchall()]
     finally:
         conn.close()
 
 def get_empresa_by_id(id_empresa):
     init_empresa_table()
-    conn = get_db_connection()
+    conn = get_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute('SELECT * FROM "EMP" WHERE "id_empresa" = %s', (id_empresa,))
             row = cursor.fetchone()
-            return dict(row) if row else None
+            return normalize_empresa_row(row) if row else None
     finally:
         conn.close()
 
 def save_empresa(data):
     init_empresa_table()
-    conn = get_db_connection()
+    conn = get_connection()
     try:
         with conn.cursor() as cursor:
             id_emp = data.get('id_empresa')
