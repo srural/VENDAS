@@ -7,12 +7,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.3">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.5">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
     (function() {
-      var saved = localStorage.getItem('theme_preference') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      document.documentElement.setAttribute('data-theme', saved);
+      var savedTheme = localStorage.getItem('theme_preference') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      var savedSidebar = localStorage.getItem('sidebar_collapsed');
+      if (savedSidebar === 'true') {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
     })();
   </script>
 </head>
@@ -31,56 +35,59 @@
           <div class="brand-title">Sistema Vendas</div>
           <div class="brand-subtitle">Módulo Multiempresa & PDV</div>
         </div>
+        <button type="button" class="sidebar-toggle-mini-btn" onclick="toggleSidebar()" title="Recolher menu lateral" id="btn-sidebar-mini-toggle">
+          <i class="fa-solid fa-angles-left" id="sidebar-toggle-icon-aside"></i>
+        </button>
       </div>
 
       <div class="sidebar-section-title">NAVEGAÇÃO</div>
 
       <nav class="sidebar-nav">
-        <button class="nav-item active" id="nav-dashboard" onclick="switchModule('dashboard')">
+        <button class="nav-item active" id="nav-dashboard" onclick="switchModule('dashboard')" title="Dashboard Principal">
           <i class="fa-solid fa-chart-pie"></i>
           <span>Dashboard Principal</span>
         </button>
-        <button class="nav-item nav-highlight" id="nav-pdv" onclick="switchModule('pdv')">
+        <button class="nav-item nav-highlight" id="nav-pdv" onclick="switchModule('pdv')" title="PDV Frente de Caixa">
           <i class="fa-solid fa-cash-register"></i>
           <span>PDV Frente de Caixa</span>
         </button>
-        <button class="nav-item nav-highlight-blue" id="nav-pedidos" onclick="switchModule('pedidos')">
+        <button class="nav-item nav-highlight-blue" id="nav-pedidos" onclick="switchModule('pedidos')" title="Pedidos de Vendas">
           <i class="fa-solid fa-file-invoice-dollar"></i>
           <span>Pedidos de Vendas</span>
         </button>
-        <button class="nav-item" id="nav-entidades" onclick="switchModule('entidades')">
+        <button class="nav-item" id="nav-entidades" onclick="switchModule('entidades')" title="Entidades">
           <i class="fa-solid fa-users"></i>
           <span>Entidades</span>
         </button>
-        <button class="nav-item" id="nav-produtos" onclick="switchModule('produtos')">
+        <button class="nav-item" id="nav-produtos" onclick="switchModule('produtos')" title="Produtos">
           <i class="fa-solid fa-boxes-stacked"></i>
           <span>Produtos</span>
         </button>
-        <button class="nav-item" id="nav-grupos" onclick="switchModule('grupos')">
+        <button class="nav-item" id="nav-grupos" onclick="switchModule('grupos')" title="Grupos de Produtos">
           <i class="fa-solid fa-layer-group"></i>
           <span>Grupos de Produtos</span>
         </button>
-        <button class="nav-item" id="nav-empresas" onclick="switchModule('empresas')">
+        <button class="nav-item" id="nav-empresas" onclick="switchModule('empresas')" title="Empresas">
           <i class="fa-solid fa-building"></i>
           <span>Empresas</span>
         </button>
-        <button class="nav-item" id="nav-cfop" onclick="switchModule('cfop')">
+        <button class="nav-item" id="nav-cfop" onclick="switchModule('cfop')" title="Tabela CFOP (CFO)">
           <i class="fa-solid fa-file-contract"></i>
           <span>Tabela CFOP (CFO)</span>
         </button>
-        <button class="nav-item" id="nav-formas-pgto" onclick="switchModule('formas-pgto')">
+        <button class="nav-item" id="nav-formas-pgto" onclick="switchModule('formas-pgto')" title="Formas de Pagamento">
           <i class="fa-solid fa-credit-card"></i>
           <span>Formas de Pagamento</span>
         </button>
-        <button class="nav-item" id="nav-natureza-op" onclick="switchModule('natureza-op')">
+        <button class="nav-item" id="nav-natureza-op" onclick="switchModule('natureza-op')" title="Naturezas de Operação">
           <i class="fa-solid fa-route"></i>
           <span>Naturezas de Operação</span>
         </button>
-        <button class="nav-item" id="nav-usuarios" onclick="switchModule('usuarios')">
+        <button class="nav-item" id="nav-usuarios" onclick="switchModule('usuarios')" title="Usuários & Perfis">
           <i class="fa-solid fa-user-shield"></i>
           <span>Usuários & Perfis</span>
         </button>
-        <button class="nav-item" id="nav-config-db" onclick="switchModule('config-db')">
+        <button class="nav-item" id="nav-config-db" onclick="switchModule('config-db')" title="Configuração do Banco">
           <i class="fa-solid fa-database"></i>
           <span>Configuração do Banco</span>
         </button>
@@ -89,7 +96,7 @@
       <div class="sidebar-footer">
         <div class="system-status">
           <span class="status-dot"></span>
-          <span>PostgreSQL 18 Conectado</span>
+          <span class="status-text">PostgreSQL 18 Conectado</span>
         </div>
       </div>
     </aside>
@@ -99,8 +106,13 @@
 
       <!-- Top Header Bar -->
       <header class="topbar">
-        <div class="topbar-title" id="page-title">
-          <i class="fa-solid fa-chart-pie"></i> <span>Dashboard - Visão Geral do Sistema</span>
+        <div class="topbar-left" style="display: flex; align-items: center; gap: 0.65rem;">
+          <button type="button" class="btn btn-secondary btn-sm sidebar-topbar-toggle" id="btn-sidebar-toggle" onclick="toggleSidebar()" title="Recolher / Expandir Menu Lateral">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="topbar-title" id="page-title">
+            <i class="fa-solid fa-chart-pie"></i> <span>Dashboard - Visão Geral do Sistema</span>
+          </div>
         </div>
 
         <!-- Header Actions -->
@@ -3719,6 +3731,6 @@
 
   <!-- Local QR Code Library -->
   <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.0.7"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.0.8"></script>
 </body>
 </html>

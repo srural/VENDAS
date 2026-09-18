@@ -104,6 +104,43 @@ function toggleTheme() {
   applyTheme(newTheme, true);
 }
 
+/* ==================== SIDEBAR (MENU LATERAL) COLLAPSE / EXPAND ==================== */
+function initSidebar() {
+  const savedSidebar = localStorage.getItem('sidebar_collapsed');
+  applySidebarState(savedSidebar === 'true', false);
+}
+
+function applySidebarState(isCollapsed, notify = false) {
+  if (isCollapsed) {
+    document.documentElement.classList.add('sidebar-collapsed');
+    localStorage.setItem('sidebar_collapsed', 'true');
+  } else {
+    document.documentElement.classList.remove('sidebar-collapsed');
+    localStorage.setItem('sidebar_collapsed', 'false');
+  }
+
+  const asideIcon = document.getElementById('sidebar-toggle-icon-aside');
+  if (asideIcon) {
+    asideIcon.className = isCollapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left';
+  }
+  const topbarBtn = document.getElementById('btn-sidebar-toggle');
+  if (topbarBtn) {
+    topbarBtn.setAttribute('title', isCollapsed ? 'Expandir Menu Lateral' : 'Recolher Menu Lateral');
+  }
+
+  // Trigger resize event for dynamic layout recalculations
+  window.dispatchEvent(new Event('resize'));
+
+  if (notify) {
+    showToast(isCollapsed ? 'Menu lateral recolhido' : 'Menu lateral expandido', 'info', 1500);
+  }
+}
+
+function toggleSidebar() {
+  const isCurrentlyCollapsed = document.documentElement.classList.contains('sidebar-collapsed');
+  applySidebarState(!isCurrentlyCollapsed, true);
+}
+
 // Entidades State
 let entCurrentPage = 1;
 let entTotalPages = 1;
@@ -128,6 +165,7 @@ function onReady(fn) {
 
 onReady(() => {
   initTheme();
+  initSidebar();
   fetchStats();
   loadGroupOptions();
   loadActiveEmpresasSelector();
