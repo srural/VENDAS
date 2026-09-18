@@ -1406,6 +1406,7 @@ async function searchPdvProducts(q) {
 function setupPdvKeyboardNavigation() {
   const barcodeInp = document.getElementById('pdv-barcode-input');
   const qtyInp = document.getElementById('pdv-qty-input');
+  const priceInp = document.getElementById('pdv-price-input');
   const addBtn = document.getElementById('pdv-add-btn');
 
   if (barcodeInp) {
@@ -1436,11 +1437,28 @@ function setupPdvKeyboardNavigation() {
     qtyInp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        addPdvItemFromInput();
+        if (priceInp) {
+          priceInp.focus();
+          priceInp.select();
+        } else {
+          addPdvItemFromInput();
+        }
       }
     });
     qtyInp.addEventListener('focus', () => {
       qtyInp.select();
+    });
+  }
+
+  if (priceInp) {
+    priceInp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addPdvItemFromInput();
+      }
+    });
+    priceInp.addEventListener('focus', () => {
+      priceInp.select();
     });
   }
 }
@@ -1449,6 +1467,7 @@ function selectPdvProductByIndex(index) {
   if (pdvSearchResults && pdvSearchResults[index]) {
     const prd = pdvSearchResults[index];
     setElementValue('pdv-barcode-input', prd.Descricao_Produto);
+    setElementValue('pdv-price-input', floatOrZero(prd.Venda).toFixed(2));
     const overlay = document.getElementById('pdv-results-overlay');
     if (overlay) overlay.style.display = 'none';
     pdvSelectedProduct = prd;
@@ -1461,13 +1480,14 @@ function selectPdvProductByIndex(index) {
 }
 
 function selectPdvProduct(codPrd, desc, price) {
-  const found = pdvSearchResults.find(p => p.CodPrd === codPrd);
+  const found = (pdvSearchResults || []).find(p => p.CodPrd === codPrd);
   if (found) {
     pdvSelectedProduct = found;
   } else {
     pdvSelectedProduct = { CodPrd: codPrd, Descricao_Produto: desc, Venda: floatOrZero(price) };
   }
   setElementValue('pdv-barcode-input', desc);
+  setElementValue('pdv-price-input', floatOrZero(price).toFixed(2));
   const overlay = document.getElementById('pdv-results-overlay');
   if (overlay) overlay.style.display = 'none';
   const qtyInp = document.getElementById('pdv-qty-input');
@@ -1480,10 +1500,12 @@ function selectPdvProduct(codPrd, desc, price) {
 async function addPdvItemFromInput() {
   const barcodeInput = document.getElementById('pdv-barcode-input');
   const qtyInput = document.getElementById('pdv-qty-input');
+  const priceInput = document.getElementById('pdv-price-input');
   if (!barcodeInput) return;
 
   const val = barcodeInput.value.trim();
   const qty = parseFloat(qtyInput ? qtyInput.value : 1.0) || 1.0;
+  const customPrice = (priceInput && priceInput.value.trim() !== '') ? parseFloat(priceInput.value) : null;
 
   if (!val) {
     showToast('Digite ou escaneie um produto', 'error');
@@ -1494,10 +1516,11 @@ async function addPdvItemFromInput() {
   if (overlay) overlay.style.display = 'none';
 
   if (pdvSelectedProduct && pdvSelectedProduct.CodPrd) {
-    addPdvItemToCart(pdvSelectedProduct, qty);
+    addPdvItemToCart(pdvSelectedProduct, qty, customPrice);
     pdvSelectedProduct = null;
     barcodeInput.value = '';
     if (qtyInput) qtyInput.value = '1';
+    if (priceInput) priceInput.value = '';
     barcodeInput.focus();
     return;
   }
@@ -1511,21 +1534,25 @@ async function addPdvItemFromInput() {
     }
 
     const prd = results[0];
-    addPdvItemToCart(prd, qty);
+    addPdvItemToCart(prd, qty, customPrice);
     
     // Reset inputs & refocus
     barcodeInput.value = '';
     if (qtyInput) qtyInput.value = '1';
+    if (priceInput) priceInput.value = '';
     barcodeInput.focus();
   } catch (err) {
     showToast(`Erro ao buscar item: ${err.message}`, 'error');
   }
 }
 
-function addPdvItemToCart(product, qty = 1.0) {
-  const existingIdx = pdvCart.findIndex(item => item.CodPrd === product.CodPrd);
+function addPdvItemToCart(product, qty = 1.0, customPrice = null) {
   const descGrupo = floatOrZero(product.DescontoGrupo || product.descontogrupo || product.Desconto_Grupo);
-  const unitPrice = floatOrZero(product.Venda);
+  const unitPrice = (customPrice !== null && !isNaN(customPrice) && customPrice >= 0)
+    ? customPrice
+    : floatOrZero(product.Venda);
+
+  const existingIdx = pdvCart.findIndex(item => item.CodPrd === product.CodPrd && Math.abs(item.ValorUnit - unitPrice) < 0.001);
 
   if (existingIdx >= 0) {
     pdvCart[existingIdx].Qtd += qty;
@@ -1551,7 +1578,7 @@ function addPdvItemToCart(product, qty = 1.0) {
 
   renderPdvCart();
   const descMsg = descGrupo > 0 ? ` (${descGrupo}% desc. grupo)` : '';
-  showToast(`Item adicionado: ${product.Descricao_Produto}${descMsg}`, 'success');
+  showToast(`Item adicionado: ${product.Descricao_Produto} - R$ ${unitPrice.toFixed(2)}${descMsg}`, 'success');
 }
 
 function removePdvCartItem(index) {
@@ -1561,7 +1588,7 @@ function removePdvCartItem(index) {
 
 function updatePdvItemQty(index, newQty) {
   const q = parseFloat(newQty);
-  if (q > 0) {
+  if (q > 0 && pdvCart[index]) {
     pdvCart[index].Qtd = q;
     pdvCart[index].Valor = q * pdvCart[index].ValorUnit;
     const descGrupo = floatOrZero(pdvCart[index].DescontoGrupo);
@@ -1570,6 +1597,19 @@ function updatePdvItemQty(index, newQty) {
     }
   } else {
     pdvCart.splice(index, 1);
+  }
+  renderPdvCart();
+}
+
+function updatePdvItemPrice(index, newPrice) {
+  const p = parseFloat(newPrice);
+  if (!isNaN(p) && p >= 0 && pdvCart[index]) {
+    pdvCart[index].ValorUnit = p;
+    pdvCart[index].Valor = pdvCart[index].Qtd * p;
+    const descGrupo = floatOrZero(pdvCart[index].DescontoGrupo);
+    if (descGrupo > 0) {
+      pdvCart[index].Desconto = Math.round(pdvCart[index].Valor * (descGrupo / 100.0) * 100) / 100;
+    }
   }
   renderPdvCart();
 }
@@ -1609,9 +1649,11 @@ function renderPdvCart() {
           ${descInfo}
         </td>
         <td style="text-align: right;">
-          <input type="number" class="form-control" style="width: 75px; text-align: right;" value="${item.Qtd}" step="1" min="1" onchange="updatePdvItemQty(${idx}, this.value)">
+          <input type="number" class="form-control" style="width: 75px; text-align: right; display: inline-block; padding: 0.25rem 0.4rem; font-size: 0.85rem;" value="${item.Qtd}" step="1" min="1" onchange="updatePdvItemQty(${idx}, this.value)">
         </td>
-        <td style="text-align: right;">R$ ${item.ValorUnit.toFixed(2)}</td>
+        <td style="text-align: right;">
+          <input type="number" class="form-control" style="width: 85px; text-align: right; display: inline-block; padding: 0.25rem 0.4rem; font-size: 0.85rem;" value="${item.ValorUnit.toFixed(2)}" step="0.01" min="0" onchange="updatePdvItemPrice(${idx}, this.value)">
+        </td>
         <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">
           ${itemDesc > 0 ? `<s style="color: var(--text-muted); font-size: 0.8rem;">R$ ${item.Valor.toFixed(2)}</s><br>R$ ${finalVal.toFixed(2)}` : `R$ ${item.Valor.toFixed(2)}`}
         </td>
@@ -2312,8 +2354,18 @@ function onPdvPhotoCardClick(codPrd, cardElement) {
     }, 180);
   }
 
+  // Se o operador informou quantidade ou preço personalizado nos campos do topo, utiliza-os
+  const qtyInp = document.getElementById('pdv-qty-input');
+  const priceInp = document.getElementById('pdv-price-input');
+  const qty = parseFloat(qtyInp ? qtyInp.value : 1.0) || 1.0;
+  const customPrice = (priceInp && priceInp.value.trim() !== '') ? parseFloat(priceInp.value) : null;
+
   // Adiciona item ao carrinho do PDV
-  addPdvItemToCart(prod, 1.0);
+  addPdvItemToCart(prod, qty, customPrice);
+
+  // Reseta inputs superiores
+  if (qtyInp) qtyInp.value = '1';
+  if (priceInp) priceInp.value = '';
 }
 
 function floatOrZero(v) {
