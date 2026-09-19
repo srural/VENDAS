@@ -2018,5 +2018,305 @@ def get_db_info():
         conn.close()
 
 
+# --- RELATÓRIO DE VENDAS AGRUPADO POR PRODUTO ---
+
+def _parse_to_iso_date(d_str):
+    import re
+    if not d_str:
+        return None
+    d_str = str(d_str).strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', d_str):
+        return d_str
+    if re.match(r'^\d{2}/\d{2}/\d{4}$', d_str):
+        parts = d_str.split('/')
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    return None
+
+def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=None, id_empresa=None, status="ativos", sort_by="total_valor", sort_order="DESC", page=1, limit=50):
+    params = []
+    where_clauses = [
+        """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
+    ]
+    
+    # Status do Pedido
+    if status == "ativos":
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s)
+        )""")
+        params.append('%CANCEL%')
+    elif status == "cancelados":
+        where_clauses.append("""(
+            UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
+            UPPER(PED."Cfo") LIKE %s
+        )""")
+        params.append('%CANCEL%')
+
+    # Filtro por Período de Emissão
+    iso_inicio = _parse_to_iso_date(data_inicio)
+    if iso_inicio:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') >= %s::date")
+        params.append(iso_inicio)
+
+    iso_fim = _parse_to_iso_date(data_fim)
+    if iso_fim:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') <= %s::date")
+        params.append(iso_fim)
+
+    # Filtro de Empresa / Filial
+    if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
+        try:
+            where_clauses.append('PED."id_empresa" = %s')
+            params.append(int(id_empresa))
+        except ValueError:
+            pass
+
+    # Filtro de Grupo de Produtos
+    if grupo is not None and str(grupo).lower() not in ('all', ''):
+        try:
+            where_clauses.append('PRD."Grupo" = %s')
+            params.append(int(grupo))
+        except ValueError:
+            pass
+
+    # Busca por Nome, Código, Código de Barras ou Marca
+    if q and q.strip():
+        search = f"%{q.strip()}%"
+        where_clauses.append(f"""(
+            CAST(PRD."CodPrd" AS TEXT) ILIKE %s OR
+            PRD."{DESC_PRD_COL}" ILIKE %s OR
+            PRD."CodBar" ILIKE %s OR
+            PRD."Marca" ILIKE %s
+        )""")
+        params.extend([search] * 4)
+
+    where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+    # Mapeamento de Ordenação
+    sort_map = {
+        "total_valor": "total_valor",
+        "total_qtd": "total_qtd",
+        "total_pedidos": "total_pedidos",
+        "preco_medio": "preco_medio",
+        "lucro_bruto": "lucro_bruto",
+        "margem_pct": "margem_pct",
+        "descricao": f'PRD."{DESC_PRD_COL}"',
+        "codprd": 'PRD."CodPrd"'
+    }
+    sort_col = sort_map.get(sort_by.lower(), "total_valor")
+    sort_dir = "DESC" if sort_order.upper() == "DESC" else "ASC"
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1. Totalizadores Globais (KPIs) para o escopo filtrado
+            summary_sql = f"""
+                SELECT 
+                    COUNT(DISTINCT ITP."Produto") as total_produtos_distintos,
+                    COUNT(DISTINCT PED."CodPed") as total_pedidos_geral,
+                    COALESCE(SUM(ITP."Qtd"), 0) as total_qtd_geral,
+                    COALESCE(SUM(ITP."Qtd" * ITP."ValorUnit"), 0) as total_bruto_geral,
+                    COALESCE(SUM(ITP."Desconto"), 0) as total_desconto_geral,
+                    COALESCE(SUM(ITP."Valor"), 0) as total_faturamento_geral,
+                    COALESCE(SUM(ITP."Qtd" * COALESCE(PRD."Custo", 0)), 0) as total_custo_geral
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                {where_sql}
+            """
+            cursor.execute(summary_sql, params)
+            sum_row = _convert_row(cursor.fetchone())
+            
+            faturamento_geral = float(sum_row.get("total_faturamento_geral", 0.0))
+            custo_geral = float(sum_row.get("total_custo_geral", 0.0))
+            qtd_geral = float(sum_row.get("total_qtd_geral", 0.0))
+            lucro_geral = faturamento_geral - custo_geral
+            margem_geral = (lucro_geral / faturamento_geral * 100.0) if faturamento_geral > 0 else 0.0
+            preco_medio_geral = (faturamento_geral / qtd_geral) if qtd_geral > 0 else 0.0
+
+            summary = {
+                "total_produtos_distintos": int(sum_row.get("total_produtos_distintos", 0)),
+                "total_pedidos_geral": int(sum_row.get("total_pedidos_geral", 0)),
+                "total_qtd_geral": qtd_geral,
+                "total_bruto_geral": float(sum_row.get("total_bruto_geral", 0.0)),
+                "total_desconto_geral": float(sum_row.get("total_desconto_geral", 0.0)),
+                "total_faturamento_geral": faturamento_geral,
+                "total_custo_geral": custo_geral,
+                "lucro_bruto_geral": lucro_geral,
+                "margem_lucro_pct_geral": round(margem_geral, 2),
+                "preco_medio_geral": round(preco_medio_geral, 2)
+            }
+
+            # 2. Agrupamento por Produto
+            offset = (page - 1) * limit if page > 0 and limit > 0 else 0
+            limit_clause = f"LIMIT {limit} OFFSET {offset}" if limit > 0 else ""
+            
+            agg_query = f"""
+                SELECT 
+                    PRD."CodPrd",
+                    COALESCE(PRD."{DESC_PRD_COL}", 'PRODUTO NÃO IDENTIFICADO') as "Descricao_Produto",
+                    PRD."CodBar",
+                    PRD."Foto",
+                    COALESCE(PRD."Embalagem", 'UN') as "Embalagem",
+                    COALESCE(PRD."Custo", 0.0) as "Custo",
+                    COALESCE(PRD."Venda", 0.0) as "PrecoTabela",
+                    COALESCE(PRD."Estoque", 0.0) as "EstoqueAtual",
+                    GRU."CodGru",
+                    COALESCE(GRU."{DESC_GRU_COL}", 'SEM GRUPO') as "Descricao_Grupo",
+                    COUNT(DISTINCT PED."CodPed") as total_pedidos,
+                    SUM(ITP."Qtd") as total_qtd,
+                    SUM(ITP."Qtd" * ITP."ValorUnit") as total_bruto,
+                    SUM(ITP."Desconto") as total_desconto,
+                    SUM(ITP."Valor") as total_valor,
+                    (SUM(ITP."Valor") / NULLIF(SUM(ITP."Qtd"), 0)) as preco_medio,
+                    SUM(ITP."Qtd" * COALESCE(PRD."Custo", 0.0)) as custo_total,
+                    (SUM(ITP."Valor") - SUM(ITP."Qtd" * COALESCE(PRD."Custo", 0.0))) as lucro_bruto,
+                    CASE 
+                        WHEN SUM(ITP."Valor") > 0 THEN 
+                            ((SUM(ITP."Valor") - SUM(ITP."Qtd" * COALESCE(PRD."Custo", 0.0))) / SUM(ITP."Valor")) * 100.0
+                        ELSE 0.0 
+                    END as margem_pct
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                LEFT JOIN "GRU" GRU ON PRD."Grupo" = GRU."CodGru"
+                {where_sql}
+                GROUP BY 
+                    PRD."CodPrd", PRD."{DESC_PRD_COL}", PRD."CodBar", PRD."Foto",
+                    PRD."Embalagem", PRD."Custo", PRD."Venda", PRD."Estoque",
+                    GRU."CodGru", GRU."{DESC_GRU_COL}"
+                ORDER BY {sort_col} {sort_dir}
+                {limit_clause}
+            """
+            cursor.execute(agg_query, params)
+            raw_items = cursor.fetchall()
+
+            items = []
+            for r in raw_items:
+                item = _convert_row(r)
+                val_tot = float(item.get("total_valor", 0.0))
+                item["participacao_pct"] = round((val_tot / faturamento_geral * 100.0), 2) if faturamento_geral > 0 else 0.0
+                item["margem_pct"] = round(float(item.get("margem_pct", 0.0)), 2)
+                item["lucro_bruto"] = round(float(item.get("lucro_bruto", 0.0)), 2)
+                item["preco_medio"] = round(float(item.get("preco_medio", 0.0)), 2)
+                item["total_bruto"] = round(float(item.get("total_bruto", 0.0)), 2)
+                item["total_desconto"] = round(float(item.get("total_desconto", 0.0)), 2)
+                item["total_valor"] = round(val_tot, 2)
+                item["custo_total"] = round(float(item.get("custo_total", 0.0)), 2)
+                items.append(item)
+
+            total_distintos = summary["total_produtos_distintos"]
+            pages = (total_distintos + limit - 1) // limit if limit > 0 else 1
+
+            return {
+                "summary": summary,
+                "items": items,
+                "page": page,
+                "limit": limit,
+                "total": total_distintos,
+                "pages": pages
+            }
+    finally:
+        conn.close()
+
+def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=None, id_empresa=None, status="ativos"):
+    params = [cod_prd]
+    where_clauses = [
+        'ITP."Produto" = %s',
+        """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
+    ]
+
+    if status == "ativos":
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s)
+        )""")
+        params.append('%CANCEL%')
+    elif status == "cancelados":
+        where_clauses.append("""(
+            UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
+            UPPER(PED."Cfo") LIKE %s
+        )""")
+        params.append('%CANCEL%')
+
+    iso_inicio = _parse_to_iso_date(data_inicio)
+    if iso_inicio:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') >= %s::date")
+        params.append(iso_inicio)
+
+    iso_fim = _parse_to_iso_date(data_fim)
+    if iso_fim:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') <= %s::date")
+        params.append(iso_fim)
+
+    if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
+        try:
+            where_clauses.append('PED."id_empresa" = %s')
+            params.append(int(id_empresa))
+        except ValueError:
+            pass
+
+    where_sql = " WHERE " + " AND ".join(where_clauses)
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1. Dados cadastrais do Produto
+            cursor.execute(f"""
+                SELECT PRD.*, GRU."{DESC_GRU_COL}" as "Nome_Grupo"
+                FROM "PRD" PRD
+                LEFT JOIN "GRU" GRU ON PRD."Grupo" = GRU."CodGru"
+                WHERE PRD."CodPrd" = %s
+            """, (cod_prd,))
+            prd_row = cursor.fetchone()
+            prd_info = normalize_prd_row(prd_row) if prd_row else None
+
+            # 2. Transações e pedidos individuais
+            sql = f"""
+                SELECT 
+                    PED."CodPed",
+                    PED."DataEmiss",
+                    PED."Hora",
+                    PED."CondPgto",
+                    PED."Cfo",
+                    PED."PrevEntrega",
+                    ENT."Nome" as "NomeCliente",
+                    ENT."Cidade" as "CidadeCliente",
+                    ITP."CodItp",
+                    ITP."Qtd",
+                    ITP."ValorUnit",
+                    ITP."Desconto",
+                    ITP."Valor" as "ValorTotal"
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
+                {where_sql}
+                ORDER BY TO_DATE(PED."DataEmiss", 'DD/MM/YYYY') DESC, PED."CodPed" DESC
+                LIMIT 200
+            """
+            cursor.execute(sql, params)
+            vendas = [_convert_row(r) for r in cursor.fetchall()]
+
+            total_qtd = sum(float(v.get("Qtd", 0)) for v in vendas)
+            total_valor = sum(float(v.get("ValorTotal", 0)) for v in vendas)
+            total_desconto = sum(float(v.get("Desconto", 0)) for v in vendas)
+            preco_medio = (total_valor / total_qtd) if total_qtd > 0 else 0.0
+
+            return {
+                "produto": prd_info,
+                "vendas": vendas,
+                "resumo_produto": {
+                    "total_pedidos": len(vendas),
+                    "total_qtd": total_qtd,
+                    "total_desconto": round(total_desconto, 2),
+                    "total_valor": round(total_valor, 2),
+                    "preco_medio": round(preco_medio, 2)
+                }
+            }
+    finally:
+        conn.close()
+
+
+
 
 

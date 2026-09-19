@@ -1277,6 +1277,154 @@ def upload_certificado():
         return jsonify({"error": str(e)}), 500
 
 
+# --- RELATÓRIO DE VENDAS AGRUPADO POR PRODUTO ENDPOINTS ---
+
+@main_bp.route('/api/relatorios/vendas-por-produto', methods=['GET'])
+def get_relatorio_vendas_produto_route():
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        grupo = request.args.get('grupo', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+        sort_by = request.args.get('sort_by', 'total_valor')
+        sort_order = request.args.get('sort_order', 'DESC')
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 50, type=int)
+
+        relatorio = db.get_relatorio_vendas_produto(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            grupo=grupo,
+            q=q,
+            id_empresa=id_empresa,
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            limit=limit
+        )
+        return jsonify(relatorio)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/vendas-por-produto/detalhes/<int:cod_prd>', methods=['GET'])
+def get_relatorio_vendas_produto_detalhes_route(cod_prd):
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+
+        detalhes = db.get_relatorio_vendas_produto_detalhes(
+            cod_prd=cod_prd,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            id_empresa=id_empresa,
+            status=status
+        )
+        return jsonify(detalhes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/vendas-por-produto/export/csv', methods=['GET'])
+def export_relatorio_vendas_produto_csv_route():
+    import io
+    import csv
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        grupo = request.args.get('grupo', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+        sort_by = request.args.get('sort_by', 'total_valor')
+        sort_order = request.args.get('sort_order', 'DESC')
+
+        # Limit 0 to get all rows for export
+        relatorio = db.get_relatorio_vendas_produto(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            grupo=grupo,
+            q=q,
+            id_empresa=id_empresa,
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=1,
+            limit=0
+        )
+
+        output = io.StringIO()
+        # UTF-8 BOM for Excel pt-BR
+        output.write('\ufeff')
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+
+        # Header rows
+        writer.writerow(['RELATORIO DE VENDAS AGRUPADO POR PRODUTO'])
+        periodo_str = f"Periodo: {data_inicio or 'Inicio'} ate {data_fim or 'Hoje'}"
+        writer.writerow([periodo_str, f"Status: {status.upper()}", f"Total Itens Distintos: {relatorio['summary']['total_produtos_distintos']}"])
+        writer.writerow([
+            f"Faturamento Total: R$ {relatorio['summary']['total_faturamento_geral']:,.2f}",
+            f"Qtd Total: {relatorio['summary']['total_qtd_geral']}",
+            f"Lucro Estimado: R$ {relatorio['summary']['lucro_bruto_geral']:,.2f} ({relatorio['summary']['margem_lucro_pct_geral']}%)"
+        ])
+        writer.writerow([])
+
+        # Table header
+        writer.writerow([
+            'Codigo',
+            'Codigo de Barras',
+            'Descricao do Produto',
+            'Grupo',
+            'Unidade',
+            'Qtd Vendida',
+            'Nro Pedidos',
+            'Preco Medio (R$)',
+            'Desconto (R$)',
+            'Total Faturado (R$)',
+            'Participacao (%)',
+            'Custo Total (R$)',
+            'Lucro Bruto (R$)',
+            'Margem (%)',
+            'Estoque Atual'
+        ])
+
+        for item in relatorio['items']:
+            writer.writerow([
+                item.get('CodPrd', ''),
+                item.get('CodBar', ''),
+                item.get('Descricao_Produto', ''),
+                item.get('Descricao_Grupo', ''),
+                item.get('Embalagem', 'UN'),
+                f"{float(item.get('total_qtd', 0)):.2f}".replace('.', ','),
+                item.get('total_pedidos', 0),
+                f"{float(item.get('preco_medio', 0)):.2f}".replace('.', ','),
+                f"{float(item.get('total_desconto', 0)):.2f}".replace('.', ','),
+                f"{float(item.get('total_valor', 0)):.2f}".replace('.', ','),
+                f"{float(item.get('participacao_pct', 0)):.2f}%".replace('.', ','),
+                f"{float(item.get('custo_total', 0)):.2f}".replace('.', ','),
+                f"{float(item.get('lucro_bruto', 0)):.2f}".replace('.', ','),
+                f"{float(item.get('margem_pct', 0)):.2f}%".replace('.', ','),
+                f"{float(item.get('EstoqueAtual', 0)):.2f}".replace('.', ',')
+            ])
+
+        csv_content = output.getvalue()
+        now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Relatorio_Vendas_Produto_{now_str}.csv"
+
+        return csv_content, 200, {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 
 
 

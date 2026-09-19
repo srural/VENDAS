@@ -1347,15 +1347,16 @@ body {
 }
 
 
-/* Media Print Rules */
+/* Media Print Rules for Thermal Receipt */
 @media print {
-  body * {
+  body.print-receipt-mode * {
     visibility: hidden;
   }
-  #thermal-receipt-printable, #thermal-receipt-printable * {
+  body.print-receipt-mode #thermal-receipt-printable, 
+  body.print-receipt-mode #thermal-receipt-printable * {
     visibility: visible;
   }
-  #thermal-receipt-printable {
+  body.print-receipt-mode #thermal-receipt-printable {
     position: absolute;
     left: 0;
     top: 0;
@@ -2148,3 +2149,219 @@ textarea.form-control {
   background-color: #131b2e;
   color: #f8fafc;
 }
+
+/* Nav Item Highlight Amber */
+.nav-item.nav-highlight-amber {
+  background: rgba(217, 119, 6, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.nav-item.nav-highlight-amber:hover {
+  background: rgba(217, 119, 6, 0.35);
+  color: #ffffff;
+}
+
+.nav-item.nav-highlight-amber.active {
+  background: #d97706;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.3);
+}
+
+.nav-item.nav-highlight-amber.active i {
+  color: #ffffff;
+}
+
+/* Sidebar Nav Dropdown & Submenus */
+.nav-dropdown {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.nav-dropdown-btn {
+  justify-content: flex-start;
+  position: relative;
+}
+
+.nav-dropdown-arrow {
+  font-size: 0.72rem !important;
+  width: auto !important;
+  margin-left: auto !important;
+  transition: transform var(--transition-fast) !important;
+  color: #93c5fd !important;
+  opacity: 0.85;
+}
+
+.nav-dropdown.open .nav-dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.nav-dropdown.open .nav-dropdown-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.nav-dropdown-btn.parent-active {
+  background: rgba(217, 119, 6, 0.18);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.nav-dropdown-btn.parent-active i:first-child {
+  color: #fbbf24;
+}
+
+.nav-submenu {
+  display: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0 0.35rem 0.6rem;
+  margin-left: 1.15rem;
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  transition: all var(--transition-normal);
+}
+
+.nav-dropdown.open .nav-submenu {
+  display: flex;
+  animation: navSubmenuSlide 0.2s ease-out;
+}
+
+@keyframes navSubmenuSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-sub-item {
+  background: transparent;
+  border: none;
+  color: #bfdbfe;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  transition: all var(--transition-fast);
+  text-align: left;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.nav-sub-item i {
+  font-size: 0.9rem;
+  width: 18px;
+  text-align: center;
+  color: #93c5fd;
+  transition: color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.nav-sub-item:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nav-sub-item:hover i {
+  color: #ffffff;
+}
+
+.nav-sub-item.active {
+  background: #ffffff;
+  color: #1e3a8a;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.nav-sub-item.active i {
+  color: #d97706;
+}
+
+/* Collapsed Sidebar adjustments for Dropdown */
+.sidebar-collapsed .nav-dropdown-arrow,
+.sidebar-collapsed .nav-submenu {
+  display: none !important;
+}
+
+.sidebar-collapsed .nav-sub-item span {
+  display: none !important;
+}
+
+
+/* Relatório de Vendas Print Media Styles */
+@media print {
+  .sidebar,
+  .topbar,
+  .period-shortcuts,
+  .modal-backdrop,
+  .btn,
+  .pagination,
+  .table-footer,
+  #btn-sidebar-toggle,
+  #user-info-wrapper,
+  .empresa-selector-wrapper,
+  .theme-toggle-btn {
+    display: none !important;
+  }
+
+  body,
+  .app-layout,
+  .content-wrapper,
+  .main-container {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .module-view {
+    display: none !important;
+  }
+
+  .module-view.active {
+    display: block !important;
+  }
+
+  .table-card,
+  .stat-card {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .data-table {
+    width: 100% !important;
+  }
+
+  .data-table th {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+    border-bottom: 2px solid #9ca3af !important;
+    font-size: 0.75rem !important;
+  }
+
+  .data-table td {
+    color: #111827 !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    font-size: 0.75rem !important;
+  }
+
+  .badge {
+    border: 1px solid #9ca3af !important;
+    color: #111827 !important;
+    background: #f3f4f6 !important;
+  }
+}
+

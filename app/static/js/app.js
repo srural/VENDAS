@@ -188,6 +188,12 @@ onReady(() => {
     gruSearchQuery = val;
     fetchGroups();
   });
+
+  setupDebounce('rel-filtro-busca', (val) => {
+    relFiltros.q = val;
+    relCurrentPage = 1;
+    fetchRelatorioVendasProduto(1);
+  });
 });
 
 function setupDebounce(inputId, callback) {
@@ -201,14 +207,41 @@ function setupDebounce(inputId, callback) {
   }
 }
 
+// Sidebar Dropdown Submenu Toggle
+function toggleSidebarSubmenu(menuKey) {
+  const group = document.getElementById(`nav-group-${menuKey}`);
+  if (!group) return;
+
+  const isCollapsed = document.documentElement.classList.contains('sidebar-collapsed');
+  if (isCollapsed) {
+    applySidebarState(false, false);
+    group.classList.add('open');
+    return;
+  }
+
+  group.classList.toggle('open');
+}
+
 // Module Navigation Switcher
 function switchModule(moduleName) {
   currentModule = moduleName;
 
-  // Update Nav Items active class
-  document.querySelectorAll('.nav-item').forEach(item => {
+  // Update Nav Items & Sub-items active class
+  document.querySelectorAll('.nav-item, .nav-sub-item').forEach(item => {
     item.classList.toggle('active', item.id === `nav-${moduleName}`);
   });
+
+  // Auto-expand parent dropdown if navigating to a report sub-item
+  const isReportModule = moduleName.startsWith('rel-');
+  const relGroup = document.getElementById('nav-group-relatorios');
+  const parentToggle = document.getElementById('nav-relatorios-toggle');
+
+  if (isReportModule) {
+    if (relGroup) relGroup.classList.add('open');
+    if (parentToggle) parentToggle.classList.add('parent-active');
+  } else {
+    if (parentToggle) parentToggle.classList.remove('parent-active');
+  }
 
   // Update View Sections active class
   document.querySelectorAll('.module-view').forEach(view => {
@@ -246,10 +279,16 @@ function switchModule(moduleName) {
     titleEl.innerHTML = `<i class="fa-solid fa-user-shield"></i> <span>Gestão de Usuários & Perfis de Acesso</span>`;
   } else if (moduleName === 'config-db') {
     titleEl.innerHTML = `<i class="fa-solid fa-database"></i> <span>Configuração e Diagnóstico do Banco PostgreSQL 18</span>`;
+  } else if (moduleName === 'rel-vendas-produto') {
+    titleEl.innerHTML = `<i class="fa-solid fa-chart-column"></i> <span>Relatório de Vendas Agrupado por Produto</span>`;
   }
 
   document.querySelectorAll('.module-btn').forEach(btn => {
-    btn.style.display = (btn.id === `btn-new-${moduleName}` || btn.id === `btn-new-${moduleName.slice(0, -1)}`) ? 'inline-flex' : 'none';
+    let show = (btn.id === `btn-new-${moduleName}` || btn.id === `btn-new-${moduleName.slice(0, -1)}`);
+    if (moduleName === 'rel-vendas-produto' && (btn.id === 'btn-print-rel-vendas-produto' || btn.id === 'btn-export-rel-vendas-produto')) {
+      show = true;
+    }
+    btn.style.display = show ? 'inline-flex' : 'none';
   });
 
   // Refresh stats & load module data
@@ -261,7 +300,10 @@ function switchModule(moduleName) {
   } else if (moduleName === 'grupos') fetchGroups();
   else if (moduleName === 'empresas') fetchEmpresas();
   else if (moduleName === 'pedidos') fetchOrders();
-  else if (moduleName === 'cfop') fetchCfops();
+  else if (moduleName === 'rel-vendas-produto') {
+    loadGroupOptions();
+    fetchRelatorioVendasProduto(1);
+  } else if (moduleName === 'cfop') fetchCfops();
   else if (moduleName === 'formas-pgto') fetchFormasPgto();
   else if (moduleName === 'natureza-op') fetchNaturezasOperacao();
   else if (moduleName === 'usuarios') fetchUsuarios();
@@ -283,6 +325,8 @@ function refreshCurrentModule() {
   else if (currentModule === 'produtos') fetchProducts();
   else if (currentModule === 'grupos') fetchGroups();
   else if (currentModule === 'empresas') fetchEmpresas();
+  else if (currentModule === 'pedidos') fetchOrders();
+  else if (currentModule === 'rel-vendas-produto') fetchRelatorioVendasProduto(relCurrentPage);
 }
 
 // Stats & Dashboard Loader
@@ -645,8 +689,19 @@ async function loadGroupOptions() {
 
       // Populate Product Form Dropdown
       const formSelect = document.getElementById('Prd_Grupo');
-      formSelect.innerHTML = '<option value="">Selecione um grupo...</option>' + 
-        groupsList.map(g => `<option value="${g.CodGru}">${escapeHtml(g.Descricao_Grupo || 'Sem Nome')}</option>`).join('');
+      if (formSelect) {
+        formSelect.innerHTML = '<option value="">Selecione um grupo...</option>' + 
+          groupsList.map(g => `<option value="${g.CodGru}">${escapeHtml(g.Descricao_Grupo || 'Sem Nome')}</option>`).join('');
+      }
+
+      // Populate Relatorio Filter Dropdown
+      const relGroupSelect = document.getElementById('rel-filtro-grupo');
+      if (relGroupSelect) {
+        const curVal = relGroupSelect.value;
+        relGroupSelect.innerHTML = '<option value="all">Todos os Grupos</option>' + 
+          groupsList.map(g => `<option value="${g.CodGru}">${escapeHtml(g.Descricao_Grupo || 'Sem Nome')}</option>`).join('');
+        relGroupSelect.value = curVal || 'all';
+      }
     }
   } catch (err) {
     console.error('Erro ao carregar opções de grupos:', err);
@@ -2134,14 +2189,22 @@ function printSimpleSaleReceipt() {
   if (lastSaleData) {
     renderThermalReceipt(lastSaleData, 'venda');
   }
-  setTimeout(() => window.print(), 150);
+  document.body.classList.add('print-receipt-mode');
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
+  }, 150);
 }
 
 function printDanfeNfce() {
   if (lastSaleData) {
     renderThermalReceipt(lastSaleData, 'nfce');
   }
-  setTimeout(() => window.print(), 150);
+  document.body.classList.add('print-receipt-mode');
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
+  }, 150);
 }
 
 function closeReceiptModal() {
@@ -5656,6 +5719,845 @@ function selectWin32Cert(serialOrSubject, name) {
 function closeWin32CertModal() {
   const modal = document.getElementById('win32-cert-modal');
   if (modal) modal.classList.remove('active');
+}
+
+
+// ==========================================
+// RELATÓRIO DE VENDAS AGRUPADO POR PRODUTO
+// ==========================================
+
+let relCurrentPage = 1;
+let relTotalPages = 1;
+let relReportData = null;
+let relFiltros = {
+  data_inicio: '',
+  data_fim: '',
+  grupo: 'all',
+  status: 'ativos',
+  sort_by: 'total_valor',
+  sort_order: 'DESC',
+  q: '',
+  limit: 50
+};
+
+function setRelPeriodo(tipo) {
+  const dtInicioEl = document.getElementById('rel-filtro-data-inicio');
+  const dtFimEl = document.getElementById('rel-filtro-data-fim');
+  if (!dtInicioEl || !dtFimEl) return;
+
+  const now = new Date();
+  const formatYMD = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  if (tipo === 'hoje') {
+    dtInicioEl.value = formatYMD(now);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === '7dias') {
+    const d7 = new Date();
+    d7.setDate(d7.getDate() - 7);
+    dtInicioEl.value = formatYMD(d7);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'mes') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    dtInicioEl.value = formatYMD(firstDay);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'ano') {
+    const firstDayYear = new Date(now.getFullYear(), 0, 1);
+    dtInicioEl.value = formatYMD(firstDayYear);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'tudo') {
+    dtInicioEl.value = '';
+    dtFimEl.value = '';
+  }
+
+  fetchRelatorioVendasProduto(1);
+}
+
+function clearRelFiltroBusca() {
+  const el = document.getElementById('rel-filtro-busca');
+  if (el) {
+    el.value = '';
+    relFiltros.q = '';
+    fetchRelatorioVendasProduto(1);
+  }
+}
+
+function limparFiltrosRelatorioVendasProduto() {
+  const dtInicioEl = document.getElementById('rel-filtro-data-inicio');
+  const dtFimEl = document.getElementById('rel-filtro-data-fim');
+  const grupoEl = document.getElementById('rel-filtro-grupo');
+  const statusEl = document.getElementById('rel-filtro-status');
+  const ordEl = document.getElementById('rel-filtro-ordenacao');
+  const buscaEl = document.getElementById('rel-filtro-busca');
+  const limitEl = document.getElementById('rel-limit-select');
+
+  if (dtInicioEl) dtInicioEl.value = '';
+  if (dtFimEl) dtFimEl.value = '';
+  if (grupoEl) grupoEl.value = 'all';
+  if (statusEl) statusEl.value = 'ativos';
+  if (ordEl) ordEl.value = 'total_valor|DESC';
+  if (buscaEl) buscaEl.value = '';
+  if (limitEl) limitEl.value = '50';
+
+  relFiltros.q = '';
+  relCurrentPage = 1;
+  fetchRelatorioVendasProduto(1);
+  showToast('Filtros restaurados para o padrão', 'info', 1500);
+}
+
+function changeRelatorioPage(delta) {
+  const newPage = relCurrentPage + delta;
+  if (newPage >= 1 && newPage <= relTotalPages) {
+    fetchRelatorioVendasProduto(newPage);
+  }
+}
+
+async function fetchRelatorioVendasProduto(page = 1) {
+  relCurrentPage = page;
+
+  const dtInicio = document.getElementById('rel-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-filtro-busca')?.value || '';
+  const limitVal = parseInt(document.getElementById('rel-limit-select')?.value || '50', 10);
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  const tbody = document.getElementById('tbody-rel-vendas-produto');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="13" class="loading-td">
+          <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-blue);"></i>
+          <div style="margin-top: 0.5rem; font-weight: 500;">Consolidando vendas por produto...</div>
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      page: relCurrentPage,
+      limit: limitVal,
+      sort_by: sort_by || 'total_valor',
+      sort_order: sort_order || 'DESC',
+      status: status
+    });
+
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (grupo && grupo !== 'all') params.append('grupo', grupo);
+    if (qVal && qVal.trim()) params.append('q', qVal.trim());
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const res = await fetch(`/api/relatorios/vendas-por-produto?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Falha ao consultar relatório');
+
+    relReportData = data;
+    relTotalPages = data.pages || 1;
+
+    renderRelatorioKPIs(data.summary);
+    renderRelatorioRanking(data.items, data.summary);
+    renderRelatorioTabela(data.items, data.summary);
+    renderRelatorioPaginacao(data.total, data.page, data.limit);
+
+  } catch (err) {
+    console.error('Erro no relatório de vendas:', err);
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="13" style="text-align: center; color: var(--accent-rose); padding: 2rem;">
+            <i class="fa-solid fa-circle-exclamation fa-2x"></i>
+            <div style="margin-top: 0.5rem;">Erro ao gerar relatório: ${escapeHtml(err.message)}</div>
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+function renderRelatorioKPIs(sum) {
+  if (!sum) return;
+  const faturamento = sum.total_faturamento_geral || 0;
+  const bruto = sum.total_bruto_geral || 0;
+  const descontos = sum.total_desconto_geral || 0;
+  const qtd = sum.total_qtd_geral || 0;
+  const pedidos = sum.total_pedidos_geral || 0;
+  const distintos = sum.total_produtos_distintos || 0;
+  const precoMedio = sum.preco_medio_geral || 0;
+  const lucro = sum.lucro_bruto_geral || 0;
+  const margem = sum.margem_lucro_pct_geral || 0;
+
+  setElementText('rel-kpi-faturamento', `R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-kpi-bruto-sub', `Total Bruto: R$ ${bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-kpi-qtd', qtd.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+  setElementText('rel-kpi-pedidos-sub', `Em ${pedidos.toLocaleString()} pedidos`);
+  setElementText('rel-kpi-produtos-distintos', distintos.toLocaleString());
+  setElementText('rel-kpi-preco-medio', `R$ ${precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-kpi-descontos-sub', `Descontos: R$ ${descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-kpi-lucro', `R$ ${lucro.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-kpi-margem-sub', `Margem Média: ${margem.toFixed(2)}%`);
+  setElementText('rel-badge-total-registros', `${distintos.toLocaleString()} produtos vendidos`);
+}
+
+function renderRelatorioRanking(items, sum) {
+  const container = document.getElementById('rel-top-ranking-container');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Nenhum dado para o período selecionado.</div>';
+    return;
+  }
+
+  // Pegar os top 5 ordenados por total_valor
+  const top5 = [...items].sort((a, b) => (b.total_valor || 0) - (a.total_valor || 0)).slice(0, 5);
+  const maxVal = Math.max(...top5.map(t => t.total_valor || 0), 1);
+
+  const medalColors = ['#f59e0b', '#94a3b8', '#d97706', '#3b82f6', '#8b5cf6'];
+  const medalIcons = ['1º', '2º', '3º', '4º', '5º'];
+
+  container.innerHTML = top5.map((item, idx) => {
+    const val = item.total_valor || 0;
+    const part = item.participacao_pct || 0;
+    const barWidth = Math.min(Math.max((val / maxVal) * 100, 4), 100);
+    const color = medalColors[idx] || '#3b82f6';
+    const rankLabel = medalIcons[idx] || `${idx + 1}º`;
+
+    return `
+      <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span style="font-weight: 700; color: ${color}; min-width: 24px;">${rankLabel}</span>
+            <strong style="color: var(--text-primary); cursor: pointer;" onclick="openProdutoVendasDetalhesModal(${item.CodPrd})" title="Clique para ver vendas detalhadas">
+              #${item.CodPrd} - ${escapeHtml(item.Descricao_Produto)}
+            </strong>
+            <span class="badge badge-group" style="padding: 0.1rem 0.35rem; font-size: 0.7rem;">${escapeHtml(item.Descricao_Grupo || 'SEM GRUPO')}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; white-space: nowrap;">
+            <span style="color: var(--text-secondary);">${item.total_qtd} ${escapeHtml(item.Embalagem || 'UN')}</span>
+            <strong style="color: var(--accent-emerald);">R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            <span class="badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); font-size: 0.75rem; padding: 0.1rem 0.4rem;">${part.toFixed(2)}%</span>
+          </div>
+        </div>
+        <div style="width: 100%; height: 8px; background: var(--bg-surface-elevated); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+          <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, ${color} 0%, var(--accent-emerald) 100%); border-radius: 4px; transition: width 0.4s ease;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRelatorioTabela(items, sum) {
+  const tbody = document.getElementById('tbody-rel-vendas-produto');
+  if (!tbody) return;
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="13" class="loading-td">Nenhuma venda encontrada para os filtros selecionados.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map(p => {
+    const faturamentoStr = `R$ ${p.total_valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const precoMedioStr = `R$ ${p.preco_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const descontoStr = p.total_desconto > 0 ? `R$ ${p.total_desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+    const lucroStr = `R$ ${p.lucro_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const margemClass = p.margem_pct >= 40 ? 'color: var(--accent-emerald); font-weight: 600;' : (p.margem_pct >= 20 ? 'color: var(--accent-blue); font-weight: 600;' : 'color: var(--accent-amber); font-weight: 600;');
+
+    const hasPhoto = isValidPhotoUrl(p.Foto);
+    const photoThumbnail = hasPhoto
+      ? `<div style="width: 32px; height: 32px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-surface); display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" onclick="openProdutoVendasDetalhesModal(${p.CodPrd})" title="Ver detalhes do produto">
+           <img src="${escapeHtml(p.Foto)}" alt="" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.parentElement.innerHTML='<i class=\\'fa-solid fa-image\\' style=\\'color: var(--text-muted); opacity: 0.5;\\'></i>';">
+         </div>`
+      : `<div style="width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); background: rgba(255,255,255,0.02); display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted);" title="Sem foto">
+           <i class="fa-solid fa-box" style="opacity: 0.35; font-size: 0.75rem;"></i>
+         </div>`;
+
+    const barWidth = Math.min(Math.max(p.participacao_pct, 2), 100);
+
+    return `
+      <tr>
+        <td style="text-align: center;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; justify-content: center;">
+            ${photoThumbnail}
+            <strong>#${p.CodPrd}</strong>
+          </div>
+        </td>
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="openProdutoVendasDetalhesModal(${p.CodPrd})" title="Clique para ver vendas detalhadas">
+            ${escapeHtml(p.Descricao_Produto)}
+          </div>
+          ${p.CodBar ? `<div style="font-size: 0.75rem; color: var(--text-muted);">EAN: ${escapeHtml(p.CodBar)}</div>` : ''}
+        </td>
+        <td><span class="badge badge-group">${escapeHtml(p.Descricao_Grupo || 'SEM GRUPO')}</span></td>
+        <td style="text-align: center;"><span class="badge" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); font-size: 0.75rem;">${escapeHtml(p.Embalagem || 'UN')}</span></td>
+        <td style="text-align: right; font-weight: 600;">${p.total_qtd.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+        <td style="text-align: right; color: var(--text-secondary);">${precoMedioStr}</td>
+        <td style="text-align: right; color: var(--text-muted); font-size: 0.85rem;">${descontoStr}</td>
+        <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">${faturamentoStr}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <div style="flex: 1; height: 6px; background: var(--bg-surface-elevated); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 3px;"></div>
+            </div>
+            <span style="font-size: 0.75rem; font-weight: 600; min-width: 38px; text-align: right; color: var(--text-secondary);">${p.participacao_pct.toFixed(1)}%</span>
+          </div>
+        </td>
+        <td style="text-align: right; color: var(--text-primary);">${lucroStr}</td>
+        <td style="text-align: right; ${margemClass}">${p.margem_pct.toFixed(1)}%</td>
+        <td style="text-align: right; color: ${p.EstoqueAtual <= 0 ? 'var(--accent-rose)' : 'var(--text-secondary)'}; font-size: 0.85rem;">
+          ${p.EstoqueAtual.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+        </td>
+        <td style="text-align: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openProdutoVendasDetalhesModal(${p.CodPrd})" title="Ver histórico de vendas do produto" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <i class="fa-solid fa-list"></i> Vendas
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderRelatorioPaginacao(total, page, limit) {
+  const infoEl = document.getElementById('rel-pagination-info');
+  const indicatorEl = document.getElementById('rel-page-indicator');
+  const btnPrev = document.getElementById('rel-btn-prev');
+  const btnNext = document.getElementById('rel-btn-next');
+  const footerEl = document.getElementById('rel-table-footer');
+
+  if (!total || limit === 0) {
+    if (footerEl) footerEl.style.display = limit === 0 ? 'none' : 'flex';
+    if (infoEl) infoEl.innerText = `Total: ${total || 0} produtos`;
+    return;
+  }
+
+  if (footerEl) footerEl.style.display = 'flex';
+
+  const start = ((page - 1) * limit) + 1;
+  const end = Math.min(page * limit, total);
+
+  if (infoEl) infoEl.innerText = `Mostrando ${start} - ${end} de ${total} produtos`;
+  if (indicatorEl) indicatorEl.innerText = `${page} / ${relTotalPages}`;
+
+  if (btnPrev) btnPrev.disabled = (page <= 1);
+  if (btnNext) btnNext.disabled = (page >= relTotalPages);
+}
+
+async function openProdutoVendasDetalhesModal(codPrd) {
+  const modal = document.getElementById('rel-prd-detalhes-modal');
+  if (!modal) return;
+
+  modal.classList.add('active');
+
+  const dtInicio = document.getElementById('rel-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-filtro-data-fim')?.value || '';
+  const status = document.getElementById('rel-filtro-status')?.value || 'ativos';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const tbody = document.getElementById('tbody-rel-detalhes-vendas');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" class="loading-td">
+          <i class="fa-solid fa-spinner fa-spin"></i> Carregando histórico de vendas...
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const params = new URLSearchParams({ status });
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const res = await fetch(`/api/relatorios/vendas-por-produto/detalhes/${codPrd}?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Falha ao carregar detalhes');
+
+    const prd = data.produto || {};
+    const resumo = data.resumo_produto || {};
+    const vendas = data.vendas || [];
+
+    // Header info
+    setElementText('rel-det-badge-cod', `Cód: #${prd.CodPrd || codPrd}`);
+    setElementText('rel-det-badge-grupo', prd.Nome_Grupo || 'SEM GRUPO');
+    setElementText('rel-det-badge-un', prd.Embalagem || 'UN');
+    setElementText('rel-det-prd-nome', prd.Descricao_Produto || 'Produto');
+    setElementText('rel-det-prd-codbar', prd.CodBar || '-');
+    setElementText('rel-det-prd-venda', `R$ ${(prd.Venda || 0).toFixed(2)}`);
+    setElementText('rel-det-prd-custo', `R$ ${(prd.Custo || 0).toFixed(2)}`);
+    setElementText('rel-det-prd-estoque', `${prd.Estoque || 0} ${prd.Embalagem || 'UN'}`);
+
+    const fotoWrap = document.getElementById('rel-det-foto-wrapper');
+    if (fotoWrap) {
+      if (isValidPhotoUrl(prd.Foto)) {
+        fotoWrap.innerHTML = `<img src="${escapeHtml(prd.Foto)}" alt="" style="width: 100%; height: 100%; object-fit: cover;">`;
+      } else {
+        fotoWrap.innerHTML = `<i class="fa-solid fa-box fa-2x" style="color: var(--text-muted); opacity: 0.5;"></i>`;
+      }
+    }
+
+    // KPI Badges
+    setElementText('rel-det-kpi-pedidos', (resumo.total_pedidos || vendas.length).toLocaleString());
+    setElementText('rel-det-kpi-qtd', (resumo.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+    setElementText('rel-det-kpi-preco-medio', `R$ ${(resumo.preco_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    setElementText('rel-det-kpi-faturamento', `R$ ${(resumo.total_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+    // Transactions Table
+    if (tbody) {
+      if (vendas.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="loading-td">Nenhuma venda registrada para este produto no período.</td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = vendas.map(v => {
+          const vlrTotStr = `R$ ${(v.ValorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const vlrUnitStr = `R$ ${(v.ValorUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const descStr = v.Desconto > 0 ? `R$ ${(v.Desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+
+          return `
+            <tr>
+              <td><strong style="color: var(--accent-blue);">#${v.CodPed}</strong></td>
+              <td>${escapeHtml(v.DataEmiss || '-')}</td>
+              <td style="color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(v.Hora || '-')}</td>
+              <td><div style="font-weight: 500;">${escapeHtml(v.NomeCliente || 'CONSUMIDOR')}</div></td>
+              <td style="color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(v.CidadeCliente || '-')}</td>
+              <td style="text-align: right; font-weight: 600;">${(v.Qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+              <td style="text-align: right; color: var(--text-secondary);">${vlrUnitStr}</td>
+              <td style="text-align: right; color: var(--text-muted); font-size: 0.8rem;">${descStr}</td>
+              <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">${vlrTotStr}</td>
+              <td><span class="badge" style="background: var(--bg-surface); border: 1px solid var(--border-color); font-size: 0.75rem;">${escapeHtml(v.CondPgto || 'A VISTA')}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+  } catch (err) {
+    showToast(`Erro ao carregar detalhes: ${err.message}`, 'error');
+  }
+}
+
+function closeProdutoVendasDetalhesModal() {
+  const modal = document.getElementById('rel-prd-detalhes-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function imprimirRelatorioVendasProduto() {
+  const dtInicio = document.getElementById('rel-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-filtro-busca')?.value || '';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || '1';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  showToast('Preparando relatório formatado para impressão...', 'info', 2000);
+
+  try {
+    const params = new URLSearchParams({
+      sort_by: sort_by || 'total_valor',
+      sort_order: sort_order || 'DESC',
+      status: status,
+      limit: 0 // Fetch all rows for complete printing
+    });
+
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (grupo && grupo !== 'all') params.append('grupo', grupo);
+    if (qVal && qVal.trim()) params.append('q', qVal.trim());
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const [resRel, resEmp] = await Promise.all([
+      fetch(`/api/relatorios/vendas-por-produto?${params.toString()}`),
+      fetch(`/api/empresas/${idEmpresa}`).catch(() => null)
+    ]);
+
+    const data = await resRel.json();
+    if (!resRel.ok) throw new Error(data.error || 'Falha ao obter dados para impressão');
+
+    let empData = { RazaoSocial: 'SISTEMA DE VENDAS', CNPJ: '', InscrEst: '', Fone: '', Cidade: '', Uf: '' };
+    if (resEmp && resEmp.ok) {
+      try {
+        const empJson = await resEmp.json();
+        if (empJson) empData = { ...empData, ...empJson };
+      } catch (e) {}
+    }
+
+    const items = data.items || [];
+    const sum = data.summary || {};
+
+    if (items.length === 0) {
+      showToast('Nenhum registro encontrado para impressão.', 'warning');
+      return;
+    }
+
+    const now = new Date();
+    const dataHoraEmissao = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+    const periodoFormatado = (dtInicio || dtFim) 
+      ? `De ${dtInicio ? dtInicio.split('-').reverse().join('/') : 'Início'} até ${dtFim ? dtFim.split('-').reverse().join('/') : 'Hoje'}`
+      : 'Todo o Histórico de Vendas';
+
+    const statusLabel = status === 'ativos' ? 'Vendas Ativas (Concluídas)' : (status === 'cancelados' ? 'Apenas Canceladas' : 'Todas as Vendas');
+    const grupoLabel = grupo && grupo !== 'all' ? (document.getElementById('rel-filtro-grupo')?.selectedOptions[0]?.text || `Grupo #${grupo}`) : 'Todos os Grupos';
+
+    const faturamentoStr = `R$ ${(sum.total_faturamento_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const brutoStr = `R$ ${(sum.total_bruto_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const descontoStr = `R$ ${(sum.total_desconto_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const lucroStr = `R$ ${(sum.lucro_bruto_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const precoMedioStr = `R$ ${(sum.preco_medio_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const rowsHtml = items.map((p, idx) => {
+      const vlrTot = `R$ ${p.total_valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const pMed = `R$ ${p.preco_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const desc = p.total_desconto > 0 ? `R$ ${p.total_desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+      const luc = `R$ ${p.lucro_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      return `
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+          <td style="text-align: center; font-weight: 600;">${p.CodPrd}</td>
+          <td>
+            <strong>${escapeHtml(p.Descricao_Produto)}</strong>
+            ${p.CodBar ? `<div style="font-size: 8pt; color: #64748b;">EAN: ${escapeHtml(p.CodBar)}</div>` : ''}
+          </td>
+          <td>${escapeHtml(p.Descricao_Grupo || 'SEM GRUPO')}</td>
+          <td style="text-align: center;">${escapeHtml(p.Embalagem || 'UN')}</td>
+          <td style="text-align: right; font-weight: 600;">${p.total_qtd.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+          <td style="text-align: right;">${pMed}</td>
+          <td style="text-align: right; color: #64748b;">${desc}</td>
+          <td style="text-align: right; font-weight: 700; color: #047857;">${vlrTot}</td>
+          <td style="text-align: right; font-weight: 600;">${p.participacao_pct.toFixed(2)}%</td>
+          <td style="text-align: right;">${luc}</td>
+          <td style="text-align: right; font-weight: 600;">${p.margem_pct.toFixed(1)}%</td>
+          <td style="text-align: right;">${p.EstoqueAtual.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const printDoc = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Vendas por Produto - ${empData.RazaoSocial || 'Sistema Vendas'}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 10mm 10mm 12mm 10mm;
+          }
+          * {
+            box-sizing: border-box;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1e293b;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            font-size: 8.5pt;
+            line-height: 1.3;
+          }
+          .header-box {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .company-name {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 2px 0;
+            text-transform: uppercase;
+          }
+          .company-sub {
+            font-size: 8pt;
+            color: #475569;
+            margin: 0;
+          }
+          .report-badge {
+            text-align: right;
+          }
+          .report-title {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #1e3a8a;
+            margin: 0 0 3px 0;
+          }
+          .report-meta {
+            font-size: 7.5pt;
+            color: #64748b;
+          }
+          .filter-box {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            font-size: 8pt;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+          }
+          .filter-item strong {
+            color: #0f172a;
+          }
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+          }
+          .kpi-card {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 8px;
+            text-align: center;
+          }
+          .kpi-card .kpi-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #475569;
+            margin-bottom: 2px;
+          }
+          .kpi-card .kpi-val {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .kpi-card .kpi-sub {
+            font-size: 6.5pt;
+            color: #64748b;
+            margin-top: 2px;
+          }
+          table.report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+          }
+          table.report-table thead {
+            display: table-header-group;
+          }
+          table.report-table tr {
+            page-break-inside: avoid;
+          }
+          table.report-table th {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 7.5pt;
+            padding: 6px 5px;
+            text-align: left;
+            border: 1px solid #0f172a;
+          }
+          table.report-table td {
+            padding: 5px 5px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+          }
+          .footer-box {
+            margin-top: 14px;
+            padding-top: 6px;
+            border-top: 1px solid #cbd5e1;
+            font-size: 7pt;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+          }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">
+          <div>
+            <div class="company-name">${escapeHtml(empData.RazaoSocial || 'EMPRESA MATRIZ')}</div>
+            <div class="company-sub">
+              ${empData.CNPJ ? `CNPJ: ${escapeHtml(empData.CNPJ)}` : ''} 
+              ${empData.InscrEst ? ` | IE: ${escapeHtml(empData.InscrEst)}` : ''}
+              ${empData.Fone ? ` | Fone: ${escapeHtml(empData.Fone)}` : ''}
+              ${empData.Cidade ? ` | ${escapeHtml(empData.Cidade)}/${escapeHtml(empData.Uf || '')}` : ''}
+            </div>
+          </div>
+          <div class="report-badge">
+            <div class="report-title">RELATÓRIO DE VENDAS POR PRODUTO</div>
+            <div class="report-meta">Emissão: ${dataHoraEmissao}</div>
+          </div>
+        </div>
+
+        <div class="filter-box">
+          <div class="filter-item"><strong>Período:</strong> ${escapeHtml(periodoFormatado)}</div>
+          <div class="filter-item"><strong>Grupo:</strong> ${escapeHtml(grupoLabel)}</div>
+          <div class="filter-item"><strong>Status:</strong> ${escapeHtml(statusLabel)}</div>
+          ${qVal ? `<div class="filter-item"><strong>Busca:</strong> "${escapeHtml(qVal)}"</div>` : ''}
+          <div class="filter-item"><strong>Total Itens:</strong> ${items.length} produtos listados</div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card" style="border-top: 3px solid #059669;">
+            <div class="kpi-label">Faturamento Total</div>
+            <div class="kpi-val" style="color: #047857;">${faturamentoStr}</div>
+            <div class="kpi-sub">Bruto: ${brutoStr}</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #2563eb;">
+            <div class="kpi-label">Qtd Total Vendida</div>
+            <div class="kpi-val">${(sum.total_qtd_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+            <div class="kpi-sub">${(sum.total_pedidos_geral || 0).toLocaleString()} pedidos</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #8b5cf6;">
+            <div class="kpi-label">Produtos Distintos</div>
+            <div class="kpi-val">${(sum.total_produtos_distintos || 0).toLocaleString()}</div>
+            <div class="kpi-sub">Itens comercializados</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #d97706;">
+            <div class="kpi-label">Preço Médio / Desconto</div>
+            <div class="kpi-val">${precoMedioStr}</div>
+            <div class="kpi-sub">Desc: ${descontoStr}</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #0284c7;">
+            <div class="kpi-label">Lucro Bruto Estimado</div>
+            <div class="kpi-val" style="color: #0369a1;">${lucroStr}</div>
+            <div class="kpi-sub">Margem: ${(sum.margem_lucro_pct_geral || 0).toFixed(2)}%</div>
+          </div>
+        </div>
+
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">CÓD.</th>
+              <th>DESCRIÇÃO DO PRODUTO</th>
+              <th>GRUPO</th>
+              <th style="width: 30px; text-align: center;">UN</th>
+              <th style="width: 60px; text-align: right;">QTD</th>
+              <th style="width: 65px; text-align: right;">P. MÉDIO</th>
+              <th style="width: 55px; text-align: right;">DESC.</th>
+              <th style="width: 75px; text-align: right;">TOTAL (R$)</th>
+              <th style="width: 50px; text-align: right;">% PART.</th>
+              <th style="width: 65px; text-align: right;">LUCRO</th>
+              <th style="width: 45px; text-align: right;">MARG.</th>
+              <th style="width: 50px; text-align: right;">ESTOQUE</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+          <tfoot>
+            <tr style="background: #e2e8f0; font-weight: 700;">
+              <td colspan="4" style="text-align: right;">TOTAIS GERAIS:</td>
+              <td style="text-align: right;">${(sum.total_qtd_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+              <td style="text-align: right;">${precoMedioStr}</td>
+              <td style="text-align: right;">${descontoStr}</td>
+              <td style="text-align: right; color: #047857;">${faturamentoStr}</td>
+              <td style="text-align: right;">100.00%</td>
+              <td style="text-align: right;">${lucroStr}</td>
+              <td style="text-align: right;">${(sum.margem_lucro_pct_geral || 0).toFixed(1)}%</td>
+              <td style="text-align: right;">-</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="footer-box">
+          <span>Sistema Vendas - Módulo Gestão Comercial & PDV Multiempresa</span>
+          <span>Página 1 de 1</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 250);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    // Open clean print window
+    const printWindow = window.open('', '_blank', 'width=1000,height=800,menubar=no,toolbar=no,location=no,status=no');
+    if (!printWindow) {
+      // Fallback if popup blocker active: use hidden iframe
+      let printFrame = document.getElementById('report-print-iframe');
+      if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'report-print-iframe';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        document.body.appendChild(printFrame);
+      }
+      const frameDoc = printFrame.contentWindow.document;
+      frameDoc.open();
+      frameDoc.write(printDoc);
+      frameDoc.close();
+      setTimeout(() => {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      }, 500);
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(printDoc);
+    printWindow.document.close();
+
+  } catch (err) {
+    console.error('Erro ao imprimir relatório:', err);
+    showToast(`Erro ao preparar impressão: ${err.message}`, 'error');
+  }
+}
+
+function exportarRelatorioVendasProdutoCSV() {
+  const dtInicio = document.getElementById('rel-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-filtro-busca')?.value || '';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  const params = new URLSearchParams({
+    sort_by: sort_by || 'total_valor',
+    sort_order: sort_order || 'DESC',
+    status: status
+  });
+
+  if (dtInicio) params.append('data_inicio', dtInicio);
+  if (dtFim) params.append('data_fim', dtFim);
+  if (grupo && grupo !== 'all') params.append('grupo', grupo);
+  if (qVal && qVal.trim()) params.append('q', qVal.trim());
+  if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+  showToast('Iniciando download do relatório em CSV/Excel...', 'info', 2000);
+  window.location.href = `/api/relatorios/vendas-por-produto/export/csv?${params.toString()}`;
 }
 
 
