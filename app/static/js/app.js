@@ -5900,7 +5900,15 @@ function renderRelatorioKPIs(sum) {
   setElementText('rel-kpi-faturamento', `R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setElementText('rel-kpi-bruto-sub', `Total Bruto: R$ ${bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setElementText('rel-kpi-qtd', qtd.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
-  setElementText('rel-kpi-pedidos-sub', `Em ${pedidos.toLocaleString()} pedidos`);
+  
+  const comNota = sum.total_pedidos_com_nota || 0;
+  const semNota = sum.total_pedidos_sem_nota || 0;
+  if (comNota > 0 || semNota > 0) {
+    setElementText('rel-kpi-pedidos-sub', `Em ${pedidos.toLocaleString()} pedidos (${comNota.toLocaleString()} com NF • ${semNota.toLocaleString()} sem NF)`);
+  } else {
+    setElementText('rel-kpi-pedidos-sub', `Em ${pedidos.toLocaleString()} pedidos`);
+  }
+  
   setElementText('rel-kpi-produtos-distintos', distintos.toLocaleString());
   setElementText('rel-kpi-preco-medio', `R$ ${precoMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setElementText('rel-kpi-descontos-sub', `Descontos: R$ ${descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -6122,7 +6130,7 @@ async function openProdutoVendasDetalhesModal(codPrd) {
       if (vendas.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="10" class="loading-td">Nenhuma venda registrada para este produto no período.</td>
+            <td colspan="11" class="loading-td">Nenhuma venda registrada para este produto no período.</td>
           </tr>
         `;
       } else {
@@ -6131,9 +6139,18 @@ async function openProdutoVendasDetalhesModal(codPrd) {
           const vlrUnitStr = `R$ ${(v.ValorUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           const descStr = v.Desconto > 0 ? `R$ ${(v.Desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
 
+          let statusBadge = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-clock"></i> Sem Nota</span>';
+          if (v.is_cancelado) {
+            statusBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-ban"></i> Cancelado</span>';
+          } else if (v.has_nota) {
+            const nro = v.NroNt > 0 ? `NF #${v.NroNt}` : 'NF-e Emitida';
+            statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-receipt"></i> ${escapeHtml(nro)}</span>`;
+          }
+
           return `
             <tr>
               <td><strong style="color: var(--accent-blue);">#${v.CodPed}</strong></td>
+              <td>${statusBadge}</td>
               <td>${escapeHtml(v.DataEmiss || '-')}</td>
               <td style="color: var(--text-muted); font-size: 0.8rem;">${escapeHtml(v.Hora || '-')}</td>
               <td><div style="font-weight: 500;">${escapeHtml(v.NomeCliente || 'CONSUMIDOR')}</div></td>
@@ -6216,7 +6233,14 @@ async function imprimirRelatorioVendasProduto() {
       ? `De ${dtInicio ? dtInicio.split('-').reverse().join('/') : 'Início'} até ${dtFim ? dtFim.split('-').reverse().join('/') : 'Hoje'}`
       : 'Todo o Histórico de Vendas';
 
-    const statusLabel = status === 'ativos' ? 'Vendas Ativas (Concluídas)' : (status === 'cancelados' ? 'Apenas Canceladas' : 'Todas as Vendas');
+    const statusLabelsMap = {
+      'ativos': 'Todos os Pedidos (Faturados e Pendentes de Nota)',
+      'com_nota': 'Apenas com Nota Fiscal (Faturados)',
+      'sem_nota': 'Apenas Pendentes de Nota (Sem NF)',
+      'cancelados': 'Apenas Cancelados',
+      'todos': 'Todos os Pedidos (Inclusive Cancelados)'
+    };
+    const statusLabel = statusLabelsMap[status] || 'Todos os Pedidos';
     const grupoLabel = grupo && grupo !== 'all' ? (document.getElementById('rel-filtro-grupo')?.selectedOptions[0]?.text || `Grupo #${grupo}`) : 'Todos os Grupos';
 
     const faturamentoStr = `R$ ${(sum.total_faturamento_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -6426,7 +6450,7 @@ async function imprimirRelatorioVendasProduto() {
           <div class="kpi-card" style="border-top: 3px solid #2563eb;">
             <div class="kpi-label">Qtd Total Vendida</div>
             <div class="kpi-val">${(sum.total_qtd_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
-            <div class="kpi-sub">${(sum.total_pedidos_geral || 0).toLocaleString()} pedidos</div>
+            <div class="kpi-sub">${(sum.total_pedidos_geral || 0).toLocaleString()} pedidos (${(sum.total_pedidos_com_nota || 0).toLocaleString()} c/ NF • ${(sum.total_pedidos_sem_nota || 0).toLocaleString()} s/ NF)</div>
           </div>
           <div class="kpi-card" style="border-top: 3px solid #8b5cf6;">
             <div class="kpi-label">Produtos Distintos</div>

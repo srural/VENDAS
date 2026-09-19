@@ -2038,19 +2038,40 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
         """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
     ]
     
-    # Status do Pedido
-    if status == "ativos":
+    # Status do Pedido e Emissão Fiscal
+    st = str(status).lower() if status else "ativos"
+    if st in ("ativos", "todos_ativos"):
         where_clauses.append("""(
             (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
-            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s)
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL)
         )""")
         params.append('%CANCEL%')
-    elif status == "cancelados":
+    elif st in ("com_nota", "faturados"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != ''))
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("sem_nota", "pendentes"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            COALESCE(PED."NroNt", 0) = 0 AND 
+            (NFE."NroChave" IS NULL OR NFE."NroChave" = '')
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("cancelados", "cancel"):
         where_clauses.append("""(
             UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
-            UPPER(PED."Cfo") LIKE %s
+            UPPER(PED."Cfo") LIKE %s OR
+            PED."Operacao" = 4
         )""")
         params.append('%CANCEL%')
+    # "todos" não adiciona cláusula de status
 
     # Filtro por Período de Emissão
     iso_inicio = _parse_to_iso_date(data_inicio)
@@ -2114,6 +2135,8 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
                 SELECT 
                     COUNT(DISTINCT ITP."Produto") as total_produtos_distintos,
                     COUNT(DISTINCT PED."CodPed") as total_pedidos_geral,
+                    COUNT(DISTINCT CASE WHEN (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != '')) THEN PED."CodPed" END) as total_pedidos_com_nota,
+                    COUNT(DISTINCT CASE WHEN (COALESCE(PED."NroNt", 0) = 0 AND (NFE."NroChave" IS NULL OR NFE."NroChave" = '')) THEN PED."CodPed" END) as total_pedidos_sem_nota,
                     COALESCE(SUM(ITP."Qtd"), 0) as total_qtd_geral,
                     COALESCE(SUM(ITP."Qtd" * ITP."ValorUnit"), 0) as total_bruto_geral,
                     COALESCE(SUM(ITP."Desconto"), 0) as total_desconto_geral,
@@ -2121,6 +2144,7 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
                     COALESCE(SUM(ITP."Qtd" * COALESCE(PRD."Custo", 0)), 0) as total_custo_geral
                 FROM "ITP" ITP
                 JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
                 LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
                 {where_sql}
             """
@@ -2137,6 +2161,8 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
             summary = {
                 "total_produtos_distintos": int(sum_row.get("total_produtos_distintos", 0)),
                 "total_pedidos_geral": int(sum_row.get("total_pedidos_geral", 0)),
+                "total_pedidos_com_nota": int(sum_row.get("total_pedidos_com_nota", 0)),
+                "total_pedidos_sem_nota": int(sum_row.get("total_pedidos_sem_nota", 0)),
                 "total_qtd_geral": qtd_geral,
                 "total_bruto_geral": float(sum_row.get("total_bruto_geral", 0.0)),
                 "total_desconto_geral": float(sum_row.get("total_desconto_geral", 0.0)),
@@ -2178,6 +2204,7 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
                     END as margem_pct
                 FROM "ITP" ITP
                 JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
                 LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
                 LEFT JOIN "GRU" GRU ON PRD."Grupo" = GRU."CodGru"
                 {where_sql}
@@ -2226,16 +2253,36 @@ def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=No
         """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
     ]
 
-    if status == "ativos":
+    st = str(status).lower() if status else "ativos"
+    if st in ("ativos", "todos_ativos"):
         where_clauses.append("""(
             (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
-            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s)
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL)
         )""")
         params.append('%CANCEL%')
-    elif status == "cancelados":
+    elif st in ("com_nota", "faturados"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != ''))
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("sem_nota", "pendentes"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            COALESCE(PED."NroNt", 0) = 0 AND 
+            (NFE."NroChave" IS NULL OR NFE."NroChave" = '')
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("cancelados", "cancel"):
         where_clauses.append("""(
             UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
-            UPPER(PED."Cfo") LIKE %s
+            UPPER(PED."Cfo") LIKE %s OR
+            PED."Operacao" = 4
         )""")
         params.append('%CANCEL%')
 
@@ -2280,6 +2327,10 @@ def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=No
                     PED."CondPgto",
                     PED."Cfo",
                     PED."PrevEntrega",
+                    PED."NroNt",
+                    PED."DtFat",
+                    NFE."NroChave",
+                    NFE."Status" as "StatusNFe",
                     ENT."Nome" as "NomeCliente",
                     ENT."Cidade" as "CidadeCliente",
                     ITP."CodItp",
@@ -2289,13 +2340,39 @@ def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=No
                     ITP."Valor" as "ValorTotal"
                 FROM "ITP" ITP
                 JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
                 LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
                 {where_sql}
                 ORDER BY TO_DATE(PED."DataEmiss", 'DD/MM/YYYY') DESC, PED."CodPed" DESC
                 LIMIT 200
             """
             cursor.execute(sql, params)
-            vendas = [_convert_row(r) for r in cursor.fetchall()]
+            vendas_raw = cursor.fetchall()
+            
+            vendas = []
+            for r in vendas_raw:
+                v = _convert_row(r)
+                nro_nt = int(v.get("NroNt") or 0)
+                nro_chave = v.get("NroChave") or ""
+                prev_entrega = str(v.get("PrevEntrega") or "").strip().upper()
+                cfo = str(v.get("Cfo") or "").strip().upper()
+                
+                is_cancelado = (prev_entrega == 'CANCELADO' or 'CANCEL' in cfo)
+                has_nota = (nro_nt > 0 or bool(nro_chave))
+                
+                v["is_cancelado"] = is_cancelado
+                v["has_nota"] = has_nota
+                if is_cancelado:
+                    v["status_label"] = "Cancelado"
+                    v["status_badge_class"] = "badge-danger"
+                elif has_nota:
+                    v["status_label"] = f"Nota #{nro_nt}" if nro_nt > 0 else "NF-e Emitida"
+                    v["status_badge_class"] = "badge-success"
+                else:
+                    v["status_label"] = "Pendente de Nota"
+                    v["status_badge_class"] = "badge-warning"
+
+                vendas.append(v)
 
             total_qtd = sum(float(v.get("Qtd", 0)) for v in vendas)
             total_valor = sum(float(v.get("ValorTotal", 0)) for v in vendas)

@@ -1394,16 +1394,18 @@
                 </select>
               </div>
 
-              <div class="form-group col-2">
-                <label>Status do Pedido</label>
+              <div class="form-group col-3">
+                <label>Status & Emissão Fiscal</label>
                 <select id="rel-filtro-status" class="form-control" onchange="fetchRelatorioVendasProduto(1)">
-                  <option value="ativos" selected>Vendas Ativas (Concluídas)</option>
-                  <option value="todos">Todos os Pedidos</option>
+                  <option value="ativos" selected>Todos os Pedidos (Com e Sem Nota)</option>
+                  <option value="com_nota">Apenas com Nota Fiscal (Faturados)</option>
+                  <option value="sem_nota">Apenas Pendentes de Nota (Sem NF)</option>
                   <option value="cancelados">Apenas Cancelados</option>
+                  <option value="todos">Todos (Inclusive Cancelados)</option>
                 </select>
               </div>
 
-              <div class="form-group col-3">
+              <div class="form-group col-2">
                 <label>Ordenar Por</label>
                 <select id="rel-filtro-ordenacao" class="form-control" onchange="fetchRelatorioVendasProduto(1)">
                   <option value="total_valor|DESC">Maior Faturamento (R$)</option>
@@ -4044,20 +4046,21 @@
               <thead>
                 <tr>
                   <th style="width: 80px;">Nº Pedido</th>
-                  <th style="width: 100px;">Data</th>
-                  <th style="width: 80px;">Hora</th>
+                  <th style="width: 120px;">Status / Nota</th>
+                  <th style="width: 95px;">Data</th>
+                  <th style="width: 75px;">Hora</th>
                   <th>Cliente</th>
                   <th>Cidade</th>
-                  <th style="text-align: right; width: 70px;">Qtd</th>
-                  <th style="text-align: right; width: 100px;">Vlr. Unit</th>
-                  <th style="text-align: right; width: 90px;">Desconto</th>
-                  <th style="text-align: right; width: 110px;">Total (R$)</th>
-                  <th style="width: 110px;">Cond. Pgto</th>
+                  <th style="text-align: right; width: 65px;">Qtd</th>
+                  <th style="text-align: right; width: 95px;">Vlr. Unit</th>
+                  <th style="text-align: right; width: 85px;">Desconto</th>
+                  <th style="text-align: right; width: 105px;">Total (R$)</th>
+                  <th style="width: 100px;">Cond. Pgto</th>
                 </tr>
               </thead>
               <tbody id="tbody-rel-detalhes-vendas">
                 <tr>
-                  <td colspan="10" class="loading-td">Carregando transações do produto...</td>
+                  <td colspan="11" class="loading-td">Carregando transações do produto...</td>
                 </tr>
               </tbody>
             </table>
