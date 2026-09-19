@@ -1060,15 +1060,15 @@ def create_pdv_sale(sale_data):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # 1. Insert into PED
+            id_emp = int(sale_data.get("id_empresa") or 1)
             cursor.execute('''
                 INSERT INTO "PED" (
                     "CodPed", "Operacao", "Entidade", "DataEmiss", "Total", "SubTotal", "Desconto", 
-                    "Vendedor", "CondPgto", "Cfo", "DtSaida", "Hora", "Sat"
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    "Vendedor", "CondPgto", "Cfo", "DtSaida", "Hora", "Sat", "id_empresa"
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 cod_ped, 2, cod_entidade, data_emiss, total_final, subtotal, desconto_total,
-                vendedor_id, cond_pgto, "Nfc-e" if emitir_nfce_flag else "VENDA", data_emiss, hora, chave_nfe
+                vendedor_id, cond_pgto, "Nfc-e" if emitir_nfce_flag else "VENDA", data_emiss, hora, chave_nfe, id_emp
             ))
 
             # 2. Insert into ITP & Deduct Inventory
@@ -1298,6 +1298,7 @@ def create_order(order_data):
     hora = now.strftime("%H:%M:%S")
 
     cod_ped = get_next_ped_id()
+    id_emp = int(order_data.get("id_empresa") or 1)
 
     conn = get_connection()
     try:
@@ -1305,11 +1306,11 @@ def create_order(order_data):
             cursor.execute('''
                 INSERT INTO "PED" (
                     "CodPed", "Operacao", "Entidade", "DataEmiss", "Total", "SubTotal", "Desconto", 
-                    "Vendedor", "Transportadora", "ValorFrete", "CondPgto", "Cfo", "DtSaida", "Hora", "Obs"
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    "Vendedor", "Transportadora", "ValorFrete", "CondPgto", "Cfo", "DtSaida", "Hora", "Obs", "id_empresa"
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 cod_ped, 1, cod_entidade, data_emiss, total_final, subtotal, desconto_total,
-                vendedor_id, transp_id, valor_frete, cond_pgto, cfo, data_emiss, hora, obs
+                vendedor_id, transp_id, valor_frete, cond_pgto, cfo, data_emiss, hora, obs, id_emp
             ))
 
             next_itp = get_next_itp_id()
@@ -2087,8 +2088,12 @@ def get_relatorio_vendas_produto(data_inicio=None, data_fim=None, grupo=None, q=
     # Filtro de Empresa / Filial
     if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
         try:
-            where_clauses.append('PED."id_empresa" = %s')
-            params.append(int(id_empresa))
+            emp_id = int(id_empresa)
+            if emp_id == 1:
+                where_clauses.append('(PED."id_empresa" = %s OR PED."id_empresa" IS NULL)')
+            else:
+                where_clauses.append('PED."id_empresa" = %s')
+            params.append(emp_id)
         except ValueError:
             pass
 
@@ -2298,8 +2303,12 @@ def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=No
 
     if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
         try:
-            where_clauses.append('PED."id_empresa" = %s')
-            params.append(int(id_empresa))
+            emp_id = int(id_empresa)
+            if emp_id == 1:
+                where_clauses.append('(PED."id_empresa" = %s OR PED."id_empresa" IS NULL)')
+            else:
+                where_clauses.append('PED."id_empresa" = %s')
+            params.append(emp_id)
         except ValueError:
             pass
 
