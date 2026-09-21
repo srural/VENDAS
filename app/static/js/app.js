@@ -2855,9 +2855,12 @@ function renderOrdersTable(orders) {
         <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">${totalStr}</td>
         <td style="text-align: center;">${nfeBadge}</td>
         <td style="text-align: center;">
-          <div style="display: flex; justify-content: center; gap: 0.35rem;">
+          <div style="display: flex; justify-content: center; gap: 0.35rem; flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" onclick="editOrder(${o.CodPed})" title="Editar Pedido">
               <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="validarNfeOrder(${o.CodPed})" title="Validar Nota no SEFAZ (Validação Real no Ambiente Configurado)" style="color: var(--accent-amber); font-weight: 600;">
+              <i class="fa-solid fa-clipboard-check"></i> Validar
             </button>
             <button class="btn btn-emerald btn-sm" onclick="openNfeEmissaoModal(${o.CodPed})" title="Abrir Tela de Emissão de NF-e 55 (FrmNota)">
               <i class="fa-solid fa-file-invoice"></i> NF-e
@@ -4568,15 +4571,16 @@ async function executeDbSync() {
 // ==========================================
 
 let currentValidationCodPed = null;
+let currentValidationXml = '';
 
 async function validarNfeOrder(codPed) {
   currentValidationCodPed = codPed;
-  showToast('Validando estrutura e regras da NF-e SEFAZ 4.00...', 'info');
+  showToast(`Consultando WebService SEFAZ e auditando Pedido #${codPed}...`, 'info', 2500);
 
   try {
     const res = await fetch(`/api/pedidos/${codPed}/validar-nfe`);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Falha ao validar NF-e');
+    if (!res.ok) throw new Error(data.error || 'Falha ao validar NF-e na SEFAZ');
 
     renderValidationReport(codPed, data);
     document.getElementById('nfe-validation-modal').classList.add('active');
@@ -4595,9 +4599,39 @@ function renderValidationReport(codPed, data) {
   const badgeWarn = document.getElementById('nfe-val-badge-warn');
   const badgeErr = document.getElementById('nfe-val-badge-err');
 
+  const envLabel = document.getElementById('nfe-val-env-label');
+  const wsLabel = document.getElementById('nfe-val-ws-label');
+  const chaveLabel = document.getElementById('nfe-val-chave-label');
+  const xmlContent = document.getElementById('nfe-val-xml-content');
+  const xmlBox = document.getElementById('nfe-val-xml-box');
+
   const checklistContainer = document.getElementById('nfe-val-checklist-container');
   const alertsBox = document.getElementById('nfe-val-alerts-box');
   const alertsList = document.getElementById('nfe-val-alerts-list');
+
+  currentValidationXml = data.xml_preview || '';
+  if (xmlContent) xmlContent.innerText = currentValidationXml;
+  if (xmlBox) xmlBox.style.display = 'none'; // closed by default
+
+  // Populate Environment & WebService Diagnostics
+  if (envLabel) {
+    const ambCode = data.ambiente_codigo || '2';
+    const isProd = ambCode === '1';
+    envLabel.innerHTML = `<i class="fa-solid fa-server"></i> <span style="color: ${isProd ? 'var(--accent-emerald)' : 'var(--accent-blue)'};">${escapeHtml(data.ambiente_nome || (isProd ? '1 - Produção Oficial SEFAZ' : '2 - Homologação / Simulação'))}</span>`;
+  }
+
+  if (wsLabel) {
+    const ws = data.webservice || {};
+    if (ws.online) {
+      wsLabel.innerHTML = `<i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> <span style="color: var(--accent-emerald);">Online (${ws.elapsed_ms || 0}ms - SEFAZ ${escapeHtml(data.uf_sefaz || 'SP')})</span>`;
+    } else {
+      wsLabel.innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color: var(--accent-amber);"></i> <span style="color: var(--accent-amber);">${escapeHtml(ws.mensagem || 'WebService Indisponível')}</span>`;
+    }
+  }
+
+  if (chaveLabel) {
+    chaveLabel.innerText = data.chave_nfe || 'Chave gerada automaticamente na transmissão';
+  }
 
   if (badgeOk) badgeOk.innerText = `${data.total_checks || 0} Regras Auditadas`;
   if (badgeWarn) badgeWarn.innerText = `${data.total_warnings || 0} Alertas`;
@@ -4612,8 +4646,8 @@ function renderValidationReport(codPed, data) {
       icon.className = 'fa-solid fa-circle-check fa-2x';
       icon.style.color = 'var(--accent-emerald)';
     }
-    if (title) title.innerText = 'NF-e Totalmente Válida para Emissão!';
-    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Todos os parâmetros SEFAZ v4.00 foram aprovados com sucesso.`;
+    if (title) title.innerText = 'NF-e Totalmente Aprovada e Válida!';
+    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Todos os parâmetros SEFAZ 4.00 e comunicação validados com sucesso no ambiente ${data.ambiente_codigo == '1' ? 'de Produção' : 'de Homologação'}.`;
     if (badgeErr) badgeErr.style.display = 'none';
   } else {
     if (banner) {
@@ -4624,8 +4658,8 @@ function renderValidationReport(codPed, data) {
       icon.className = 'fa-solid fa-circle-xmark fa-2x';
       icon.style.color = 'var(--accent-rose)';
     }
-    if (title) title.innerText = 'Impedimentos de Emissão Identificados';
-    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Corrija os erros destacados abaixo antes de emitir a NF-e.`;
+    if (title) title.innerText = 'Impedimentos Fiscais Identificados';
+    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Corrija os erros destacados abaixo antes de transmitir a NF-e.`;
     if (badgeErr) badgeErr.style.display = 'inline-block';
   }
 
@@ -4669,15 +4703,42 @@ function renderValidationReport(codPed, data) {
   }
 }
 
+function toggleNfeXmlPreview() {
+  const box = document.getElementById('nfe-val-xml-box');
+  if (box) {
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function copyNfeXmlPreview() {
+  if (!currentValidationXml) {
+    showToast('Nenhum XML disponível para cópia.', 'warning');
+    return;
+  }
+  navigator.clipboard.writeText(currentValidationXml).then(() => {
+    showToast('XML copiado para a área de transferência!', 'success');
+  }).catch(() => {
+    showToast('Não foi possível copiar o XML automaticamente.', 'warning');
+  });
+}
+
 function closeNfeValidationModal() {
   const modal = document.getElementById('nfe-validation-modal');
   if (modal) modal.classList.remove('active');
 }
 
+function openFrmNotaFromValidationModal() {
+  if (!currentValidationCodPed) return;
+  const cod = currentValidationCodPed;
+  closeNfeValidationModal();
+  openNfeEmissaoModal(cod);
+}
+
 async function emitNfeFromValidationModal() {
   if (!currentValidationCodPed) return;
+  const cod = currentValidationCodPed;
   closeNfeValidationModal();
-  emitNfeFromOrder(currentValidationCodPed);
+  emitNfeFromOrder(cod);
 }
 
 // Database Config Page Tabs
