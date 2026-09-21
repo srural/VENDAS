@@ -2130,6 +2130,9 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
   document.getElementById('rec-total-items').innerText = itens.length;
 
   const isNfceMode = mode === 'nfce' && (nfe.NroChave || venda.Sat);
+  const homologBannerEl = document.getElementById('rec-homolog-banner');
+  const watermarkEl = document.getElementById('rec-watermark');
+  const watermarkTextEl = document.getElementById('rec-watermark-text');
 
   // Document Title & Blocks
   if (isNfceMode) {
@@ -2141,9 +2144,34 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
     document.getElementById('rec-qrcode-block').style.display = 'flex';
 
     const chave = nfe.NroChave || venda.Sat || '35260811054174000153650010000126591599973082';
-    const proto = nfe.Protocolo || '1352608071205011705';
+    const proto = (nfe.Protocolo || venda.Protocolo || '').trim();
+    const statusNfe = String(nfe.Status || nfe.status || venda.StatusNFe || venda.Status || '').toUpperCase();
+    const ambiente = String(nfe.Ambiente || venda.Ambiente || (window.currentPdvConfig && window.currentPdvConfig.Nfce && window.currentPdvConfig.Nfce.Ambiente) || '2');
 
-    document.getElementById('rec-protocolo').innerText = proto;
+    const isHomologacao = (ambiente !== '1' && ambiente !== 1);
+    const isAuthorized = (proto.length > 0 || statusNfe.includes('AUTORIZ'));
+    const semValidadeFiscal = isHomologacao || !isAuthorized;
+
+    if (semValidadeFiscal) {
+      if (homologBannerEl) {
+        homologBannerEl.style.display = 'block';
+        homologBannerEl.innerText = isHomologacao 
+          ? 'EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL' 
+          : 'DOCUMENTO NÃO VALIDADO NA SEFAZ - SEM VALOR FISCAL';
+      }
+      if (watermarkEl) {
+        watermarkEl.style.display = 'block';
+        if (watermarkTextEl) watermarkTextEl.innerText = 'SEM VALOR FISCAL';
+      }
+      document.getElementById('rec-protocolo').innerText = isHomologacao
+        ? `HOMOLOGAÇÃO - SEM VALOR FISCAL (${proto || 'SIMULAÇÃO'})`
+        : `NÃO AUTORIZADA NA SEFAZ (${proto || 'PENDENTE'})`;
+    } else {
+      if (homologBannerEl) homologBannerEl.style.display = 'none';
+      if (watermarkEl) watermarkEl.style.display = 'none';
+      document.getElementById('rec-protocolo').innerText = proto || '1352608071205011705';
+    }
+
     document.getElementById('rec-chave-nfe').innerText = chave.replace(/(.{4})/g, '$1 ').trim();
 
     // QR Code Rendering
@@ -2171,6 +2199,16 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
     document.getElementById('rec-doc-extra').innerText = 'Documento de Simples Conferência';
     document.getElementById('rec-nfce-block').style.display = 'none';
     document.getElementById('rec-qrcode-block').style.display = 'none';
+
+    // Para comprovante de venda simples / não-fiscal
+    if (homologBannerEl) {
+      homologBannerEl.style.display = 'block';
+      homologBannerEl.innerText = 'NÃO É DOCUMENTO FISCAL - COMPROVANTE DE VENDA';
+    }
+    if (watermarkEl) {
+      watermarkEl.style.display = 'block';
+      if (watermarkTextEl) watermarkTextEl.innerText = 'NÃO FISCAL';
+    }
   }
 
   document.getElementById('pdv-receipt-modal').classList.add('active');

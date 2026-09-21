@@ -2679,6 +2679,16 @@
       <div class="modal-body" style="background: var(--bg-surface-elevated); padding: 1.25rem;">
         <!-- Printable Receipt Thermal Area -->
         <div class="thermal-receipt" id="thermal-receipt-printable">
+          <!-- Watermark Overlay for Homologation / Non-fiscal -->
+          <div class="receipt-watermark" id="rec-watermark" style="display: none;">
+            <div class="rec-watermark-text" id="rec-watermark-text">SEM VALOR FISCAL</div>
+          </div>
+
+          <!-- Homologation / Non-fiscal Alert Banner -->
+          <div class="receipt-homolog-banner" id="rec-homolog-banner" style="display: none;">
+            EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL
+          </div>
+
           <div class="receipt-header">
             <h2 id="rec-company-name">SIDCOMP VENDAS LTDA</h2>
             <p id="rec-company-sub">FRENTE DE CAIXA - PDV</p>

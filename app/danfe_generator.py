@@ -155,9 +155,30 @@ def render_danfe_html(order, company, items, nfe_res):
     else:
         nat_op_desc = nat_op
 
-    # Protocolo
-    protocolo = nfe_res.get('protocolo') or '135180587979473'
-    proto_data = f"{protocolo} {dt_emiss} {hora_saida or '18:22:40'}"
+    # Protocolo e Ambiente Fiscal
+    from app.config_manager import get_pdv_config
+    cfg = get_pdv_config()
+    ambiente = str(order.get('Ambiente') or nfe_res.get('ambiente') or cfg.get('Nfe', {}).get('Ambiente', '2'))
+    status_nfe = str(nfe_res.get('status') or order.get('StatusNFe') or order.get('Status') or '').upper()
+    protocolo = nfe_res.get('protocolo') or ''
+
+    is_not_authorized = ('AUTORIZ' not in status_nfe and not protocolo)
+    is_homologacao = (ambiente != '1')
+    has_no_fiscal_validity = is_homologacao or is_not_authorized
+
+    if is_homologacao:
+        proto_data = f"HOMOLOGAÇÃO - SEM VALIDADE FISCAL ({protocolo or 'SIMULAÇÃO'}) {dt_emiss}"
+        strip_text = "EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL"
+        sub_watermark = "EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO"
+    elif is_not_authorized:
+        proto_data = f"NÃO AUTORIZADA NA SEFAZ ({protocolo or 'PENDENTE'}) {dt_emiss}"
+        strip_text = "DOCUMENTO NÃO VALIDADO NA SEFAZ - SEM VALOR FISCAL"
+        sub_watermark = "NÃO VALIDADA NA SEFAZ"
+    else:
+        protocolo_val = protocolo or '135180587979473'
+        proto_data = f"{protocolo_val} {dt_emiss} {hora_saida or '18:22:40'}"
+        strip_text = ""
+        sub_watermark = ""
 
     # Frete por conta
     mod_frete = str(order.get('ModFrete') or order.get('TipoFrete') or '0')
@@ -242,6 +263,19 @@ def render_danfe_html(order, company, items, nfe_res):
     trib_total = trib_federal + trib_estadual
     inf_compl = f"Trib.RS {format_money(trib_total)}(19,42%) Federal RS {format_money(trib_federal)}(7,00%) Estadual.<br>{pyhtml.escape(str(obs_texto))}"
 
+    homolog_strip_html = f"""
+    <div class="danfe-homolog-strip">
+        {strip_text}
+    </div>
+    """ if has_no_fiscal_validity else ""
+
+    watermark_html = f"""
+    <div class="danfe-watermark">
+        <div class="watermark-main">SEM VALOR FISCAL</div>
+        <div class="watermark-sub">{sub_watermark}</div>
+    </div>
+    """ if has_no_fiscal_validity else ""
+
     html_content = f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -250,8 +284,9 @@ def render_danfe_html(order, company, items, nfe_res):
     <style>
         * {{
             box-sizing: border-box;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
             margin: 0;
             padding: 0;
         }}
@@ -271,6 +306,8 @@ def render_danfe_html(order, company, items, nfe_res):
             padding: 4mm 5mm;
             border: 1px solid #ccc;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
         }}
         @media print {{
             @page {{
@@ -292,6 +329,52 @@ def render_danfe_html(order, company, items, nfe_res):
             .no-print {{
                 display: none !important;
             }}
+            .danfe-watermark {{
+                display: block !important;
+            }}
+        }}
+
+        /* Watermark & Homologation Banner */
+        .danfe-homolog-strip {{
+            background-color: #fee2e2 !important;
+            border: 2px dashed #dc2626 !important;
+            color: #991b1b !important;
+            padding: 4px 6px;
+            text-align: center;
+            font-weight: 900;
+            font-size: 10.5px;
+            margin-bottom: 3px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }}
+        .danfe-watermark {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-32deg);
+            width: 90%;
+            border: 6px dashed rgba(220, 38, 38, 0.22);
+            background: rgba(254, 226, 226, 0.12);
+            padding: 25px 15px;
+            text-align: center;
+            pointer-events: none;
+            z-index: 999;
+        }}
+        .watermark-main {{
+            font-size: 38px;
+            font-weight: 900;
+            color: rgba(220, 38, 38, 0.22);
+            letter-spacing: 3px;
+            line-height: 1.1;
+            text-transform: uppercase;
+        }}
+        .watermark-sub {{
+            font-size: 14px;
+            font-weight: 800;
+            color: rgba(220, 38, 38, 0.25);
+            letter-spacing: 1.5px;
+            margin-top: 6px;
+            text-transform: uppercase;
         }}
 
         /* Typography & Labels */
@@ -494,6 +577,8 @@ def render_danfe_html(order, company, items, nfe_res):
     </div>
 
     <div class="danfe-page">
+        {homolog_strip_html}
+        {watermark_html}
         <!-- CANHOTO DE RECEBIMENTO -->
         <div class="canhoto-container">
             <div class="row-flex">
