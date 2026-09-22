@@ -28,16 +28,18 @@
     <!-- Left Sidebar Menu (Azul) -->
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-icon">
-          <i class="fa-solid fa-store" id="brand-main-icon"></i>
+        <div class="brand-logo-banner" title="Sidcomp Automação Comercial">
+          <img src="/static/img/logo-sidcomp.png" alt="Sidcomp Automação Comercial" id="brand-main-img">
         </div>
-        <div class="brand-info">
-          <div class="brand-title">Sistema Vendas</div>
-          <div class="brand-subtitle">Módulo Multiempresa & PDV</div>
+        <div class="brand-header-bottom">
+          <div class="brand-info">
+            <div class="brand-title">Sistema Vendas</div>
+            <div class="brand-subtitle">Módulo Multiempresa & PDV</div>
+          </div>
+          <button type="button" class="sidebar-toggle-mini-btn" onclick="toggleSidebar()" title="Recolher menu lateral" id="btn-sidebar-mini-toggle">
+            <i class="fa-solid fa-angles-left" id="sidebar-toggle-icon-aside"></i>
+          </button>
         </div>
-        <button type="button" class="sidebar-toggle-mini-btn" onclick="toggleSidebar()" title="Recolher menu lateral" id="btn-sidebar-mini-toggle">
-          <i class="fa-solid fa-angles-left" id="sidebar-toggle-icon-aside"></i>
-        </button>
       </div>
 
       <div class="sidebar-section-title">NAVEGAÇÃO</div>
@@ -111,7 +113,7 @@
       <div class="sidebar-footer">
         <div class="system-status">
           <span class="status-dot"></span>
-          <span class="status-text">PostgreSQL 18 Conectado</span>
+          <span class="status-text">Conectado ao Banco</span>
         </div>
       </div>
     </aside>

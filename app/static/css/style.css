@@ -116,27 +116,42 @@ body {
 }
 
 .sidebar-brand {
-  padding: 1.25rem 1.15rem;
+  padding: 0.95rem 1rem 0.85rem 1rem;
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.65rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   flex-shrink: 0;
   position: relative;
 }
 
-.brand-icon {
-  width: 40px;
-  height: 40px;
+.brand-logo-banner {
+  width: 100%;
   background: #ffffff;
-  color: #1e3a8a;
   border-radius: var(--radius-md);
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  height: 52px;
+  box-sizing: border-box;
+}
+
+.brand-logo-banner img {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-header-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
 }
 
 .brand-info {
@@ -148,7 +163,7 @@ body {
 
 .brand-title {
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #ffffff;
   line-height: 1.2;
 }
@@ -157,7 +172,7 @@ body {
   font-size: 0.7rem;
   color: #93c5fd;
   font-weight: 400;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .sidebar-toggle-mini-btn {
@@ -324,18 +339,24 @@ body {
 }
 
 .sidebar-collapsed .sidebar-brand {
-  padding: 1.1rem 0.5rem;
+  padding: 0.85rem 0.4rem;
+  align-items: center;
   justify-content: center;
+}
+
+.sidebar-collapsed .brand-header-bottom {
+  display: none !important;
 }
 
 .sidebar-collapsed .sidebar-toggle-mini-btn {
   display: none !important;
 }
 
-.sidebar-collapsed .brand-icon {
-  width: 36px;
-  height: 36px;
-  font-size: 1.1rem;
+.sidebar-collapsed .brand-logo-banner {
+  width: 46px;
+  height: 46px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .sidebar-collapsed .sidebar-nav {
