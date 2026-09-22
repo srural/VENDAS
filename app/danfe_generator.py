@@ -1,5 +1,8 @@
 import datetime
 import html as pyhtml
+import os
+import base64
+import mimetypes
 
 def format_cnpj_cpf(val):
     if not val:
@@ -216,6 +219,21 @@ def render_danfe_html(order, company, items, nfe_res):
     emit_mun = company.get('Cidade') or 'URUPES'
     emit_uf = company.get('UF') or 'SP'
     emit_fone = company.get('Telefone') or company.get('Fone') or ''
+    emit_logo = company.get('Logo') or company.get('logo') or ''
+
+    # Process logo (convert local static upload to base64 data URI if available)
+    logo_src = emit_logo
+    if emit_logo and str(emit_logo).startswith('/static/'):
+        local_path = os.path.join(os.path.dirname(__file__), emit_logo.lstrip('/'))
+        if os.path.exists(local_path):
+            try:
+                mime_type, _ = mimetypes.guess_type(local_path)
+                mime_type = mime_type or 'image/png'
+                with open(local_path, 'rb') as img_f:
+                    b64_data = base64.b64encode(img_f.read()).decode('utf-8')
+                    logo_src = f"data:{mime_type};base64,{b64_data}"
+            except Exception:
+                logo_src = emit_logo
 
     # Items HTML
     items_rows_html = []
@@ -609,6 +627,22 @@ def render_danfe_html(order, company, items, nfe_res):
         <div class="header-container">
             <!-- EMITENTE -->
             <div class="header-emitente">
+                {f'''
+                <div style="display: flex; gap: 8px; align-items: center; height: 100%;">
+                    <div style="width: 75px; min-width: 75px; text-align: center; display: flex; align-items: center; justify-content: center;">
+                        <img src="{pyhtml.escape(logo_src)}" alt="Logo" style="max-height: 72px; max-width: 75px; object-fit: contain;">
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <span class="lbl" style="font-size: 5.5px;">IDENTIFICAÇÃO DO EMITENTE</span>
+                        <div class="val-bold" style="font-size: 9.5px; line-height: 1.15; margin-top: 1px;">{pyhtml.escape(emit_nome)}</div>
+                        <div class="val" style="font-size: 7.5px; margin-top: 2px; line-height: 1.15;">
+                            {pyhtml.escape(emit_end)}<br>
+                            {pyhtml.escape(emit_bairro)} - CEP: {emit_cep}<br>
+                            {pyhtml.escape(emit_mun)} - {pyhtml.escape(emit_uf)} {f"Fone: {pyhtml.escape(emit_fone)}" if emit_fone else ""}
+                        </div>
+                    </div>
+                </div>
+                ''' if logo_src else f'''
                 <div>
                     <span class="lbl" style="font-size: 5.5px;">IDENTIFICAÇÃO DO EMITENTE</span>
                     <div class="val-bold" style="font-size: 11px; line-height: 1.15; margin-top: 2px;">{pyhtml.escape(emit_nome)}</div>
@@ -618,6 +652,7 @@ def render_danfe_html(order, company, items, nfe_res):
                         {pyhtml.escape(emit_mun)} - {pyhtml.escape(emit_uf)} {f"Fone: {pyhtml.escape(emit_fone)}" if emit_fone else ""}
                     </div>
                 </div>
+                '''}
             </div>
 
             <!-- DANFE -->

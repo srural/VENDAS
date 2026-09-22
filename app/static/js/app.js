@@ -2019,9 +2019,23 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
   const nfe = saleData.nfe || {};
   const empresa = saleData.empresa || {};
 
-  document.getElementById('rec-company-name').innerText = empresa.NomeEmpresa || 'SIDCOMP VENDAS LTDA';
-  document.getElementById('rec-company-sub').innerText = empresa.Cabecalho1 || 'FRENTE DE CAIXA';
-  document.getElementById('rec-company-cnpj').innerText = `CNPJ: ${empresa.CNPJ || '11.054.174/0001-53'} | IE: ${empresa.IE || '123456789110'}`;
+  // Logomarca da Empresa no Comprovante
+  const logoWrap = document.getElementById('rec-company-logo-wrap');
+  const logoImg = document.getElementById('rec-company-logo');
+  const logoUrl = empresa.Logo || empresa.logo;
+  if (logoWrap && logoImg) {
+    if (logoUrl) {
+      logoImg.src = logoUrl;
+      logoWrap.style.display = 'block';
+    } else {
+      logoWrap.style.display = 'none';
+      logoImg.src = '';
+    }
+  }
+
+  document.getElementById('rec-company-name').innerText = empresa.NomeEmpresa || empresa.RazaoSocial || 'SIDCOMP VENDAS LTDA';
+  document.getElementById('rec-company-sub').innerText = empresa.Cabecalho1 || empresa.Fantasia || 'FRENTE DE CAIXA';
+  document.getElementById('rec-company-cnpj').innerText = `CNPJ: ${empresa.CNPJ || '11.054.174/0001-53'} | IE: ${empresa.InscEst || empresa.IE || '123456789110'}`;
 
   const clientName = (venda.NomeCliente || venda.nomecliente || venda.Nome || '').trim();
   const rawDoc = (venda.CPF || venda.CGC || '').trim();
@@ -2159,10 +2173,7 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
           ? 'EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL' 
           : 'DOCUMENTO NÃO VALIDADO NA SEFAZ - SEM VALOR FISCAL';
       }
-      if (watermarkEl) {
-        watermarkEl.style.display = 'block';
-        if (watermarkTextEl) watermarkTextEl.innerText = 'SEM VALOR FISCAL';
-      }
+      if (watermarkEl) watermarkEl.style.display = 'none';
       document.getElementById('rec-protocolo').innerText = isHomologacao
         ? `HOMOLOGAÇÃO - SEM VALOR FISCAL (${proto || 'SIMULAÇÃO'})`
         : `NÃO AUTORIZADA NA SEFAZ (${proto || 'PENDENTE'})`;
@@ -2201,14 +2212,8 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
     document.getElementById('rec-qrcode-block').style.display = 'none';
 
     // Para comprovante de venda simples / não-fiscal
-    if (homologBannerEl) {
-      homologBannerEl.style.display = 'block';
-      homologBannerEl.innerText = 'NÃO É DOCUMENTO FISCAL - COMPROVANTE DE VENDA';
-    }
-    if (watermarkEl) {
-      watermarkEl.style.display = 'block';
-      if (watermarkTextEl) watermarkTextEl.innerText = 'NÃO FISCAL';
-    }
+    if (homologBannerEl) homologBannerEl.style.display = 'none';
+    if (watermarkEl) watermarkEl.style.display = 'none';
   }
 
   document.getElementById('pdv-receipt-modal').classList.add('active');
@@ -2250,7 +2255,11 @@ function closeReceiptModal() {
 }
 
 function printReceipt() {
-  window.print();
+  document.body.classList.add('print-receipt-mode');
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
+  }, 150);
 }
 
 /* ==========================================================================
@@ -2721,6 +2730,7 @@ async function openEmpresaModal(id_empresa = null) {
   const form = document.getElementById('empresa-form');
   if (form) form.reset();
   document.getElementById('Emp_id_empresa').value = '';
+  setEmpresaLogoPreview('');
 
   const titleEl = document.getElementById('modal-title-emp');
 
@@ -2754,12 +2764,16 @@ async function openEmpresaModal(id_empresa = null) {
       document.getElementById('Emp_SitTribFixo').value = emp.SitTribFixo || '';
       document.getElementById('Emp_Deducao').value = emp.Deducao || '33,33';
       document.getElementById('Emp_Ativo').checked = emp.Ativo === 1;
+
+      // Logomarca Preview
+      setEmpresaLogoPreview(emp.Logo || emp.logo || '');
     } catch (err) {
       showToast(`Erro ao carregar dados da empresa: ${err.message}`, 'error');
       return;
     }
   } else {
     titleEl.innerHTML = `<i class="fa-solid fa-building-circle-check"></i> Cadastrar Nova Empresa`;
+    setEmpresaLogoPreview('');
   }
 
   document.getElementById('empresa-modal').classList.add('active');
@@ -2767,6 +2781,68 @@ async function openEmpresaModal(id_empresa = null) {
 
 function closeEmpresaModal() {
   document.getElementById('empresa-modal').classList.remove('active');
+}
+
+function setEmpresaLogoPreview(url) {
+  const previewImg = document.getElementById('emp-logo-preview-img');
+  const placeholder = document.getElementById('emp-logo-placeholder');
+  const btnRemove = document.getElementById('btn-remove-emp-logo');
+  const inputLogo = document.getElementById('Emp_Logo');
+
+  if (inputLogo) inputLogo.value = url || '';
+
+  if (url) {
+    if (previewImg) {
+      previewImg.src = url;
+      previewImg.style.display = 'block';
+    }
+    if (placeholder) placeholder.style.display = 'none';
+    if (btnRemove) btnRemove.style.display = 'inline-flex';
+  } else {
+    if (previewImg) {
+      previewImg.src = '';
+      previewImg.style.display = 'none';
+    }
+    if (placeholder) placeholder.style.display = 'block';
+    if (btnRemove) btnRemove.style.display = 'none';
+  }
+}
+
+function triggerEmpresaLogoUpload() {
+  const fileInput = document.getElementById('emp-logo-file-input');
+  if (fileInput) fileInput.click();
+}
+
+async function handleEmpresaLogoFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  await uploadEmpresaLogoFile(file);
+  e.target.value = '';
+}
+
+async function uploadEmpresaLogoFile(file) {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    showToast('Enviando logomarca da empresa...', 'info');
+
+    const res = await fetch('/api/empresas/upload-logo', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha no upload do logo');
+
+    setEmpresaLogoPreview(data.url);
+    showToast('Logomarca enviada com sucesso!', 'success');
+  } catch (err) {
+    showToast(`Erro no upload da logomarca: ${err.message}`, 'error');
+  }
+}
+
+function removeEmpresaLogo() {
+  setEmpresaLogoPreview('');
+  showToast('Logomarca removida. Clique em Salvar para confirmar.', 'info');
 }
 
 async function saveEmpresa(e) {

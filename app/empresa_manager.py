@@ -34,7 +34,8 @@ def normalize_empresa_row(row):
         'SitTribFixo': ['SitTribFixo', 'sittribfixo'],
         'Deducao': ['Deducao', 'deducao'],
         'Ativo': ['Ativo', 'ativo'],
-        'DtCadastro': ['DtCadastro', 'dtcadastro']
+        'DtCadastro': ['DtCadastro', 'dtcadastro'],
+        'Logo': ['Logo', 'logo', 'Logomarca', 'logomarca', 'Foto', 'foto', 'Imagem', 'imagem']
     }
     result = {}
     for std_key, aliases in keys_map.items():
@@ -81,7 +82,8 @@ def init_empresa_table():
                     "SitTribFixo" TEXT,
                     "Deducao" TEXT,
                     "Ativo" INTEGER DEFAULT 1,
-                    "DtCadastro" TEXT
+                    "DtCadastro" TEXT,
+                    "Logo" TEXT
                 )
             """)
             conn.commit()
@@ -110,7 +112,8 @@ def init_empresa_table():
                 ("SitTribFixo", "TEXT"),
                 ("Deducao", "TEXT"),
                 ("Ativo", "INTEGER DEFAULT 1"),
-                ("DtCadastro", "TEXT")
+                ("DtCadastro", "TEXT"),
+                ("Logo", "TEXT")
             ]
             for col_name, col_type in expected_columns:
                 try:
@@ -274,6 +277,7 @@ def save_empresa(data):
             sit_trib_fixo = data.get('SitTribFixo', '').strip()
             deducao = data.get('Deducao', '33,33').strip()
             ativo = 1 if str(data.get('Ativo', '1')) in ['1', '-1', 'true', 'True'] else 0
+            logo = (data.get('Logo') or data.get('logo') or '').strip()
 
             if id_emp and str(id_emp).isdigit() and int(id_emp) > 0:
                 id_emp = int(id_emp)
@@ -282,11 +286,11 @@ def save_empresa(data):
                         "RazaoSocial" = %s, "Fantasia" = %s, "CNPJ" = %s, "InscEst" = %s, "Logradouro" = %s, "Nro" = %s,
                         "Bairro" = %s, "Cidade" = %s, "UF" = %s, "CEP" = %s, "Fone" = %s, "CodigoIBGE" = %s, "RegimeTrib" = %s,
                         "PIS" = %s, "AliqPIS" = %s, "COFINS" = %s, "AliqCOFINS" = %s, "SitTrib" = %s, "CFOP" = %s,
-                        "SitTribFixo" = %s, "Deducao" = %s, "Ativo" = %s
+                        "SitTribFixo" = %s, "Deducao" = %s, "Ativo" = %s, "Logo" = %s
                     WHERE "id_empresa" = %s
                 """, (
                     razao, fantasia, cnpj, ie, logradouro, nro, bairro, cidade, uf, cep, fone,
-                    ibge, regime, pis, aliq_pis, cofins, aliq_cofins, sit_trib, cfop, sit_trib_fixo, deducao, ativo, id_emp
+                    ibge, regime, pis, aliq_pis, cofins, aliq_cofins, sit_trib, cfop, sit_trib_fixo, deducao, ativo, logo, id_emp
                 ))
             else:
                 cursor.execute('SELECT COALESCE(MAX("id_empresa"), 0) + 1 as next_id FROM "EMP"')
@@ -295,13 +299,13 @@ def save_empresa(data):
                     INSERT INTO "EMP" (
                         "id_empresa", "RazaoSocial", "Fantasia", "CNPJ", "InscEst", "Logradouro", "Nro", "Bairro", "Cidade", "UF",
                         "CEP", "Fone", "CodigoIBGE", "RegimeTrib", "PIS", "AliqPIS", "COFINS", "AliqCOFINS", "SitTrib",
-                        "CFOP", "SitTribFixo", "Deducao", "Ativo", "DtCadastro"
+                        "CFOP", "SitTribFixo", "Deducao", "Ativo", "DtCadastro", "Logo"
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE::text
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE::text, %s
                     )
                 """, (
                     next_id, razao, fantasia, cnpj, ie, logradouro, nro, bairro, cidade, uf, cep, fone,
-                    ibge, regime, pis, aliq_pis, cofins, aliq_cofins, sit_trib, cfop, sit_trib_fixo, deducao, ativo
+                    ibge, regime, pis, aliq_pis, cofins, aliq_cofins, sit_trib, cfop, sit_trib_fixo, deducao, ativo, logo
                 ))
                 id_emp = next_id
 

@@ -1036,7 +1036,8 @@ def create_pdv_sale(sale_data):
     hora = now.strftime("%H:%M:%S")
 
     cod_ped = get_next_ped_id()
-    company = get_company_info()
+    id_emp = int(sale_data.get("id_empresa") or sale_data.get("Empresa") or 1)
+    company = get_company_info(id_emp)
 
     entidade = get_entity_by_id(cod_entidade) if cod_entidade else None
     nome_cliente = entidade.get("Nome", "CONSUMIDOR FINAL") if entidade else "CONSUMIDOR FINAL"
@@ -1150,7 +1151,8 @@ def get_pdv_sale_by_id(cod_ped):
             nfe_row = cursor.fetchone()
             nfe_data = _convert_row(nfe_row) if nfe_row else None
 
-            company = get_company_info()
+            id_emp = sale.get('id_empresa') or 1
+            company = get_company_info(id_emp)
 
             return {
                 "venda": sale,
@@ -1262,7 +1264,8 @@ def get_order_by_id(cod_ped):
             nfe_row = cursor.fetchone()
             nfe_data = _convert_row(nfe_row) if nfe_row else None
 
-            company = get_company_info()
+            id_emp = order.get('id_empresa') or 1
+            company = get_company_info(id_emp)
 
             return {
                 "pedido": order,

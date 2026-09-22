@@ -1233,29 +1233,9 @@ body {
   print-color-adjust: exact !important;
 }
 
-.receipt-watermark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotate(-35deg);
-  width: 90%;
-  border: 4px dashed rgba(220, 38, 38, 0.25);
-  background: rgba(254, 226, 226, 0.15);
-  padding: 20px 10px;
-  text-align: center;
-  pointer-events: none;
-  z-index: 50;
-  -webkit-print-color-adjust: exact !important;
-  print-color-adjust: exact !important;
-}
-
+.receipt-watermark,
 .rec-watermark-text {
-  font-size: 24px;
-  font-weight: 900;
-  color: rgba(220, 38, 38, 0.35);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  line-height: 1.2;
+  display: none !important;
 }
 
 .receipt-header {
@@ -1390,35 +1370,127 @@ body {
 }
 
 
-/* Media Print Rules for Thermal Receipt */
+/* Media Print Rules for Thermal Receipt (80mm / 89mm Thermal Printers) */
 @media print {
-  body.print-receipt-mode * {
-    visibility: hidden;
+  @page {
+    size: 80mm auto;
+    margin: 0;
   }
-  body.print-receipt-mode #thermal-receipt-printable, 
-  body.print-receipt-mode #thermal-receipt-printable * {
-    visibility: visible;
-  }
-  body.print-receipt-mode #thermal-receipt-printable {
-    position: absolute;
-    left: 0;
-    top: 0;
+
+  html, body {
     width: 80mm !important;
+    max-width: 80mm !important;
+    min-height: auto !important;
+    height: auto !important;
+    margin: 0 !important;
     padding: 0 !important;
-    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
   }
-  body.print-receipt-mode .receipt-homolog-banner {
-    border: 2px dashed #000 !important;
-    background: #f0f0f0 !important;
-    color: #000 !important;
-    font-weight: bold !important;
-  }
+
+  /* Ocultar rigorosamente toda a UI fora do recibo térmico */
+  body.print-receipt-mode > *:not(#pdv-receipt-modal),
+  body.print-receipt-mode .sidebar,
+  body.print-receipt-mode .header,
+  body.print-receipt-mode .main-content,
+  body.print-receipt-mode .module-view,
+  body.print-receipt-mode .toast-container,
+  body.print-receipt-mode #pdv-receipt-modal .modal-header,
+  body.print-receipt-mode #pdv-receipt-modal .modal-footer,
+  body.print-receipt-mode .no-print,
   body.print-receipt-mode .receipt-watermark {
-    border-color: rgba(0, 0, 0, 0.25) !important;
-    background: transparent !important;
+    display: none !important;
   }
-  body.print-receipt-mode .rec-watermark-text {
-    color: rgba(0, 0, 0, 0.25) !important;
+
+  body.print-receipt-mode #pdv-receipt-modal {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: auto !important;
+  }
+
+  body.print-receipt-mode #pdv-receipt-modal .modal-container {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    min-height: auto !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+  }
+
+  body.print-receipt-mode #pdv-receipt-modal .modal-body {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  body.print-receipt-mode #thermal-receipt-printable {
+    position: static !important;
+    display: block !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    padding: 3mm 1mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  body.print-receipt-mode #thermal-receipt-printable * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: #000000 !important;
+  }
+
+  body.print-receipt-mode .receipt-homolog-banner {
+    border: 1px dashed #000 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 9px !important;
+    padding: 3px !important;
+    margin-bottom: 4px !important;
+  }
+
+  body.print-receipt-mode .receipt-divider {
+    font-size: 9px !important;
+    margin: 3px 0 !important;
+    letter-spacing: -1px;
+  }
+
+  body.print-receipt-mode .receipt-header h2 {
+    font-size: 12.5px !important;
+  }
+
+  body.print-receipt-mode #rec-company-logo {
+    max-height: 44px !important;
+    max-width: 120px !important;
   }
 }
 
@@ -2352,26 +2424,26 @@ textarea.form-control {
 }
 
 
-/* Relatório de Vendas Print Media Styles */
+/* Relatório de Vendas Print Media Styles (Apenas quando não for impressão de recibo térmico) */
 @media print {
-  .sidebar,
-  .topbar,
-  .period-shortcuts,
-  .modal-backdrop,
-  .btn,
-  .pagination,
-  .table-footer,
-  #btn-sidebar-toggle,
-  #user-info-wrapper,
-  .empresa-selector-wrapper,
-  .theme-toggle-btn {
+  body:not(.print-receipt-mode) .sidebar,
+  body:not(.print-receipt-mode) .topbar,
+  body:not(.print-receipt-mode) .period-shortcuts,
+  body:not(.print-receipt-mode) .modal-backdrop,
+  body:not(.print-receipt-mode) .btn,
+  body:not(.print-receipt-mode) .pagination,
+  body:not(.print-receipt-mode) .table-footer,
+  body:not(.print-receipt-mode) #btn-sidebar-toggle,
+  body:not(.print-receipt-mode) #user-info-wrapper,
+  body:not(.print-receipt-mode) .empresa-selector-wrapper,
+  body:not(.print-receipt-mode) .theme-toggle-btn {
     display: none !important;
   }
 
-  body,
-  .app-layout,
-  .content-wrapper,
-  .main-container {
+  body:not(.print-receipt-mode),
+  body:not(.print-receipt-mode) .app-layout,
+  body:not(.print-receipt-mode) .content-wrapper,
+  body:not(.print-receipt-mode) .main-container {
     background: #ffffff !important;
     color: #000000 !important;
     padding: 0 !important;
@@ -2380,11 +2452,11 @@ textarea.form-control {
     overflow: visible !important;
   }
 
-  .module-view {
+  body:not(.print-receipt-mode) .module-view {
     display: none !important;
   }
 
-  .module-view.active {
+  body:not(.print-receipt-mode) .module-view.active {
     display: block !important;
   }
 

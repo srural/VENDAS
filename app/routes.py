@@ -426,6 +426,86 @@ def save_empresa_route():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@main_bp.route('/api/empresas/upload-logo', methods=['POST'])
+def upload_empresa_logo_temp():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "Nenhum arquivo de imagem enviado"}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Nenhum arquivo selecionado"}), 400
+
+        allowed_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp'}
+        _, ext = os.path.splitext(file.filename.lower())
+        if ext not in allowed_extensions:
+            return jsonify({"error": f"Formato inválido. Extensões permitidas: {', '.join(allowed_extensions)}"}), 400
+
+        upload_dir = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'empresas')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        unique_name = f"logo_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = os.path.join(upload_dir, unique_name)
+        file.save(filepath)
+
+        logo_url = f"/static/uploads/empresas/{unique_name}"
+        return jsonify({
+            "message": "Logomarca enviada com sucesso!",
+            "url": logo_url,
+            "filename": unique_name
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Erro ao processar imagem: {str(e)}"}), 500
+
+@main_bp.route('/api/empresas/<int:id_empresa>/logo', methods=['POST', 'DELETE'])
+def empresa_logo_manage(id_empresa):
+    from app.empresa_manager import get_empresa_by_id, save_empresa
+    try:
+        empresa = get_empresa_by_id(id_empresa)
+        if not empresa:
+            return jsonify({"error": "Empresa não encontrada"}), 404
+
+        if request.method == 'DELETE':
+            old_logo = empresa.get('Logo')
+            if old_logo and old_logo.startswith('/static/uploads/empresas/'):
+                filename = os.path.basename(old_logo)
+                filepath = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'empresas', filename)
+                if os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except Exception:
+                        pass
+            empresa['Logo'] = ''
+            save_empresa(empresa)
+            return jsonify({"message": "Logomarca removida com sucesso!"})
+
+        # POST: Upload ou Atualização de Logo
+        logo_url = None
+        if 'file' in request.files and request.files['file'].filename != '':
+            file = request.files['file']
+            allowed_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp'}
+            _, ext = os.path.splitext(file.filename.lower())
+            if ext not in allowed_extensions:
+                return jsonify({"error": "Formato de arquivo não suportado"}), 400
+
+            upload_dir = os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'empresas')
+            os.makedirs(upload_dir, exist_ok=True)
+
+            unique_name = f"logo_{id_empresa}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
+            filepath = os.path.join(upload_dir, unique_name)
+            file.save(filepath)
+            logo_url = f"/static/uploads/empresas/{unique_name}"
+        elif request.json and request.json.get('logo_url'):
+            logo_url = request.json.get('logo_url')
+        else:
+            return jsonify({"error": "Nenhum arquivo ou URL de logomarca informada"}), 400
+
+        empresa['Logo'] = logo_url
+        save_empresa(empresa)
+        return jsonify({"message": "Logomarca da empresa atualizada com sucesso!", "logo_url": logo_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # --- SALES ORDERS (PEDIDOS DE VENDA) ENDPOINTS ---
 

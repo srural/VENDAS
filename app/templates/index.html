@@ -2282,6 +2282,41 @@
                   <label for="Emp_Ativo" style="color: var(--text-primary);">Empresa Ativa</label>
                 </div>
               </div>
+
+              <!-- Logomarca da Empresa -->
+              <div class="form-group col-12" style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-top: 0.5rem;">
+                <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
+                  <i class="fa-solid fa-image"></i> Logomarca da Empresa (Usada em Venda Simples, NFC-e e DANFE NF-e)
+                </label>
+                <div style="display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
+                  <!-- Preview Box -->
+                  <div id="emp-logo-preview-box" style="width: 120px; height: 80px; border-radius: var(--radius-md); background: var(--bg-surface); border: 2px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; cursor: pointer;" onclick="triggerEmpresaLogoUpload()" title="Clique para alterar a logomarca">
+                    <img id="emp-logo-preview-img" src="" alt="Logo Preview" style="display: none; max-width: 100%; max-height: 100%; object-fit: contain;">
+                    <div id="emp-logo-placeholder" style="text-align: center; color: var(--text-muted); font-size: 0.75rem;">
+                      <i class="fa-solid fa-cloud-arrow-up fa-2x" style="margin-bottom: 0.25rem; color: var(--accent-blue);"></i>
+                      <div>Sem Logo</div>
+                    </div>
+                  </div>
+
+                  <!-- Controls & URL -->
+                  <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <input type="hidden" id="Emp_Logo" name="Logo">
+                    <input type="file" id="emp-logo-file-input" accept="image/*" style="display: none;" onchange="handleEmpresaLogoFileSelect(event)">
+                    
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                      <button type="button" class="btn btn-primary btn-sm" onclick="triggerEmpresaLogoUpload()">
+                        <i class="fa-solid fa-upload"></i> Selecionar Imagem
+                      </button>
+                      <button type="button" class="btn btn-danger btn-sm" id="btn-remove-emp-logo" onclick="removeEmpresaLogo()" style="display: none;">
+                        <i class="fa-solid fa-trash"></i> Remover Logo
+                      </button>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                      Formatos aceitos: PNG, JPG, JPEG, WEBP, SVG. A logomarca será impressa no comprovante não fiscal (Venda Simples), cupom NFC-e e DANFE NF-e (A4).
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2679,17 +2714,15 @@
       <div class="modal-body" style="background: var(--bg-surface-elevated); padding: 1.25rem;">
         <!-- Printable Receipt Thermal Area -->
         <div class="thermal-receipt" id="thermal-receipt-printable">
-          <!-- Watermark Overlay for Homologation / Non-fiscal -->
-          <div class="receipt-watermark" id="rec-watermark" style="display: none;">
-            <div class="rec-watermark-text" id="rec-watermark-text">SEM VALOR FISCAL</div>
-          </div>
-
-          <!-- Homologation / Non-fiscal Alert Banner -->
+          <!-- Homologation Alert Banner -->
           <div class="receipt-homolog-banner" id="rec-homolog-banner" style="display: none;">
             EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL
           </div>
 
           <div class="receipt-header">
+            <div id="rec-company-logo-wrap" style="text-align: center; margin-bottom: 6px; display: none;">
+              <img id="rec-company-logo" src="" alt="Logo Empresa" style="max-height: 50px; max-width: 140px; object-fit: contain;">
+            </div>
             <h2 id="rec-company-name">SIDCOMP VENDAS LTDA</h2>
             <p id="rec-company-sub">FRENTE DE CAIXA - PDV</p>
             <p id="rec-company-cnpj">CNPJ: 11.054.174/0001-53 | IE: 123456789110</p>
