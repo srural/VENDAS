@@ -299,7 +299,7 @@ def emit_nfe_55(order_data, company_data, items_data):
     protocolo = generate_protocolo_sefaz(uf="135")
     xml_content = build_nfe_55_xml(order_data, company_data, items_data, chave_nfe, protocolo)
 
-    filepath = save_xml_to_disk(xml_content, chave_nfe, modelo="55")
+    filepath = save_xml_to_disk(xml_content, chave_nfe, modelo="55", cnpj=cnpj)
 
     return {
         "chave_nfe": chave_nfe,

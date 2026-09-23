@@ -1308,10 +1308,10 @@ body {
 }
 
 .receipt-client-info {
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.35;
   text-align: left;
-  margin: 4px 0 2px 0;
+  margin: 5px 0 3px 0;
   word-break: break-word;
 }
 
@@ -1319,8 +1319,22 @@ body {
   margin: 2px 0;
 }
 
-.receipt-client-info strong {
-  font-weight: bold;
+.rec-cli-row {
+  margin: 2px 0 4px 0 !important;
+}
+
+.rec-cli-row strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rec-cli-name-highlight {
+  font-size: 13.5px !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .receipt-items-table {
@@ -1503,6 +1517,20 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color: #000000 !important;
+  }
+
+  body.print-receipt-mode .receipt-client-info {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    margin: 4px 0 !important;
+  }
+
+  body.print-receipt-mode .rec-cli-name-highlight {
+    font-size: 13.5px !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+    display: inline-block !important;
+    -webkit-text-stroke: 0.3px #000 !important;
   }
 
   body.print-receipt-mode .receipt-homolog-banner {

@@ -239,7 +239,7 @@ def emit_nfce(sale, company, items):
         serie=serie_nfce, nnf=nro_nfce, c_id_token=c_id_token, csc=csc
     )
     
-    filepath = save_xml_to_disk(xml_content, chave, modelo="65")
+    filepath = save_xml_to_disk(xml_content, chave, modelo="65", cnpj=cnpj_emit)
 
     return {
         "chave_nfe": chave,
