@@ -353,6 +353,8 @@ def pdv_process_sale():
             "venda_id": result["venda"]["CodPed"],
             "data": result
         }), 201
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -646,8 +648,10 @@ def emitir_nfe_sefaz_direto(cod_ped):
 
 @main_bp.route('/api/nfe/<int:cod_ped>/danfe-html', methods=['GET'])
 def get_danfe_html(cod_ped):
-    from app.nfe_engine import emit_nfe_55
+    from app.nfe_engine import emit_nfe_55, validate_nfe_structure
     from app.danfe_generator import render_danfe_html
+    from app.config_manager import get_pdv_config
+    import html as pyhtml
     try:
         order_data = db.get_order_by_id(cod_ped)
         if not order_data or not order_data.get("pedido"):
@@ -656,6 +660,7 @@ def get_danfe_html(cod_ped):
         order = order_data["pedido"]
         items = order_data["itens"]
         company = order_data["empresa"]
+        cfg = get_pdv_config() or {}
         
         # Check if already emitted with NroChave
         nfe_info = order_data.get("nfe")
@@ -666,9 +671,36 @@ def get_danfe_html(cod_ped):
             nfe_res = {
                 "chave_nfe": str(chave_existente),
                 "protocolo": str(protocolo_existente),
-                "status": "100"
+                "status": str((nfe_info and nfe_info.get("Status")) or "100")
             }
         else:
+            val_report = validate_nfe_structure(order, company, items, cfg)
+            if not val_report.get("valid"):
+                errs_html = "".join(f"<li>{pyhtml.escape(e)}</li>" for e in val_report.get("errors", []))
+                return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bloqueio de Impressão de DANFE</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 2.5rem; text-align: center; }}
+        .card {{ max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #f43f5e; border-radius: 12px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+        h2 {{ color: #f43f5e; margin-top: 0; }}
+        ul {{ text-align: left; background: rgba(244,63,94,0.1); border-radius: 8px; padding: 1.25rem 2rem; color: #fca5a5; }}
+        .btn {{ display: inline-block; margin-top: 1.5rem; padding: 0.6rem 1.2rem; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>⚠️ Impressão de DANFE / PDF Bloqueada</h2>
+        <p>A NF-e do Pedido <strong>#{cod_ped}</strong> não pode ser emitida ou impressa porque possui pendências fiscais que violam as regras da SEFAZ:</p>
+        <ul>{errs_html}</ul>
+        <p style="font-size: 0.9rem; color: #94a3b8;">Abra o pedido no <strong>FrmNota</strong> e preencha todos os dados do Destinatário (CPF/CNPJ, Nome e Endereço) para liberar a transmissão e impressão.</p>
+        <a href="javascript:window.close()" class="btn">Fechar Janela</a>
+    </div>
+</body>
+</html>""", 400, {'Content-Type': 'text/html; charset=utf-8'}
+
             nfe_res = emit_nfe_55(order, company, items)
 
         html = render_danfe_html(order, company, items, nfe_res)
@@ -678,7 +710,8 @@ def get_danfe_html(cod_ped):
 
 @main_bp.route('/api/nfe/<int:cod_ped>/xml-download', methods=['GET'])
 def download_nfe_xml(cod_ped):
-    from app.nfe_engine import emit_nfe_55
+    from app.nfe_engine import emit_nfe_55, validate_nfe_structure
+    from app.config_manager import get_pdv_config
     try:
         order_data = db.get_order_by_id(cod_ped)
         if not order_data or not order_data.get("pedido"):
@@ -687,6 +720,15 @@ def download_nfe_xml(cod_ped):
         order = order_data["pedido"]
         items = order_data["itens"]
         company = order_data["empresa"]
+        cfg = get_pdv_config() or {}
+
+        val_report = validate_nfe_structure(order, company, items, cfg)
+        if not val_report.get("valid"):
+            return jsonify({
+                "error": "Não é possível baixar o XML: a nota possui pendências fiscais que violam as regras da SEFAZ.",
+                "errors": val_report.get("errors", [])
+            }), 400
+
         nfe_res = emit_nfe_55(order, company, items)
 
         xml_content = nfe_res.get("xml", "")
@@ -755,6 +797,29 @@ def validar_nfe_pedido(cod_ped):
         config_data = get_pdv_config() or {}
 
         report = validate_nfe_structure(
+            order_data["pedido"],
+            company_data,
+            order_data.get("itens", []),
+            config_data
+        )
+        return jsonify(report)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/pedidos/<int:cod_ped>/validar-nfce', methods=['GET', 'POST'])
+def validar_nfce_pedido(cod_ped):
+    from app.nfce import validate_nfce_structure
+    from app.empresa_manager import get_empresa_by_id
+    from app.config_manager import get_pdv_config
+    try:
+        order_data = db.get_order_by_id(cod_ped)
+        if not order_data or not order_data.get("pedido"):
+            return jsonify({"error": "Pedido não encontrado"}), 404
+        
+        company_data = get_empresa_by_id(1) or {}
+        config_data = get_pdv_config() or {}
+
+        report = validate_nfce_structure(
             order_data["pedido"],
             company_data,
             order_data.get("itens", []),

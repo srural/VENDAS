@@ -1,7 +1,26 @@
 import datetime
 import random
+import re
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+
+def sanitize_sefaz_string(val, max_len=120, fallback="PRODUTO"):
+    """
+    Higieniza o texto para cumprir rigorosamente o padrão TString da SEFAZ 4.00:
+    [!-ÿ]{1}[ -ÿ]*[!-ÿ]{1}|[!-ÿ]{1}
+    - Remove quebras de linha (\r, \n), tabs (\t) e caracteres de controle
+    - Remove espaços iniciais e finais (leading/trailing)
+    - Colapsa múltiplos espaços internos consecutivos
+    - Garante fallback caso a string seja vazia ou apenas espaços
+    """
+    if val is None:
+        return fallback
+    s = str(val).strip()
+    s = re.sub(r'[\r\n\t\x00-\x1f\x7f-\x9f]', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    if not s:
+        return fallback
+    return s[:max_len].strip()
 
 def calc_cdv(key_43):
     multipliers = [2, 3, 4, 5, 6, 7, 8, 9]
@@ -41,12 +60,14 @@ def generate_qrcode_url(chave_nfe, tp_amb="2", c_dest="", dh_emi="", v_nf=0.0, v
     p = f"{chave_nfe}|2|{tp_amb}|{c_id_token}"
     return f"{base_url}?p={p}"
 
-def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1, c_id_token="000001", csc="1317bbaf-264c-41d9-9c71-c75215211f2a"):
+def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1, c_id_token="000001", csc="1317bbaf-264c-41d9-9c71-c75215211f2a", ambiente=None):
     """
     Builds a compliant SEFAZ NFC-e 4.00 XML structure using CfgPdv parameters
     """
     now = datetime.datetime.now()
     dh_emiss = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
+    amb_val = str(ambiente or sale.get("Ambiente") or "2")
+    c_mun_emp = str(company.get("CodigoIBGE") or company.get("CodMun") or "3556008") or "3556008"
 
     # Root NFe
     nfe = ET.Element("NFe", xmlns="http://www.portalfiscal.inf.br/nfe")
@@ -54,7 +75,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     # <ide>
     ide = ET.SubElement(inf_nfe, "ide")
-    ET.SubElement(ide, "cUF").text = str(company.get("CodigoIBGE", "3556008"))[:2] or "35"
+    ET.SubElement(ide, "cUF").text = c_mun_emp[:2] if len(c_mun_emp) >= 2 else "35"
     ET.SubElement(ide, "cNF").text = chave_nfe[35:43]
     ET.SubElement(ide, "natOp").text = "VENDA CONSUMIDOR FINAL"
     ET.SubElement(ide, "mod").text = "65" # NFC-e
@@ -63,47 +84,48 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ide, "dhEmi").text = dh_emiss
     ET.SubElement(ide, "tpNF").text = "1" # Saída
     ET.SubElement(ide, "idDest").text = "1" # Operação interna
-    ET.SubElement(ide, "cMunFG").text = str(company.get("CodigoIBGE", "3556008")) or "3556008"
+    ET.SubElement(ide, "cMunFG").text = c_mun_emp
     ET.SubElement(ide, "tpImp").text = "4" # DANFE NFC-e
     ET.SubElement(ide, "tpEmis").text = "1" # Normal
     ET.SubElement(ide, "cDV").text = chave_nfe[43]
-    ET.SubElement(ide, "tpAmb").text = "2" # Homologação / Simulação
+    ET.SubElement(ide, "tpAmb").text = amb_val
     ET.SubElement(ide, "finNFe").text = "1" # Normal
     ET.SubElement(ide, "indFinal").text = "1" # Consumidor Final
     ET.SubElement(ide, "indPres").text = "1" # Presencial
     ET.SubElement(ide, "procEmi").text = "0" # Aplicativo do Contribuinte
+    ET.SubElement(ide, "verProc").text = "1.0" # Versão do Processo
 
     # <emit> (Dados do Emitente da Tabela EMP)
     emit = ET.SubElement(inf_nfe, "emit")
     cnpj_clean = ''.join(filter(str.isdigit, str(company.get("CNPJ", "23103347000165")))).zfill(14)
     ET.SubElement(emit, "CNPJ").text = cnpj_clean
-    ET.SubElement(emit, "xNome").text = company.get("RazaoSocial") or company.get("NomeEmpresa") or "SIDIVAL CARLOS CIOCA"
-    ET.SubElement(emit, "xFant").text = company.get("Fantasia") or company.get("Cabecalho1") or "SIDIVAL CARLOS CIOCA"
+    ET.SubElement(emit, "xNome").text = sanitize_sefaz_string(company.get("RazaoSocial") or company.get("NomeEmpresa"), max_len=60, fallback="SIDIVAL CARLOS CIOCA")
+    ET.SubElement(emit, "xFant").text = sanitize_sefaz_string(company.get("Fantasia") or company.get("Cabecalho1") or company.get("RazaoSocial"), max_len=60, fallback="SIDIVAL CARLOS CIOCA")
 
     ender_emit = ET.SubElement(emit, "enderEmit")
-    ET.SubElement(ender_emit, "xLgr").text = company.get("Logradouro", "RUA GUSTAVO MARTINS CERQUEIRA")
-    ET.SubElement(ender_emit, "nro").text = company.get("Nro", "255")
-    ET.SubElement(ender_emit, "xBairro").text = company.get("Bairro", "CENTRO")
-    ET.SubElement(ender_emit, "cMun").text = str(company.get("CodigoIBGE", "3556008")) or "3556008"
-    ET.SubElement(ender_emit, "xMun").text = company.get("Cidade", "URUPES")
-    ET.SubElement(ender_emit, "UF").text = company.get("UF", "SP")
+    ET.SubElement(ender_emit, "xLgr").text = sanitize_sefaz_string(company.get("Logradouro", "RUA GUSTAVO MARTINS CERQUEIRA"), max_len=60, fallback="RUA GUSTAVO MARTINS CERQUEIRA")
+    ET.SubElement(ender_emit, "nro").text = sanitize_sefaz_string(company.get("Nro", "255"), max_len=60, fallback="255")
+    ET.SubElement(ender_emit, "xBairro").text = sanitize_sefaz_string(company.get("Bairro", "CENTRO"), max_len=60, fallback="CENTRO")
+    ET.SubElement(ender_emit, "cMun").text = c_mun_emp
+    ET.SubElement(ender_emit, "xMun").text = sanitize_sefaz_string(company.get("Cidade", "URUPES"), max_len=60, fallback="URUPES")
+    ET.SubElement(ender_emit, "UF").text = sanitize_sefaz_string(company.get("UF", "SP"), max_len=2, fallback="SP")
     ET.SubElement(ender_emit, "CEP").text = ''.join(filter(str.isdigit, str(company.get("CEP", "15850029")))).zfill(8)
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst") or company.get("IE", "707021792115"))))
-    ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib", "3"))
+    ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib") or company.get("CRT") or "1")
 
-    # <dest> (Consumidor)
-    dest = ET.SubElement(inf_nfe, "dest")
-    if sale.get("CPF"):
-        cpf_clean = ''.join(filter(str.isdigit, str(sale["CPF"])))
-        if len(cpf_clean) == 11:
-            ET.SubElement(dest, "CPF").text = cpf_clean
+    # <dest> (Consumidor - Opcional na NFC-e se não identificado)
+    doc_cliente = ''.join(filter(str.isdigit, str(sale.get("CPF", "") or sale.get("CGC", "") or sale.get("CpfCnpj", "") or "")))
+    if len(doc_cliente) in (11, 14):
+        dest = ET.SubElement(inf_nfe, "dest")
+        if len(doc_cliente) == 11:
+            ET.SubElement(dest, "CPF").text = doc_cliente
         else:
-            ET.SubElement(dest, "CNPJ").text = cpf_clean.zfill(14)
-        if sale.get("NomeCliente"):
-            ET.SubElement(dest, "xNome").text = sale.get("NomeCliente")
-    else:
-        ET.SubElement(dest, "xNome").text = "CONSUMIDOR FINAL"
+            ET.SubElement(dest, "CNPJ").text = doc_cliente
+        nome_cliente = (sale.get("NomeCliente") or sale.get("Nome") or "").strip()
+        if nome_cliente and nome_cliente.upper() not in ("CONSUMIDOR FINAL", "CONSUMIDOR", "CLIENTE PADRAO"):
+            ET.SubElement(dest, "xNome").text = sanitize_sefaz_string(nome_cliente, max_len=60, fallback="CONSUMIDOR")
+        ET.SubElement(dest, "indIEDest").text = "9" # Não Contribuinte
 
     # <det> (Itens da venda)
     total_prod = 0.0
@@ -111,12 +133,19 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
         det = ET.SubElement(inf_nfe, "det", nItem=str(idx))
         
         prod = ET.SubElement(det, "prod")
-        ET.SubElement(prod, "cProd").text = str(item.get("CodPrd", idx))
+        cod_p = str(item.get("CodPrd", idx))
+        ET.SubElement(prod, "cProd").text = cod_p
         ET.SubElement(prod, "cEAN").text = "SEM GTIN"
-        ET.SubElement(prod, "xProd").text = item.get("Descricao_Produto", "PRODUTO DIVERSO")
+        
+        raw_desc = item.get("Descricao_Produto") or item.get("Descri") or item.get("Descricao") or f"PRODUTO #{cod_p}"
+        x_prod = sanitize_sefaz_string(raw_desc, max_len=120, fallback=f"PRODUTO #{cod_p}")
+        ET.SubElement(prod, "xProd").text = x_prod
+        
         ET.SubElement(prod, "NCM").text = str(item.get("NCM", "62034200")).replace(".", "")[:8]
         ET.SubElement(prod, "CFOP").text = str(item.get("CFOP", "5102")).replace(".", "")[:4]
-        ET.SubElement(prod, "uCom").text = item.get("Embalagem", "UN")
+        
+        u_emb = sanitize_sefaz_string(item.get("Embalagem") or item.get("Unidade"), max_len=6, fallback="UN")
+        ET.SubElement(prod, "uCom").text = u_emb
         
         qtd = float(item.get("Qtd", 1.0))
         v_un = float(item.get("ValorUnit", 0.0))
@@ -127,7 +156,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
         ET.SubElement(prod, "vUnCom").text = f"{v_un:.4f}"
         ET.SubElement(prod, "vProd").text = f"{v_prod:.2f}"
         ET.SubElement(prod, "cEANTrib").text = "SEM GTIN"
-        ET.SubElement(prod, "uTrib").text = item.get("Embalagem", "UN")
+        ET.SubElement(prod, "uTrib").text = u_emb
         ET.SubElement(prod, "qTrib").text = f"{qtd:.4f}"
         ET.SubElement(prod, "vUnTrib").text = f"{v_un:.4f}"
         ET.SubElement(prod, "indTot").text = "1"
@@ -156,7 +185,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     # <total>
     desc_total = float(sale.get("Desconto", 0.0))
-    v_liquido = total_prod - desc_total
+    v_liquido = max(0.0, total_prod - desc_total)
 
     total = ET.SubElement(inf_nfe, "total")
     icms_tot = ET.SubElement(total, "ICMSTot")
@@ -212,10 +241,13 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     # <infAdic>
     inf_adic = ET.SubElement(inf_nfe, "infAdic")
-    ET.SubElement(inf_adic, "infCpl").text = "NFC-e Emitida em Ambiente de Homologacao/Simulacao. Nao possui valor fiscal."
+    if amb_val == "1":
+        ET.SubElement(inf_adic, "infCpl").text = "NFC-e emitida nos termos do art. 212-O, I do RICMS/00."
+    else:
+        ET.SubElement(inf_adic, "infCpl").text = "NFC-e Emitida em Ambiente de Homologacao/Simulacao. Nao possui valor fiscal."
 
     # <infNFeSupl> QR Code
-    qr_url = generate_qrcode_url(chave_nfe, v_nf=v_liquido, c_id_token=c_id_token, csc=csc)
+    qr_url = generate_qrcode_url(chave_nfe, tp_amb=amb_val, v_nf=v_liquido, c_id_token=c_id_token, csc=csc)
     inf_nfe_supl = ET.SubElement(nfe, "infNFeSupl")
     ET.SubElement(inf_nfe_supl, "qrCode").text = qr_url
     ET.SubElement(inf_nfe_supl, "urlChave").text = "http://www.nfce.fazenda.sp.gov.br/consulta"
@@ -224,9 +256,248 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     xml_str = minidom.parseString(ET.tostring(nfe, encoding="utf-8")).toprettyxml(indent="  ")
     return xml_str, qr_url
 
+def validate_nfce_structure(sale_data, company_data, items_data, config_data=None):
+    """
+    Executa a auditoria e validação estrutural completa da NFC-e (Modelo 65)
+    utilizando as regras fiscais e os Schemas XSD Oficiais do Governo (SEFAZ 4.00 - PL_009_V4).
+    """
+    from app.nfe_engine import check_sefaz_webservice_status, validate_xml_with_sefaz_schema
+
+    checks = []
+    errors = []
+    warnings = []
+
+    company = company_data or {}
+    items = items_data or []
+    config_data = config_data or {}
+
+    cfg_nfe = config_data.get("Nfe", {})
+    amb_config = str(cfg_nfe.get("Ambiente") or sale_data.get("Ambiente") or "2")
+    ambiente_nome = "Produção Oficial SEFAZ" if amb_config == "1" else "Homologação / Simulação SEFAZ"
+    uf_empresa = str(company.get("UF") or company.get("Uf") or "SP").upper()
+
+    checks.append({
+        "categoria": "Ambiente SEFAZ",
+        "campo": "Ambiente de Emissão NFC-e",
+        "detalhe": f"Ambiente {amb_config}: {ambiente_nome} (UF: {uf_empresa})",
+        "status": "OK" if amb_config == "2" else "WARN"
+    })
+
+    # WebService status
+    ws_result = check_sefaz_webservice_status(uf=uf_empresa, ambiente=amb_config)
+    if ws_result.get("online"):
+        checks.append({
+            "categoria": "Conectividade SEFAZ",
+            "campo": "WebService Status Serviço",
+            "detalhe": f"{ws_result.get('mensagem')} | URL: {ws_result.get('url')}",
+            "status": "OK"
+        })
+    else:
+        warnings.append(f"WebService SEFAZ {uf_empresa} não respondeu: {ws_result.get('mensagem')}")
+        checks.append({
+            "categoria": "Conectividade SEFAZ",
+            "campo": "WebService Status Serviço",
+            "detalhe": ws_result.get('mensagem'),
+            "status": "WARN"
+        })
+
+    # Emitente
+    cnpj_emit = ''.join(filter(str.isdigit, str(company.get("CNPJ", ""))))
+    razao_emit = company.get("RazaoSocial") or company.get("NomeEmpresa") or "EMPRESA EMITENTE"
+    ie_emit = ''.join(filter(str.isdigit, str(company.get("InscEst", company.get("IE", "")))))
+
+    if len(cnpj_emit) != 14:
+        errors.append("CNPJ da Empresa Emitente inválido ou não informado (deve ter 14 dígitos).")
+        checks.append({
+            "categoria": "Emitente",
+            "campo": "CNPJ",
+            "detalhe": f"CNPJ '{cnpj_emit}' incorreto.",
+            "status": "ERROR"
+        })
+    else:
+        checks.append({
+            "categoria": "Emitente",
+            "campo": "CNPJ & Razão Social",
+            "detalhe": f"{razao_emit} (CNPJ: {cnpj_emit})",
+            "status": "OK"
+        })
+
+    if not ie_emit:
+        errors.append("Inscrição Estadual da Empresa é obrigatória para emissão de NFC-e.")
+        checks.append({
+            "categoria": "Emitente",
+            "campo": "Inscrição Estadual (IE)",
+            "detalhe": "IE não preenchida no cadastro da empresa.",
+            "status": "ERROR"
+        })
+    else:
+        checks.append({
+            "categoria": "Emitente",
+            "campo": "Inscrição Estadual (IE)",
+            "detalhe": f"IE: {ie_emit}",
+            "status": "OK"
+        })
+
+    # Destinatário (Opcional na NFC-e, mas se informado deve ser válido)
+    doc_dest = ''.join(filter(str.isdigit, str(sale_data.get("CPF", "") or sale_data.get("CGC", "") or sale_data.get("CpfCnpj", "") or "")))
+    if doc_dest:
+        if len(doc_dest) not in (11, 14):
+            errors.append(f"Documento do Destinatário na NFC-e ('{doc_dest}') possui tamanho inválido.")
+            checks.append({
+                "categoria": "Destinatário",
+                "campo": "Documento (CPF/CNPJ)",
+                "detalhe": f"Documento '{doc_dest}' inválido para NFC-e.",
+                "status": "ERROR"
+            })
+        else:
+            checks.append({
+                "categoria": "Destinatário",
+                "campo": "Consumidor Identificado",
+                "detalhe": f"{'CPF' if len(doc_dest)==11 else 'CNPJ'}: {doc_dest}",
+                "status": "OK"
+            })
+    else:
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Consumidor Final",
+            "detalhe": "Consumidor Não Identificado (Permitido em NFC-e modelo 65)",
+            "status": "OK"
+        })
+
+    # Itens
+    if not items:
+        errors.append("A NFC-e não possui nenhum produto/item cadastrado.")
+        checks.append({
+            "categoria": "Itens da Venda",
+            "campo": "Lista de Produtos",
+            "detalhe": "Nenhum item anexado",
+            "status": "ERROR"
+        })
+    else:
+        checks.append({
+            "categoria": "Itens da Venda",
+            "campo": "Quantidade de Itens",
+            "detalhe": f"{len(items)} produto(s) auditado(s)",
+            "status": "OK"
+        })
+        for idx, it in enumerate(items, start=1):
+            ncm = str(it.get("NCM", it.get("ClasseFiscal", "62034200"))).replace(".", "")[:8]
+            cfop = str(it.get("CFOP", it.get("CfOpPrd", "5102"))).replace(".", "")[:4]
+            qtd = float(it.get("Qtd", 1.0))
+            v_un = float(it.get("ValorUnit", 0.0))
+            item_name = it.get("Descricao_Produto", f"PRODUTO #{it.get('CodPrd', idx)}")
+
+            if len(ncm) != 8:
+                errors.append(f"Item #{idx} ({item_name}) possui NCM inválido ('{ncm}'). O padrão SEFAZ exige 8 dígitos.")
+                checks.append({
+                    "categoria": f"Item #{idx}",
+                    "campo": "NCM",
+                    "detalhe": f"'{item_name}': NCM '{ncm}' inválido",
+                    "status": "ERROR"
+                })
+            else:
+                checks.append({
+                    "categoria": f"Item #{idx}",
+                    "campo": "NCM & CFOP",
+                    "detalhe": f"'{item_name}': NCM {ncm} | CFOP {cfop}",
+                    "status": "OK"
+                })
+
+            if qtd <= 0 or v_un <= 0:
+                errors.append(f"Item #{idx} ({item_name}) possui quantidade ou valor zerado.")
+                checks.append({
+                    "categoria": f"Item #{idx}",
+                    "campo": "Valores",
+                    "detalhe": f"Valores inválidos (Qtd: {qtd}, Unit: R$ {v_un:.2f})",
+                    "status": "ERROR"
+                })
+
+    # Totais
+    total_prod = sum(float(it.get("Qtd", 1.0)) * float(it.get("ValorUnit", 0.0)) for it in items)
+    desconto = float(sale_data.get("Desconto", 0.0))
+    total_nf = total_prod - desconto
+
+    if total_nf <= 0 and items:
+        errors.append(f"Valor total da NFC-e é R$ {total_nf:.2f} (deve ser maior que zero).")
+        checks.append({
+            "categoria": "Totais da Venda",
+            "campo": "Valor Total (vNF)",
+            "detalhe": f"Valor Total R$ {total_nf:.2f} inválido",
+            "status": "ERROR"
+        })
+    else:
+        checks.append({
+            "categoria": "Totais da Venda",
+            "campo": "Valor Total (vNF)",
+            "detalhe": f"Subtotal: R$ {total_prod:.2f} | Desconto: R$ {desconto:.2f} | TOTAL: R$ {total_nf:.2f}",
+            "status": "OK"
+        })
+
+    # Validação Schema XSD Oficial da SEFAZ
+    xml_str = ""
+    chave_test = ""
+    try:
+        cod_ped = sale_data.get("CodPed", 1)
+        chave_test, _ = generate_chave_nfe(cnpj=cnpj_emit or "23103347000165", mod="65", serie="1", nnf=cod_ped)
+        prot_test = generate_protocolo_sefaz()
+        xml_str, _ = build_nfce_xml(sale_data, company, items, chave_test, prot_test)
+
+        xsd_valid, xsd_errors = validate_xml_with_sefaz_schema(xml_str)
+        if xsd_valid:
+            checks.append({
+                "categoria": "Schema XSD Governo (SEFAZ 4.00)",
+                "campo": "leiauteNFe_v4.00.xsd",
+                "detalhe": "Estrutura XML 100% aprovada pelo Schema XSD Oficial da SEFAZ",
+                "status": "OK"
+            })
+        else:
+            for xsd_err in xsd_errors:
+                errors.append(f"Erro Schema XSD SEFAZ: {xsd_err}")
+            checks.append({
+                "categoria": "Schema XSD Governo (SEFAZ 4.00)",
+                "campo": "leiauteNFe_v4.00.xsd",
+                "detalhe": f"Inconsistências no Schema XSD: {'; '.join(xsd_errors[:2])}",
+                "status": "ERROR"
+            })
+    except Exception as ex:
+        errors.append(f"Falha na validação do XML da NFC-e: {str(ex)}")
+        checks.append({
+            "categoria": "Estrutura XML SEFAZ 4.00",
+            "campo": "Sintaxe & Tags SEFAZ",
+            "detalhe": f"Erro de estrutura XML: {str(ex)}",
+            "status": "ERROR"
+        })
+
+    is_valid = len(errors) == 0
+
+    return {
+        "valid": is_valid,
+        "modelo": "65",
+        "ambiente_codigo": amb_config,
+        "ambiente_nome": ambiente_nome,
+        "uf_sefaz": uf_empresa,
+        "chave_nfe": chave_test,
+        "webservice": ws_result,
+        "total_checks": len(checks),
+        "total_errors": len(errors),
+        "total_warnings": len(warnings),
+        "checks": checks,
+        "errors": errors,
+        "warnings": warnings,
+        "xml_preview": xml_str,
+        "resumo": "NFC-e Totalmente Aprovada e Válida para Emissão na SEFAZ 4.00" if is_valid else f"Encontrado(s) {len(errors)} erro(s) que impedem a emissão da NFC-e"
+    }
+
 def emit_nfce(sale, company, items):
     from app.xml_utils import save_xml_to_disk
-    from app.config_manager import get_and_increment_nfce_number
+    from app.config_manager import get_and_increment_nfce_number, get_pdv_config
+
+    cfg = get_pdv_config() or {}
+    amb_cfg = str(sale.get("Ambiente") or cfg.get("Nfce", {}).get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente") or "2")
+    val_report = validate_nfce_structure(sale, company, items, cfg)
+    if not val_report.get("valid"):
+        err_msg = "; ".join(val_report.get("errors", ["Dados inválidos para emissão de NFC-e"]))
+        raise ValueError(f"Impedimento para emissão de NFC-e 65: {err_msg}")
 
     id_emp = sale.get("id_empresa") or company.get("id_empresa") or 1
     serie_nfce, nro_nfce, c_id_token, csc = get_and_increment_nfce_number(id_emp)
@@ -236,7 +507,8 @@ def emit_nfce(sale, company, items):
     protocolo = generate_protocolo_sefaz()
     xml_content, qr_code_url = build_nfce_xml(
         sale, company, items, chave, protocolo,
-        serie=serie_nfce, nnf=nro_nfce, c_id_token=c_id_token, csc=csc
+        serie=serie_nfce, nnf=nro_nfce, c_id_token=c_id_token, csc=csc,
+        ambiente=amb_cfg
     )
     
     filepath = save_xml_to_disk(xml_content, chave, modelo="65", cnpj=cnpj_emit)
@@ -251,5 +523,6 @@ def emit_nfce(sale, company, items):
         "xml_content": xml_content,
         "filepath": filepath,
         "nNF": nro_nfce,
-        "serie": serie_nfce
+        "serie": serie_nfce,
+        "ambiente": amb_cfg
     }

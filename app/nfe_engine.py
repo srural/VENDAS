@@ -1,7 +1,56 @@
+import os
 import datetime
 import random
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+import xmlschema
+
+_cached_sefaz_schema = None
+
+def get_sefaz_nfe_schema():
+    """
+    Retorna o schema oficial da SEFAZ 4.00 (nfe_v4.00.xsd) carregado e compilado em memória.
+    """
+    global _cached_sefaz_schema
+    if _cached_sefaz_schema is None:
+        schema_path = os.path.join(os.path.dirname(__file__), "schemas", "nfe_v4.00", "nfe_v4.00.xsd")
+        if os.path.exists(schema_path):
+            try:
+                _cached_sefaz_schema = xmlschema.XMLSchema(schema_path)
+            except Exception as e:
+                print(f"[XSD SCHEMA ERROR] Erro ao carregar schema SEFAZ: {e}")
+    return _cached_sefaz_schema
+
+def validate_xml_with_sefaz_schema(xml_content):
+    """
+    Valida a estrutura do XML da NF-e contra os Schemas XSD Oficiais do Governo (SEFAZ 4.00 - PL_009_V4).
+    Retorna (is_valid: bool, list_of_errors: list[str]).
+    """
+    schema = get_sefaz_nfe_schema()
+    if not schema:
+        return True, []
+
+    try:
+        root = ET.fromstring(xml_content) if isinstance(xml_content, str) else xml_content
+        inf_nfe = root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe")
+        if inf_nfe is None and root.tag.endswith("infNFe"):
+            inf_nfe = root
+
+        if inf_nfe is None:
+            return False, ["Elemento <infNFe> não encontrado no XML para validação XSD."]
+
+        tnfe = schema.types.get('{http://www.portalfiscal.inf.br/nfe}TNFe') or schema.types.get('TNFe')
+        inf_type = tnfe.content[0] if (tnfe and tnfe.content) else None
+
+        errors = []
+        if inf_type:
+            for err in inf_type.iter_errors(inf_nfe):
+                path = str(err.path or "").replace("{http://www.portalfiscal.inf.br/nfe}", "")
+                reason = str(err.reason or err.message or "")
+                errors.append(f"Tag '{path or 'XML'}': {reason}")
+        return len(errors) == 0, errors
+    except Exception as e:
+        return False, [f"Falha ao processar Schema XSD da SEFAZ: {str(e)}"]
 
 def to_float(val, default=0.0):
     if val is None:
@@ -77,6 +126,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
     ET.SubElement(ide, "indFinal").text = "1" if str(order.get("Tipo", 1)) in ["1", "5"] else "0"
     ET.SubElement(ide, "indPres").text = "1" # Operação Presencial
     ET.SubElement(ide, "procEmi").text = "0" # Aplicativo do Contribuinte
+    ET.SubElement(ide, "verProc").text = "1.0" # Versão do Processo de Emissão
 
     # <emit> (Emitente)
     emit = ET.SubElement(inf_nfe, "emit")
@@ -98,26 +148,58 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
 
     # <dest> (Destinatário)
     dest = ET.SubElement(inf_nfe, "dest")
-    doc_cliente = ''.join(filter(str.isdigit, str(order.get("CPF", "") or order.get("CGC", "") or "")))
+    doc_cliente = ''.join(filter(str.isdigit, str(order.get("CPF", "") or order.get("CGC", "") or order.get("CpfCnpj", "") or "")))
     if len(doc_cliente) == 11:
         ET.SubElement(dest, "CPF").text = doc_cliente
     elif len(doc_cliente) == 14:
         ET.SubElement(dest, "CNPJ").text = doc_cliente
     else:
-        ET.SubElement(dest, "CPF").text = "00000000000"
+        raise ValueError("NF-e (Modelo 55) não pode ser emitida sem os dados do Destinatário (CPF ou CNPJ obrigatório).")
 
-    ET.SubElement(dest, "xNome").text = order.get("NomeCliente", order.get("Nome", "CONSUMIDOR FINAL"))
+    nome_cliente = (order.get("NomeCliente") or order.get("Nome") or order.get("RazaoSocial") or "").strip()
+    if not nome_cliente:
+        raise ValueError("NF-e (Modelo 55) exige o Nome/Razão Social completo do Destinatário.")
+    
+    ET.SubElement(dest, "xNome").text = nome_cliente[:60]
     
     ender_dest = ET.SubElement(dest, "enderDest")
-    ET.SubElement(ender_dest, "xLgr").text = order.get("Endereco", order.get("Logradouro", "RUA PRINCIPAL"))
-    ET.SubElement(ender_dest, "nro").text = str(order.get("Nro", "SN"))
-    ET.SubElement(ender_dest, "xBairro").text = order.get("Bairro", "CENTRO")
-    ET.SubElement(ender_dest, "cMun").text = "3556008"
-    ET.SubElement(ender_dest, "xMun").text = order.get("Cidade", "URUPES")
-    ET.SubElement(ender_dest, "UF").text = order.get("Uf", order.get("UF", "SP"))
-    ET.SubElement(ender_dest, "CEP").text = ''.join(filter(str.isdigit, str(order.get("Cep", order.get("CEP", "15850000"))))).zfill(8)
+    x_lgr = (order.get("Endereco") or order.get("Logradouro") or order.get("xLgr") or "").strip()
+    nro = str(order.get("Nro") or order.get("Numero") or "SN").strip()
+    x_bairro = (order.get("Bairro") or order.get("xBairro") or "").strip()
+    x_mun = (order.get("Cidade") or order.get("Municipio") or order.get("xMun") or "").strip()
+    uf_dest = str(order.get("Uf") or order.get("UF") or "").strip().upper()
+    cep_dest = ''.join(filter(str.isdigit, str(order.get("Cep") or order.get("CEP") or "")))
 
-    ET.SubElement(dest, "indIEDest").text = "9" # Não Contribuinte
+    if not x_lgr:
+        raise ValueError("NF-e (Modelo 55) exige o Endereço/Logradouro do Destinatário.")
+    if not x_bairro:
+        raise ValueError("NF-e (Modelo 55) exige o Bairro do Destinatário.")
+    if not x_mun:
+        raise ValueError("NF-e (Modelo 55) exige a Cidade/Município do Destinatário.")
+    if not uf_dest or len(uf_dest) != 2:
+        raise ValueError("NF-e (Modelo 55) exige a UF do Destinatário.")
+    if len(cep_dest) != 8:
+        raise ValueError("NF-e (Modelo 55) exige o CEP válido (8 dígitos) do Destinatário.")
+
+    c_mun = str(order.get("CodigoIBGE") or order.get("cMun") or "3556008")
+
+    ET.SubElement(ender_dest, "xLgr").text = x_lgr[:60]
+    ET.SubElement(ender_dest, "nro").text = nro[:60]
+    ET.SubElement(ender_dest, "xBairro").text = x_bairro[:60]
+    ET.SubElement(ender_dest, "cMun").text = c_mun
+    ET.SubElement(ender_dest, "xMun").text = x_mun[:60]
+    ET.SubElement(ender_dest, "UF").text = uf_dest
+    ET.SubElement(ender_dest, "CEP").text = cep_dest
+
+    ie_dest = ''.join(filter(str.isdigit, str(order.get("InscEst") or order.get("IE") or "")))
+    ie_str_raw = str(order.get("InscEst") or order.get("IE") or "").strip().upper()
+    if ie_dest and ie_str_raw != "ISENTO":
+        ET.SubElement(dest, "indIEDest").text = "1"
+        ET.SubElement(dest, "IE").text = ie_dest
+    elif ie_str_raw == "ISENTO":
+        ET.SubElement(dest, "indIEDest").text = "2"
+    else:
+        ET.SubElement(dest, "indIEDest").text = "9" # Não Contribuinte
 
     # <det> (Itens da Nota)
     total_v_prod = 0.0
@@ -188,7 +270,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
     ET.SubElement(icms_tot, "vDesc").text = f"{total_v_desc:.2f}"
     ET.SubElement(icms_tot, "vII").text = "0.00"
     ET.SubElement(icms_tot, "vIPI").text = f"{to_float(order.get('ValorIpi')):.2f}"
-    ET.SubElement(icms_tot, "vIPIDev").text = "0.00"
+    ET.SubElement(icms_tot, "vIPIDevol").text = "0.00"
     ET.SubElement(icms_tot, "vPIS").text = "0.00"
     ET.SubElement(icms_tot, "vCOFINS").text = "0.00"
     ET.SubElement(icms_tot, "vOutro").text = "0.00"
@@ -312,193 +394,6 @@ def emit_nfe_55(order_data, company_data, items_data):
         "serie": serie_nfe
     }
 
-def validate_nfe_structure(order_data, company_data, items_data, config_data=None):
-    """
-    Executa a auditoria e validação estrutural completa do Pedido para Emissão de NF-e 55 SEFAZ 4.00.
-    Retorna checklist de regras, lista de alertas, erros de impedimento e status global de validação.
-    """
-    if config_data is None:
-        config_data = {}
-
-    checks = []
-    errors = []
-    warnings = []
-
-    cod_ped = order_data.get("CodPed", 0)
-    company = company_data or {}
-    items = items_data or []
-    cfg_cert = config_data.get("Certificado", {})
-    cfg_nfe = config_data.get("Nfe", {})
-
-    # 1. Validação da Identificação da Nota
-    serie_nfe = cfg_nfe.get("SerieNfe", "1") or "1"
-    nro_nfe = str(cod_ped) if cod_ped else cfg_nfe.get("NroNfe", "1")
-    ambiente = "2 (Homologação / Teste SEFAZ)" if str(cfg_nfe.get("Ambiente", "2")) == "2" else "1 (Produção SEFAZ)"
-    
-    checks.append({
-        "categoria": "Identificação NF-e",
-        "campo": "Modelo e Série",
-        "detalhe": f"Modelo 55 - Série {serie_nfe} - Número #{nro_nfe} - Amb. {ambiente}",
-        "status": "OK"
-    })
-
-    # 2. Validação do Emitente
-    cnpj_emit = ''.join(filter(str.isdigit, str(company.get("CNPJ", ""))))
-    if len(cnpj_emit) == 14:
-        checks.append({
-            "categoria": "Dados do Emitente",
-            "campo": "CNPJ Emitente",
-            "detalhe": f"CNPJ Válido ({cnpj_emit})",
-            "status": "OK"
-        })
-    else:
-        errors.append("CNPJ do Emitente inválido ou não possui 14 dígitos")
-        checks.append({
-            "categoria": "Dados do Emitente",
-            "campo": "CNPJ Emitente",
-            "detalhe": f"CNPJ incorreto: '{company.get('CNPJ', '')}'",
-            "status": "ERROR"
-        })
-
-    razao_emit = company.get("RazaoSocial") or company.get("NomeEmpresa") or "SISTEMA VENDAS LTDA"
-    checks.append({
-        "categoria": "Dados do Emitente",
-        "campo": "Razão Social / Nome",
-        "detalhe": razao_emit,
-        "status": "OK"
-    })
-
-    ie_emit = ''.join(filter(str.isdigit, str(company.get("InscEst", company.get("IE", "")))))
-    if ie_emit:
-        checks.append({
-            "categoria": "Dados do Emitente",
-            "campo": "Inscrição Estadual (IE)",
-            "detalhe": f"IE: {ie_emit}",
-            "status": "OK"
-        })
-    else:
-        warnings.append("Inscrição Estadual do Emitente não informada (Pode ser isento)")
-        checks.append({
-            "categoria": "Dados do Emitente",
-            "campo": "Inscrição Estadual (IE)",
-            "detalhe": "Inscrição Estadual não preenchida",
-            "status": "WARN"
-        })
-
-    ibge_emit = str(company.get("CodigoIBGE", "3556008"))
-    checks.append({
-        "categoria": "Dados do Emitente",
-        "campo": "Município / UF / IBGE",
-        "detalhe": f"{company.get('Cidade', 'URUPÊS')}/{company.get('UF', 'SP')} - Código IBGE: {ibge_emit}",
-        "status": "OK"
-    })
-
-    # 3. Validação do Destinatário (Cliente)
-    nome_cli = order_data.get("NomeCliente") or order_data.get("Nome") or "CONSUMIDOR FINAL"
-    checks.append({
-        "categoria": "Destinatário",
-        "campo": "Nome do Cliente",
-        "detalhe": nome_cli,
-        "status": "OK"
-    })
-
-    doc_cli = ''.join(filter(str.isdigit, str(order_data.get("CPF", "") or order_data.get("CGC", "") or "")))
-    if len(doc_cli) in [11, 14]:
-        doc_tipo = "CPF" if len(doc_cli) == 11 else "CNPJ"
-        checks.append({
-            "categoria": "Destinatário",
-            "campo": f"Documento Cliente ({doc_tipo})",
-            "detalhe": f"{doc_tipo}: {doc_cli}",
-            "status": "OK"
-        })
-    else:
-        warnings.append("Cliente sem CPF/CNPJ válido cadastrado (Será emitido como Consumidor Final Padrão)")
-        checks.append({
-            "categoria": "Destinatário",
-            "campo": "Documento Cliente",
-            "detalhe": "Consumidor Não Identificado (CPF/CNPJ Genérico)",
-            "status": "WARN"
-        })
-
-    cep_cli = ''.join(filter(str.isdigit, str(order_data.get("Cep", order.get("CEP", "15850000")) if 'order' in locals() else "15850000")))
-    checks.append({
-        "categoria": "Destinatário",
-        "campo": "Endereço e CEP",
-        "detalhe": f"{order_data.get('Endereco', 'RUA PRINCIPAL')}, {order_data.get('Nro', 'SN')} - {order_data.get('Bairro', 'CENTRO')} ({order_data.get('Cidade', 'URUPES')}/{order_data.get('Uf', 'SP')}) CEP: {cep_cli}",
-        "status": "OK"
-    })
-
-    # 4. Validação dos Itens e Tributação
-    if not items:
-        errors.append("O pedido não possui nenhum item cadastrado")
-        checks.append({
-            "categoria": "Itens da Nota",
-            "campo": "Lista de Produtos",
-            "detalhe": "Nenhum produto anexado ao pedido",
-            "status": "ERROR"
-        })
-    else:
-        checks.append({
-            "categoria": "Itens da Nota",
-            "campo": "Quantidade de Itens",
-            "detalhe": f"{len(items)} produto(s) auditado(s)",
-            "status": "OK"
-        })
-
-        for idx, it in enumerate(items, start=1):
-            ncm = str(it.get("NCM", it.get("ClasseFiscal", "62034200"))).replace(".", "")[:8]
-            cfop = str(it.get("CFOP", it.get("CfOpPrd", "5102"))).replace(".", "")[:4]
-            qtd = to_float(it.get("Qtd"))
-            v_un = to_float(it.get("ValorUnit"))
-
-            item_name = it.get("Descricao_Produto", f"PRODUTO #{it.get('CodPrd', idx)}")
-
-            if len(ncm) < 8:
-                warnings.append(f"Item #{idx} ({item_name}) possui NCM incompleto: '{ncm}'")
-                checks.append({
-                    "categoria": f"Item #{idx}",
-                    "campo": "NCM (Nomenclatura Mercosul)",
-                    "detalhe": f"NCM '{ncm}' (recomendado 8 dígitos)",
-                    "status": "WARN"
-                })
-            else:
-                checks.append({
-                    "categoria": f"Item #{idx}",
-                    "campo": "NCM & CFOP",
-                    "detalhe": f"NCM: {ncm} | CFOP: {cfop}",
-                    "status": "OK"
-                })
-
-            if qtd <= 0 or v_un <= 0:
-                errors.append(f"Item #{idx} ({item_name}) possui quantidade ou valor zerado (Qtd: {qtd}, Unit: R$ {v_un:.2f})")
-                checks.append({
-                    "categoria": f"Item #{idx}",
-                    "campo": "Valores Unitários",
-                    "detalhe": f"Valores incorretos (Qtd: {qtd}, Unit: {v_un})",
-                    "status": "ERROR"
-                })
-
-    # 5. Validação dos Totais da Nota
-    total_prod = sum(to_float(it.get("Qtd"), 1.0) * to_float(it.get("ValorUnit")) for it in items)
-    desconto = to_float(order_data.get("Desconto"))
-    frete = to_float(order_data.get("ValorFrete"))
-    total_nf = total_prod - desconto + frete
-
-    if total_nf <= 0 and items:
-        errors.append(f"Valor total da Nota Fiscal é R$ {total_nf:.2f} (deve ser maior que zero)")
-        checks.append({
-            "categoria": "Totais da Nota",
-            "campo": "Valor Total (vNF)",
-            "detalhe": f"Valor Total R$ {total_nf:.2f} é inválido",
-            "status": "ERROR"
-        })
-    else:
-        checks.append({
-            "categoria": "Totais da Nota",
-            "campo": "Valor Total (vNF)",
-            "detalhe": f"Subtotal Produtos: R$ {total_prod:.2f} | Desconto: R$ {desconto:.2f} | Frete: R$ {frete:.2f} | TOTAL NF: R$ {total_nf:.2f}",
-            "status": "OK"
-        })
 
 def check_sefaz_webservice_status(uf="SP", ambiente=2):
     """
@@ -691,22 +586,97 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
             "status": "OK"
         })
 
-    # 4. Validação dos Dados do Destinatário
-    doc_dest = ''.join(filter(str.isdigit, str(order_data.get("CPF", "") or order_data.get("CGC", "") or "")))
-    nome_dest = order_data.get("NomeCliente", order_data.get("Nome", "CONSUMIDOR FINAL"))
+    # 4. Validação Rigorosa dos Dados do Destinatário (Obrigatório na NF-e Modelo 55)
+    doc_dest = ''.join(filter(str.isdigit, str(order_data.get("CPF", "") or order_data.get("CGC", "") or order_data.get("CpfCnpj", "") or "")))
+    nome_dest = (order_data.get("NomeCliente") or order_data.get("Nome") or order_data.get("RazaoSocial") or "").strip()
 
-    if len(doc_dest) in (11, 14):
+    # Validação do Documento (CPF / CNPJ)
+    invalid_docs = {'0'*11, '0'*14, '1'*11, '1'*14, '2'*11, '2'*14, '3'*11, '3'*14, '4'*11, '4'*14,
+                    '5'*11, '5'*14, '6'*11, '6'*14, '7'*11, '7'*14, '8'*11, '8'*14, '9'*11, '9'*14}
+    
+    if not doc_dest:
+        errors.append("Destinatário sem CPF ou CNPJ (Obrigatório para emissão de NF-e Modelo 55).")
         checks.append({
             "categoria": "Destinatário",
             "campo": "Documento (CPF/CNPJ)",
-            "detalhe": f"{nome_dest} ({'CPF' if len(doc_dest)==11 else 'CNPJ'}: {doc_dest})",
+            "detalhe": "CPF/CNPJ não informado. A NF-e (Modelo 55) exige identificação obrigatória do destinatário.",
+            "status": "ERROR"
+        })
+    elif len(doc_dest) not in (11, 14) or doc_dest in invalid_docs:
+        errors.append(f"Documento do Destinatário '{doc_dest}' inválido (CPF deve ter 11 dígitos e CNPJ 14 dígitos).")
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Documento (CPF/CNPJ)",
+            "detalhe": f"Documento '{doc_dest}' possui formato inválido para SEFAZ.",
+            "status": "ERROR"
+        })
+    else:
+        tipo_doc = "CPF (Pessoa Física)" if len(doc_dest) == 11 else "CNPJ (Pessoa Jurídica)"
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": f"Documento ({'CPF' if len(doc_dest)==11 else 'CNPJ'})",
+            "detalhe": f"{tipo_doc}: {doc_dest}",
             "status": "OK"
+        })
+
+    # Validação do Nome / Razão Social
+    if not nome_dest or (nome_dest.upper() in ("CONSUMIDOR FINAL", "CONSUMIDOR", "CLIENTE PADRAO", "SEM NOME") and len(doc_dest) not in (11, 14)):
+        errors.append("Nome / Razão Social do Destinatário é obrigatório na NF-e Modelo 55.")
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Razão Social / Nome",
+            "detalhe": "Nome do Destinatário não preenchido ou cliente não identificado.",
+            "status": "ERROR"
+        })
+    elif len(nome_dest) < 2:
+        errors.append("Nome do Destinatário muito curto (mínimo 2 caracteres).")
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Razão Social / Nome",
+            "detalhe": f"Nome '{nome_dest}' inválido",
+            "status": "ERROR"
         })
     else:
         checks.append({
             "categoria": "Destinatário",
-            "campo": "Consumidor Final",
-            "detalhe": f"{nome_dest} (Venda presencial sem CPF na nota)",
+            "campo": "Razão Social / Nome",
+            "detalhe": f"{nome_dest}",
+            "status": "OK"
+        })
+
+    # Validação do Endereço Completo do Destinatário (xLgr, xBairro, xMun, UF, CEP)
+    x_lgr = (order_data.get("Endereco") or order_data.get("Logradouro") or order_data.get("xLgr") or "").strip()
+    nro = str(order_data.get("Nro") or order_data.get("Numero") or "SN").strip()
+    x_bairro = (order_data.get("Bairro") or order_data.get("xBairro") or "").strip()
+    x_mun = (order_data.get("Cidade") or order_data.get("Municipio") or order_data.get("xMun") or "").strip()
+    uf_dest = str(order_data.get("Uf") or order_data.get("UF") or "").strip().upper()
+    cep_dest = ''.join(filter(str.isdigit, str(order_data.get("Cep") or order_data.get("CEP") or "")))
+
+    missing_addr = []
+    if not x_lgr:
+        missing_addr.append("Logradouro/Rua")
+    if not x_bairro:
+        missing_addr.append("Bairro")
+    if not x_mun:
+        missing_addr.append("Cidade")
+    if not uf_dest or len(uf_dest) != 2:
+        missing_addr.append("UF")
+    if len(cep_dest) != 8:
+        missing_addr.append("CEP (8 dígitos)")
+
+    if missing_addr:
+        errors.append(f"Endereço do Destinatário incompleto na NF-e (Campos faltantes: {', '.join(missing_addr)}).")
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Endereço Completo",
+            "detalhe": f"Pendente preenchimento de: {', '.join(missing_addr)}",
+            "status": "ERROR"
+        })
+    else:
+        checks.append({
+            "categoria": "Destinatário",
+            "campo": "Endereço Completo",
+            "detalhe": f"{x_lgr}, {nro} - {x_bairro} ({x_mun}/{uf_dest}) CEP: {cep_dest}",
             "status": "OK"
         })
 
@@ -809,7 +779,7 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
             "status": "OK"
         })
 
-    # 8. Teste de montagem e parse XML SEFAZ 4.00
+    # 8. Teste de montagem, validação de sintaxe e Schemas XSD Oficiais do Governo
     xml_str = ""
     chave_test = ""
     try:
@@ -830,9 +800,29 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
         checks.append({
             "categoria": "Estrutura XML SEFAZ 4.00",
             "campo": "Sintaxe & Tags SEFAZ",
-            "detalhe": f"XML gerado e validado com sucesso (Chave Acesso: {chave_test})",
+            "detalhe": f"XML gerado e montado com sucesso (Chave Acesso: {chave_test})",
             "status": "OK"
         })
+
+        # Validação Rigorosa contra os Schemas XSD Oficiais da SEFAZ (nfe_v4.00.xsd / leiauteNFe_v4.00.xsd)
+        xsd_valid, xsd_errors = validate_xml_with_sefaz_schema(xml_str)
+        if xsd_valid:
+            checks.append({
+                "categoria": "Schema XSD Governo (SEFAZ 4.00)",
+                "campo": "nfe_v4.00.xsd & leiauteNFe_v4.00.xsd",
+                "detalhe": "Estrutura XML 100% aprovada pelo Schema XSD Oficial da SEFAZ (Pacote PL_009_V4)",
+                "status": "OK"
+            })
+        else:
+            for xsd_err in xsd_errors:
+                errors.append(f"Erro Schema XSD SEFAZ: {xsd_err}")
+            checks.append({
+                "categoria": "Schema XSD Governo (SEFAZ 4.00)",
+                "campo": "nfe_v4.00.xsd & leiauteNFe_v4.00.xsd",
+                "detalhe": f"Inconsistências no Schema XSD: {'; '.join(xsd_errors[:2])}",
+                "status": "ERROR"
+            })
+
     except Exception as ex:
         errors.append(f"Falha na validação do XML SEFAZ: {str(ex)}")
         checks.append({

@@ -2514,16 +2514,16 @@
       </div>
 
       <div class="modal-footer" style="justify-content: space-between;">
-        <button type="button" class="btn btn-secondary" onclick="closePaymentModal()">
+        <button type="button" class="btn btn-secondary" id="btn-pdv-pay-cancel" onclick="closePaymentModal()">
           <i class="fa-solid fa-xmark"></i> Cancelar (Esc)
         </button>
 
         <div style="display: flex; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary" onclick="submitPdvSale(false)">
+          <button type="button" class="btn btn-secondary" id="btn-pdv-pay-simple" onclick="submitPdvSale(false)">
             <i class="fa-solid fa-receipt"></i> Venda Simples
           </button>
           
-          <button type="button" class="btn btn-emerald btn-lg" onclick="submitPdvSale(true)" style="padding: 0.6rem 1.25rem; font-weight: 700;">
+          <button type="button" class="btn btn-emerald btn-lg" id="btn-pdv-pay-nfce" onclick="submitPdvSale(true)" style="padding: 0.6rem 1.25rem; font-weight: 700;">
             <i class="fa-solid fa-check"></i> Emitir NFC-e (F9)
           </button>
         </div>

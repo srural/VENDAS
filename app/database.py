@@ -1019,8 +1019,15 @@ def create_pdv_sale(sale_data):
             v_item_desc = round(v_item_tot * (desconto_grupo / 100.0), 2)
             
         calculated_subtotal += v_item_tot
+        raw_desc = (it.get("Descricao_Produto") or (prd_obj.get("Descricao_Produto") or prd_obj.get("Descri") or prd_obj.get("Descricao") if prd_obj else "") or f"PRODUTO #{cod_prd}")
+        desc_clean = str(raw_desc).strip() or f"PRODUTO #{cod_prd}"
+
         processed_items.append({
             "CodPrd": cod_prd,
+            "Descricao_Produto": desc_clean,
+            "NCM": it.get("NCM") or (prd_obj.get("NCM") or prd_obj.get("ClasseFiscal") if prd_obj else "") or "62034200",
+            "CFOP": it.get("CFOP") or (prd_obj.get("CFOP") or prd_obj.get("CfOpPrd") if prd_obj else "") or "5102",
+            "Embalagem": it.get("Embalagem") or (prd_obj.get("Embalagem") if prd_obj else "") or "UN",
             "Qtd": qtd,
             "ValorUnit": v_un,
             "Valor": v_item_tot,
@@ -1049,7 +1056,9 @@ def create_pdv_sale(sale_data):
         "CPF": cpf_cliente,
         "CondPgto": cond_pgto,
         "Desconto": desconto_total,
-        "Total": total_final
+        "Total": total_final,
+        "id_empresa": id_emp,
+        "Ambiente": sale_data.get("Ambiente")
     }
 
     nfce_res = None
@@ -1410,12 +1419,14 @@ def delete_order(cod_ped):
 def update_nfe_order_details(cod_ped, data):
     """
     Atualiza os parâmetros específicos de emissão de NF-e (Modelo 55) baseados no FrmNota:
+    - Destinatário: NomeCliente, CPF/CNPJ, Inscrição Estadual, Endereço, Número, Bairro, Cidade, UF, CEP
     - Transportadora, ModFrete, Placa, UF, QtdVol, Especie, Marca, PesoBruto, PesoLiquido
     - CFO / Natureza de Operação, ObsRodape, ObsCorpo
     """
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
+            # 1. Atualizar campos do pedido (PED)
             cursor.execute('''
                 UPDATE "PED" SET
                     "Cfo" = COALESCE(%s, "Cfo"),
@@ -1432,13 +1443,54 @@ def update_nfe_order_details(cod_ped, data):
                 data.get("ObsRodape") or data.get("Obs"),
                 cod_ped
             ))
+
+            # 2. Atualizar dados do Destinatário na entidade (ENT) vinculada
+            cursor.execute('SELECT "Entidade" FROM "PED" WHERE "CodPed" = %s', (cod_ped,))
+            row_ped = cursor.fetchone()
+            cod_entidade = row_ped.get("Entidade") if row_ped else None
+
+            doc_cli = str(data.get("CpfCnpj") or data.get("CPF") or data.get("CGC") or "").strip()
+            clean_doc = ''.join(filter(str.isdigit, doc_cli))
+            nome_cli = data.get("NomeCliente")
+            
+            if cod_entidade and (nome_cli or clean_doc or data.get("Endereco")):
+                cpf_val = clean_doc if len(clean_doc) == 11 else None
+                cgc_val = clean_doc if len(clean_doc) == 14 else None
+                cursor.execute('''
+                    UPDATE "ENT" SET
+                        "Nome" = COALESCE(%s, "Nome"),
+                        "CPF" = COALESCE(%s, "CPF"),
+                        "CGC" = COALESCE(%s, "CGC"),
+                        "InscrEst" = COALESCE(%s, "InscrEst"),
+                        "Endereco" = COALESCE(%s, "Endereco"),
+                        "Nro" = COALESCE(%s, "Nro"),
+                        "Bairro" = COALESCE(%s, "Bairro"),
+                        "Cidade" = COALESCE(%s, "Cidade"),
+                        "Uf" = COALESCE(%s, "Uf"),
+                        "Cep" = COALESCE(%s, "Cep")
+                    WHERE "CodEntidade" = %s
+                ''', (
+                    nome_cli,
+                    cpf_val,
+                    cgc_val,
+                    data.get("InscEst"),
+                    data.get("Endereco"),
+                    data.get("Nro"),
+                    data.get("Bairro"),
+                    data.get("Cidade"),
+                    data.get("Uf"),
+                    data.get("Cep"),
+                    cod_entidade
+                ))
+
             conn.commit()
     finally:
         conn.close()
     return get_order_by_id(cod_ped)
 
 def emit_nfe_from_order(cod_ped, custom_data=None):
-    from app.nfe_engine import emit_nfe_55
+    from app.nfe_engine import emit_nfe_55, validate_nfe_structure
+    from app.config_manager import get_pdv_config
 
     order_details = get_order_by_id(cod_ped)
     if not order_details or not order_details.get("pedido"):
@@ -1450,6 +1502,13 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
 
     items = order_details["itens"]
     company = order_details["empresa"]
+    cfg = get_pdv_config() or {}
+
+    # Validação rigorosa dos parâmetros fiscais SEFAZ Modelo 55
+    val_report = validate_nfe_structure(order, company, items, cfg)
+    if not val_report.get("valid"):
+        err_details = "; ".join(val_report.get("errors", ["Dados inválidos"]))
+        raise ValueError(f"Impedimento para emissão de NF-e 55: {err_details}")
 
     nfe_res = emit_nfe_55(order, company, items)
 

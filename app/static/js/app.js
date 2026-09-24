@@ -37,34 +37,60 @@ function setElementHTML(id, html) {
   if (el) el.innerHTML = html;
 }
 
-function showToast(message, type = 'info', duration = 3500) {
+function showToast(message, type = 'info', duration = null) {
   const container = document.getElementById('toast-container');
   if (!container) {
     console.log(`[Toast ${type}]:`, message);
     return;
   }
 
+  // Se for erro, o padrão é NÃO fechar sozinho (permanece na tela até o usuário fechar no X)
+  const isError = (type === 'error' || type === 'danger');
+  const actualDuration = (duration !== null) ? duration : (isError ? 0 : 4000);
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
   
   let iconClass = 'fa-info-circle';
   if (type === 'success') iconClass = 'fa-circle-check';
-  else if (type === 'error' || type === 'danger') iconClass = 'fa-circle-exclamation';
+  else if (isError) iconClass = 'fa-circle-exclamation';
   else if (type === 'warning') iconClass = 'fa-triangle-exclamation';
 
   toast.innerHTML = `
-    <i class="fa-solid ${iconClass}"></i>
-    <span>${escapeHtml(message)}</span>
+    <i class="fa-solid ${iconClass}" style="margin-top: 3px; font-size: 1.1rem; flex-shrink: 0;"></i>
+    <div class="toast-body" style="flex: 1; font-size: 0.88rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word;">
+      ${escapeHtml(message)}
+    </div>
+    <button type="button" class="toast-close-btn" title="Fechar notificação" onclick="dismissToast(this)">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
   `;
 
   container.appendChild(toast);
 
+  if (actualDuration > 0) {
+    let timer = setTimeout(() => {
+      dismissToastEl(toast);
+    }, actualDuration);
+
+    toast.addEventListener('mouseenter', () => clearTimeout(timer));
+    toast.addEventListener('mouseleave', () => {
+      timer = setTimeout(() => dismissToastEl(toast), 2000);
+    });
+  }
+}
+
+function dismissToast(btn) {
+  const toast = btn ? btn.closest('.toast') : null;
+  if (toast) dismissToastEl(toast);
+}
+
+function dismissToastEl(toast) {
+  if (!toast || toast.classList.contains('fade-out')) return;
+  toast.classList.add('fade-out');
   setTimeout(() => {
-    toast.classList.add('fade-out');
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 300);
-  }, duration);
+    if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 300);
 }
 
 /* ==================== THEME (DIA / NOITE) SYSTEM ==================== */
@@ -1948,8 +1974,41 @@ function closePaymentModal() {
 
 let lastSaleData = null;
 
+let isPdvSubmitting = false;
+
 async function submitPdvSale(emitirNfceFlag = true) {
-  if (!pdvCart.length) return;
+  if (isPdvSubmitting) {
+    console.warn('Operação de finalização já em andamento. Aguarde...');
+    return;
+  }
+  if (!pdvCart || !pdvCart.length) {
+    showToast('O carrinho de compras está vazio!', 'warning');
+    return;
+  }
+
+  // Button references
+  const btnNfce = document.getElementById('btn-pdv-pay-nfce') || document.querySelector('#pdv-payment-modal .btn-emerald');
+  const btnSimple = document.getElementById('btn-pdv-pay-simple') || document.querySelector('#pdv-payment-modal .btn-secondary[onclick*="false"]');
+  const btnCancel = document.getElementById('btn-pdv-pay-cancel') || document.querySelector('#pdv-payment-modal .btn-secondary[onclick*="closePaymentModal"]');
+
+  const origNfceHtml = btnNfce ? btnNfce.innerHTML : '';
+  const origSimpleHtml = btnSimple ? btnSimple.innerHTML : '';
+
+  // Lock UI & disable buttons to prevent duplicate sales/NFC-e
+  isPdvSubmitting = true;
+  if (btnNfce) {
+    btnNfce.disabled = true;
+    if (emitirNfceFlag) {
+      btnNfce.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando e Emitindo NFC-e...';
+    }
+  }
+  if (btnSimple) {
+    btnSimple.disabled = true;
+    if (!emitirNfceFlag) {
+      btnSimple.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando Venda...';
+    }
+  }
+  if (btnCancel) btnCancel.disabled = true;
 
   const subtotal = pdvCart.reduce((sum, item) => sum + item.Valor, 0.0);
   const desconto = parseFloat(document.getElementById('pdv-desconto-input').value) || 0.0;
@@ -1978,7 +2037,9 @@ async function submitPdvSale(emitirNfceFlag = true) {
       body: JSON.stringify(payload)
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Erro ao processar venda');
+    if (!res.ok) {
+      throw new Error(result.error || 'Erro ao validar e processar venda');
+    }
 
     showToast(result.message || 'Venda finalizada com sucesso!', 'success');
     closePaymentModal();
@@ -1989,13 +2050,32 @@ async function submitPdvSale(emitirNfceFlag = true) {
     document.getElementById('pay-valor-recebido').value = '0.00';
     renderPdvCart();
 
-    // Render & Open Receipt Modal
+    // Render & Open Receipt Modal and trigger print
     if (result.data) {
       lastSaleData = result.data;
       renderThermalReceipt(result.data, emitirNfceFlag ? 'nfce' : 'venda');
+      
+      // Auto-trigger printing on successful validation and emission
+      if (emitirNfceFlag) {
+        printDanfeNfce();
+      } else {
+        printSimpleSaleReceipt();
+      }
     }
   } catch (err) {
-    showToast(`Erro ao finalizar venda: ${err.message}`, 'error');
+    showToast(`Erro na Validação/Emissão da NFC-e: ${err.message}`, 'error');
+  } finally {
+    // Unlock UI and restore button states
+    isPdvSubmitting = false;
+    if (btnNfce) {
+      btnNfce.disabled = false;
+      btnNfce.innerHTML = origNfceHtml || '<i class="fa-solid fa-check"></i> Emitir NFC-e (F9)';
+    }
+    if (btnSimple) {
+      btnSimple.disabled = false;
+      btnSimple.innerHTML = origSimpleHtml || '<i class="fa-solid fa-receipt"></i> Venda Simples';
+    }
+    if (btnCancel) btnCancel.disabled = false;
   }
 }
 
@@ -4751,6 +4831,9 @@ function renderValidationReport(codPed, data) {
   if (badgeWarn) badgeWarn.innerText = `${data.total_warnings || 0} Alertas`;
   if (badgeErr) badgeErr.innerText = `${data.total_errors || 0} Erros`;
 
+  const btnEmit = document.getElementById('btn-nfe-val-emit-now');
+  const btnOpenFrm = document.getElementById('btn-nfe-val-open-frmnota');
+
   if (data.valid) {
     if (banner) {
       banner.style.background = 'rgba(16, 185, 129, 0.1)';
@@ -4761,8 +4844,18 @@ function renderValidationReport(codPed, data) {
       icon.style.color = 'var(--accent-emerald)';
     }
     if (title) title.innerText = 'NF-e Totalmente Aprovada e Válida!';
-    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Todos os parâmetros SEFAZ 4.00 e comunicação validados com sucesso no ambiente ${data.ambiente_codigo == '1' ? 'de Produção' : 'de Homologação'}.`;
+    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Todos os parâmetros SEFAZ 4.00, dados do destinatário e comunicação validados com sucesso no ambiente ${data.ambiente_codigo == '1' ? 'de Produção' : 'de Homologação'}.`;
     if (badgeErr) badgeErr.style.display = 'none';
+
+    if (btnEmit) {
+      btnEmit.disabled = false;
+      btnEmit.style.opacity = '1';
+      btnEmit.style.cursor = 'pointer';
+      btnEmit.title = 'Transmitir NF-e autorizada';
+    }
+    if (btnOpenFrm) {
+      btnOpenFrm.innerHTML = '<i class="fa-solid fa-file-invoice"></i> Abrir no FrmNota';
+    }
   } else {
     if (banner) {
       banner.style.background = 'rgba(244, 63, 94, 0.1)';
@@ -4773,8 +4866,18 @@ function renderValidationReport(codPed, data) {
       icon.style.color = 'var(--accent-rose)';
     }
     if (title) title.innerText = 'Impedimentos Fiscais Identificados';
-    if (subtitle) subtitle.innerText = `Pedido #${codPed} - Corrija os erros destacados abaixo antes de transmitir a NF-e.`;
+    if (subtitle) subtitle.innerText = `Pedido #${codPed} - A NF-e (Modelo 55) não pode ser emitida sem os dados completos do Destinatário (CPF/CNPJ, Nome e Endereço).`;
     if (badgeErr) badgeErr.style.display = 'inline-block';
+
+    if (btnEmit) {
+      btnEmit.disabled = true;
+      btnEmit.style.opacity = '0.5';
+      btnEmit.style.cursor = 'not-allowed';
+      btnEmit.title = 'Corrija as pendências do destinatário antes de emitir a NF-e';
+    }
+    if (btnOpenFrm) {
+      btnOpenFrm.innerHTML = '<i class="fa-solid fa-user-pen"></i> Preencher Destinatário no FrmNota';
+    }
   }
 
   // Checklist items
@@ -4850,6 +4953,11 @@ function openFrmNotaFromValidationModal() {
 
 async function emitNfeFromValidationModal() {
   if (!currentValidationCodPed) return;
+  const btnEmit = document.getElementById('btn-nfe-val-emit-now');
+  if (btnEmit && btnEmit.disabled) {
+    showToast('Existem dados pendentes no Destinatário. Abra o FrmNota para preencher os dados do cliente.', 'warning', 4000);
+    return;
+  }
   const cod = currentValidationCodPed;
   closeNfeValidationModal();
   emitNfeFromOrder(cod);
@@ -5182,16 +5290,17 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     setElVal('FrmNota_Saida', ped.DtSaida || ped.DataEmiss || new Date().toLocaleDateString('pt-BR'));
     setElVal('FrmNota_Hora', ped.Hora || new Date().toLocaleTimeString('pt-BR'));
 
-    setElVal('FrmNota_CodEntidade', ped.Entidade || ped.CodEntidade || 1);
-    setElVal('FrmNota_NomeCliente', ped.NomeCliente || ped.Nome || 'CONSUMIDOR FINAL');
-    setElVal('FrmNota_CpfCnpj', ped.CPF || ped.CGC || '000.000.000-00');
-    setElVal('FrmNota_InscEst', ped.InscEst || ped.IE || 'ISENTO');
-    setElVal('FrmNota_Endereco', ped.Endereco || ped.Logradouro || 'RUA PRINCIPAL');
-    setElVal('FrmNota_Nro', ped.Nro || 'SN');
-    setElVal('FrmNota_Bairro', ped.Bairro || 'CENTRO');
-    setElVal('FrmNota_Cidade', ped.Cidade || 'URUPÊS');
-    setElVal('FrmNota_Uf', ped.Uf || ped.UF || 'SP');
-    setElVal('FrmNota_Cep', ped.Cep || ped.CEP || '15850-000');
+    setElVal('FrmNota_CodEntidade', ped.Entidade || ped.CodEntidade || '');
+    setElVal('FrmNota_NomeCliente', ped.NomeCliente || ped.Nome || '');
+    const docCli = (ped.CPF || ped.CGC || '').trim();
+    setElVal('FrmNota_CpfCnpj', docCli);
+    setElVal('FrmNota_InscEst', ped.InscEst || ped.IE || '');
+    setElVal('FrmNota_Endereco', ped.Endereco || ped.Logradouro || '');
+    setElVal('FrmNota_Nro', ped.Nro || '');
+    setElVal('FrmNota_Bairro', ped.Bairro || '');
+    setElVal('FrmNota_Cidade', ped.Cidade || '');
+    setElVal('FrmNota_Uf', ped.Uf || ped.UF || '');
+    setElVal('FrmNota_Cep', ped.Cep || ped.CEP || '');
 
     // Populate Transporte
     setElVal('FrmNota_ModFrete', ped.ModFrete || '9');
@@ -5433,6 +5542,15 @@ async function transmitirNfeFrmNota() {
 
 function getFrmNotaFormData() {
   return {
+    NomeCliente: document.getElementById('FrmNota_NomeCliente') ? document.getElementById('FrmNota_NomeCliente').value : '',
+    CpfCnpj: document.getElementById('FrmNota_CpfCnpj') ? document.getElementById('FrmNota_CpfCnpj').value : '',
+    InscEst: document.getElementById('FrmNota_InscEst') ? document.getElementById('FrmNota_InscEst').value : '',
+    Endereco: document.getElementById('FrmNota_Endereco') ? document.getElementById('FrmNota_Endereco').value : '',
+    Nro: document.getElementById('FrmNota_Nro') ? document.getElementById('FrmNota_Nro').value : '',
+    Bairro: document.getElementById('FrmNota_Bairro') ? document.getElementById('FrmNota_Bairro').value : '',
+    Cidade: document.getElementById('FrmNota_Cidade') ? document.getElementById('FrmNota_Cidade').value : '',
+    Uf: document.getElementById('FrmNota_Uf') ? document.getElementById('FrmNota_Uf').value : '',
+    Cep: document.getElementById('FrmNota_Cep') ? document.getElementById('FrmNota_Cep').value : '',
     NroNfe: document.getElementById('FrmNota_NroNfe') ? document.getElementById('FrmNota_NroNfe').value : '',
     SerieNfe: document.getElementById('FrmNota_SerieNfe') ? document.getElementById('FrmNota_SerieNfe').value : '1',
     Cfo: document.getElementById('FrmNota_Cfo') ? document.getElementById('FrmNota_Cfo').value : '',
