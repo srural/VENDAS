@@ -1453,9 +1453,22 @@ body {
     display: none !important;
   }
 
+  /* Garantir que todos os elementos do recibo fiquem 100% visíveis na impressão térmica */
+  body.print-receipt-mode #pdv-receipt-modal,
+  body.print-receipt-mode #pdv-receipt-modal.modal-backdrop,
+  body.print-receipt-mode #pdv-receipt-modal .modal-container,
+  body.print-receipt-mode #pdv-receipt-modal .modal-body,
+  body.print-receipt-mode #thermal-receipt-printable,
+  body.print-receipt-mode #thermal-receipt-printable * {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
   body.print-receipt-mode #pdv-receipt-modal {
     position: static !important;
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -1467,11 +1480,14 @@ body {
     box-shadow: none !important;
     border: none !important;
     z-index: auto !important;
+    backdrop-filter: none !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-container {
     position: static !important;
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -1482,6 +1498,7 @@ body {
     box-shadow: none !important;
     border: none !important;
     transform: none !important;
+    overflow: visible !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-body {

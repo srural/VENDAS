@@ -2955,11 +2955,18 @@
 
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">
-            <i class="fa-solid fa-floppy-disk"></i> Salvar Pedido de Vendas
-          </button>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div>
+            <button type="button" class="btn btn-secondary" id="btn-print-order-modal" onclick="printCurrentOrderFromModal()" style="display: none;" title="Imprimir Cupom / Pedido de Venda">
+              <i class="fa-solid fa-receipt"></i> Imprimir Pedido
+            </button>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Cancelar</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar Pedido de Vendas
+            </button>
+          </div>
         </div>
       </form>
     </div>

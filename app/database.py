@@ -1278,6 +1278,7 @@ def get_order_by_id(cod_ped):
 
             return {
                 "pedido": order,
+                "venda": order,
                 "itens": items,
                 "nfe": nfe_data,
                 "empresa": company

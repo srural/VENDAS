@@ -2053,13 +2053,13 @@ async function submitPdvSale(emitirNfceFlag = true) {
     // Render & Open Receipt Modal and trigger print
     if (result.data) {
       lastSaleData = result.data;
-      renderThermalReceipt(result.data, emitirNfceFlag ? 'nfce' : 'venda');
+      renderThermalReceipt(result.data, emitirNfceFlag ? 'nfce' : 'venda', true);
       
       // Auto-trigger printing on successful validation and emission
       if (emitirNfceFlag) {
-        printDanfeNfce();
+        printDanfeNfce(true);
       } else {
-        printSimpleSaleReceipt();
+        printSimpleSaleReceipt(true);
       }
     }
   } catch (err) {
@@ -2090,11 +2090,11 @@ function formatCpfCnpjReceipt(val) {
   return val;
 }
 
-function renderThermalReceipt(saleData, mode = 'nfce') {
+function renderThermalReceipt(saleData, mode = 'nfce', openModal = true) {
   if (!saleData) return;
   lastSaleData = saleData;
 
-  const venda = saleData.venda || {};
+  const venda = saleData.venda || saleData.pedido || {};
   const itens = saleData.itens || [];
   const nfe = saleData.nfe || {};
   const empresa = saleData.empresa || {};
@@ -2196,31 +2196,42 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
   }
 
   document.getElementById('rec-cliente-nome').innerText = isGeneric ? 'CONSUMIDOR FINAL' : clientName;
-  const pedNumStr = String(venda.CodPed || 1).padStart(6, '0');
+  const pedNumStr = String(venda.CodPed || venda.Pedido || 1).padStart(6, '0');
   document.getElementById('rec-nfe-num').innerText = pedNumStr;
   document.getElementById('rec-nfe-data').innerText = `${venda.DataEmiss || ''} ${venda.Hora || ''}`;
 
-  document.getElementById('rec-subtotal').innerText = (venda.SubTotal || venda.Total || 0.0).toFixed(2);
-  document.getElementById('rec-desconto').innerText = (venda.Desconto || 0.0).toFixed(2);
-  document.getElementById('rec-total-final').innerText = (venda.Total || 0.0).toFixed(2);
+  const vSub = floatOrZero(venda.SubTotal || venda.Total);
+  const vDesc = floatOrZero(venda.Desconto);
+  const vTot = floatOrZero(venda.Total || (vSub - vDesc));
+
+  document.getElementById('rec-subtotal').innerText = vSub.toFixed(2);
+  document.getElementById('rec-desconto').innerText = vDesc.toFixed(2);
+  document.getElementById('rec-total-final').innerText = vTot.toFixed(2);
   document.getElementById('rec-forma-pgto').innerText = venda.CondPgto || 'DINHEIRO';
 
   const valRecEl = document.getElementById('pay-valor-recebido');
-  const valRec = (valRecEl && parseFloat(valRecEl.value)) ? parseFloat(valRecEl.value) : (venda.Total || 0.0);
-  const troco = Math.max(0.0, valRec - (venda.Total || 0.0));
+  const valRec = (valRecEl && parseFloat(valRecEl.value)) ? parseFloat(valRecEl.value) : vTot;
+  const troco = Math.max(0.0, valRec - vTot);
 
   document.getElementById('rec-vlr-pago').innerText = valRec.toFixed(2);
   document.getElementById('rec-troco').innerText = troco.toFixed(2);
 
   // Items table
   const tbody = document.getElementById('rec-items-tbody');
-  tbody.innerHTML = itens.map(it => `
-    <tr>
-      <td>${it.Produto} ${escapeHtml(it.Descricao_Produto || '')}</td>
-      <td style="text-align: right;">${it.Qtd} ${it.Embalagem || 'UN'}</td>
-      <td style="text-align: right;">${(it.Valor || 0).toFixed(2)}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = itens.map(it => {
+    const prdCode = it.Produto || it.CodPrd || '';
+    const prdDesc = it.Descricao_Produto || it.Descricao || '';
+    const qtd = floatOrZero(it.Qtd || 1);
+    const embalagem = it.Embalagem || 'UN';
+    const vTotItem = it.Valor !== undefined && it.Valor !== null ? floatOrZero(it.Valor) : (qtd * floatOrZero(it.ValorUnit));
+    return `
+      <tr>
+        <td>${prdCode ? `#${prdCode} ` : ''}${escapeHtml(prdDesc)}</td>
+        <td style="text-align: right;">${qtd} ${embalagem}</td>
+        <td style="text-align: right;">${vTotItem.toFixed(2)}</td>
+      </tr>
+    `;
+  }).join('');
   document.getElementById('rec-total-items').innerText = itens.length;
 
   const isNfceMode = mode === 'nfce' && (nfe.NroChave || venda.Sat);
@@ -2296,7 +2307,11 @@ function renderThermalReceipt(saleData, mode = 'nfce') {
     if (watermarkEl) watermarkEl.style.display = 'none';
   }
 
-  document.getElementById('pdv-receipt-modal').classList.add('active');
+  if (openModal) {
+    document.getElementById('pdv-receipt-modal').classList.add('active');
+  } else {
+    document.getElementById('pdv-receipt-modal').classList.remove('active');
+  }
 }
 
 function renderFallbackQrCode(container) {
@@ -2308,25 +2323,35 @@ function renderFallbackQrCode(container) {
   `;
 }
 
-function printSimpleSaleReceipt() {
+function printSimpleSaleReceipt(openModal = false) {
   if (lastSaleData) {
-    renderThermalReceipt(lastSaleData, 'venda');
+    renderThermalReceipt(lastSaleData, 'venda', openModal);
   }
   document.body.classList.add('print-receipt-mode');
   setTimeout(() => {
     window.print();
-    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
+    setTimeout(() => {
+      document.body.classList.remove('print-receipt-mode');
+      if (!openModal) {
+        document.getElementById('pdv-receipt-modal').classList.remove('active');
+      }
+    }, 800);
   }, 150);
 }
 
-function printDanfeNfce() {
+function printDanfeNfce(openModal = false) {
   if (lastSaleData) {
-    renderThermalReceipt(lastSaleData, 'nfce');
+    renderThermalReceipt(lastSaleData, 'nfce', openModal);
   }
   document.body.classList.add('print-receipt-mode');
   setTimeout(() => {
     window.print();
-    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
+    setTimeout(() => {
+      document.body.classList.remove('print-receipt-mode');
+      if (!openModal) {
+        document.getElementById('pdv-receipt-modal').classList.remove('active');
+      }
+    }, 800);
   }, 150);
 }
 
@@ -3053,8 +3078,8 @@ function renderOrdersTable(orders) {
             <button class="btn btn-secondary btn-sm" onclick="editOrder(${o.CodPed})" title="Editar Pedido">
               <i class="fa-solid fa-pen"></i>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="validarNfeOrder(${o.CodPed})" title="Validar Nota no SEFAZ (Validação Real no Ambiente Configurado)" style="color: var(--accent-amber); font-weight: 600;">
-              <i class="fa-solid fa-clipboard-check"></i> Validar
+            <button class="btn btn-secondary btn-sm" onclick="imprimirCupomOrder(${o.CodPed})" title="Imprimir Comprovante / Cupom do Pedido">
+              <i class="fa-solid fa-receipt"></i>
             </button>
             <button class="btn btn-emerald btn-sm" onclick="openNfeEmissaoModal(${o.CodPed})" title="Abrir Tela de Emissão de NF-e 55 (FrmNota)">
               <i class="fa-solid fa-file-invoice"></i> NF-e
@@ -3125,6 +3150,8 @@ async function openOrderModal(data = null) {
     loadOrdNaturezasOptions()
   ]);
 
+  const printBtn = document.getElementById('btn-print-order-modal');
+
   if (data && data.pedido) {
     const p = data.pedido;
     document.getElementById('modal-title-ped').innerHTML = `<i class="fa-solid fa-file-pen"></i> Editar Pedido de Vendas #${p.CodPed}`;
@@ -3141,6 +3168,10 @@ async function openOrderModal(data = null) {
     document.getElementById('Ord_Obs').value = p.Obs || '';
     document.getElementById('Ord_Desconto').value = floatOrZero(p.Desconto).toFixed(2);
     document.getElementById('Ord_ValorFrete').value = floatOrZero(p.ValorFrete).toFixed(2);
+
+    if (printBtn) {
+      printBtn.style.display = 'inline-flex';
+    }
 
     if (data.itens && data.itens.length) {
       currentOrderItems = data.itens.map(it => ({
@@ -3162,6 +3193,10 @@ async function openOrderModal(data = null) {
     document.getElementById('Ord_Obs').value = '';
     document.getElementById('Ord_Desconto').value = '0.00';
     document.getElementById('Ord_ValorFrete').value = '0.00';
+
+    if (printBtn) {
+      printBtn.style.display = 'none';
+    }
   }
 
   setupOrderAutocomplete();
@@ -3496,6 +3531,46 @@ async function saveOrder(event) {
     fetchOrders();
   } catch (err) {
     showToast(`Erro ao salvar pedido: ${err.message}`, 'error');
+  }
+}
+
+async function printCurrentOrderFromModal() {
+  const codPed = document.getElementById('Ord_CodPed').value;
+  if (!codPed) {
+    showToast('Salve o pedido antes de imprimir', 'warning');
+    return;
+  }
+  await imprimirCupomOrder(codPed);
+}
+
+async function imprimirCupomOrder(codPed) {
+  try {
+    const id = codPed || (document.getElementById('Ord_CodPed') ? document.getElementById('Ord_CodPed').value : null);
+    if (!id) {
+      showToast('Nenhum pedido selecionado para impressão', 'warning');
+      return;
+    }
+
+    const res = await fetch(`/api/pedidos/${id}`);
+    const data = await res.json();
+    if (!res.ok || !data || !data.pedido) {
+      throw new Error((data && data.error) || 'Pedido não encontrado');
+    }
+
+    const saleData = {
+      venda: data.pedido,
+      pedido: data.pedido,
+      itens: data.itens || [],
+      nfe: data.nfe || {},
+      empresa: data.empresa || {}
+    };
+
+    lastSaleData = saleData;
+    renderThermalReceipt(saleData, 'venda', false);
+    printSimpleSaleReceipt(false);
+  } catch (err) {
+    console.error('Erro ao imprimir pedido:', err);
+    showToast(`Erro ao imprimir pedido: ${err.message}`, 'error');
   }
 }
 
