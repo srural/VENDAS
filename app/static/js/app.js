@@ -2228,19 +2228,31 @@ function renderThermalReceipt(saleData, mode = 'nfce', openModal = true) {
   document.getElementById('rec-vlr-pago').innerText = valRec.toFixed(2);
   document.getElementById('rec-troco').innerText = troco.toFixed(2);
 
-  // Items table
+  // Items table (2 linhas por produto: Linha 1 = Código e Descrição, Linha 2 = Qtd x Valor Unitário e Subtotal)
   const tbody = document.getElementById('rec-items-tbody');
-  tbody.innerHTML = itens.map(it => {
+  tbody.innerHTML = itens.map((it, idx) => {
     const prdCode = it.Produto || it.CodPrd || '';
     const prdDesc = it.Descricao_Produto || it.Descricao || '';
     const qtd = floatOrZero(it.Qtd || 1);
     const embalagem = it.Embalagem || 'UN';
-    const vTotItem = it.Valor !== undefined && it.Valor !== null ? floatOrZero(it.Valor) : (qtd * floatOrZero(it.ValorUnit));
+    const vUnit = it.ValorUnit !== undefined && it.ValorUnit !== null && floatOrZero(it.ValorUnit) > 0
+      ? floatOrZero(it.ValorUnit)
+      : (it.Valor && qtd ? floatOrZero(it.Valor) / qtd : floatOrZero(it.PrecoTabela || 0));
+    const vTotItem = it.Valor !== undefined && it.Valor !== null ? floatOrZero(it.Valor) : (qtd * vUnit);
+
     return `
-      <tr>
-        <td>${prdCode ? `#${prdCode} ` : ''}${escapeHtml(prdDesc)}</td>
-        <td style="text-align: right;">${qtd} ${embalagem}</td>
-        <td style="text-align: right;">${vTotItem.toFixed(2)}</td>
+      <tr class="rec-item-row-title">
+        <td colspan="2" style="font-weight: 700; padding-top: 4px; padding-bottom: 1px; word-break: break-word;">
+          ${idx + 1}. ${prdCode ? '#' + prdCode + ' ' : ''}${escapeHtml(prdDesc)}
+        </td>
+      </tr>
+      <tr class="rec-item-row-calc">
+        <td style="padding-bottom: 4px; padding-left: 10px; font-size: 10.5px;">
+          ${qtd} ${embalagem} &nbsp;x&nbsp; ${vUnit.toFixed(2)}
+        </td>
+        <td style="text-align: right; font-weight: 700; padding-bottom: 4px;">
+          ${vTotItem.toFixed(2)}
+        </td>
       </tr>
     `;
   }).join('');

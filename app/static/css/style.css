@@ -1378,8 +1378,20 @@ body {
 }
 
 .receipt-items-table td {
-  padding: 3px 0;
+  padding: 2px 0;
   vertical-align: top;
+}
+
+.rec-item-row-title td {
+  font-weight: 700;
+  padding-top: 4px !important;
+  padding-bottom: 1px !important;
+  font-size: 11px;
+}
+
+.rec-item-row-calc td {
+  padding-bottom: 4px !important;
+  font-size: 10.5px;
 }
 
 .receipt-totals {
@@ -1614,6 +1626,18 @@ body {
   body.print-receipt-mode th {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  body.print-receipt-mode .rec-item-row-title td {
+    font-weight: bold !important;
+    padding-top: 3px !important;
+    padding-bottom: 0px !important;
+    font-size: 11px !important;
+  }
+
+  body.print-receipt-mode .rec-item-row-calc td {
+    padding-bottom: 3px !important;
+    font-size: 10px !important;
   }
 
   body.print-receipt-mode .receipt-client-info {
