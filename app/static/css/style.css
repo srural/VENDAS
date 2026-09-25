@@ -1420,19 +1420,20 @@ body {
 }
 
 
-/* Media Print Rules for Thermal Receipt (80mm / 89mm Thermal Printers) */
+/* Media Print Rules for Thermal Receipt (Continuous Roll / 80mm / 58mm Thermal Printers) */
 @media print {
   @page {
-    size: 80mm auto;
-    margin: 0;
+    margin: 0 !important;
+    size: auto;
   }
 
   html, body {
-    width: 80mm !important;
+    width: 100% !important;
     max-width: 80mm !important;
-    min-height: auto !important;
+    min-height: 0 !important;
     height: auto !important;
-    margin: 0 !important;
+    max-height: none !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
@@ -1453,7 +1454,7 @@ body {
     display: none !important;
   }
 
-  /* Garantir que todos os elementos do recibo fiquem 100% visíveis na impressão térmica */
+  /* Garantir que todos os elementos do recibo fiquem 100% visíveis na impressão contínua */
   body.print-receipt-mode #pdv-receipt-modal,
   body.print-receipt-mode #pdv-receipt-modal.modal-backdrop,
   body.print-receipt-mode #pdv-receipt-modal .modal-container,
@@ -1471,16 +1472,21 @@ body {
     opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
-    margin: 0 !important;
-    width: 80mm !important;
+    margin: 0 auto !important;
+    width: 100% !important;
     max-width: 80mm !important;
-    min-height: auto !important;
+    min-height: 0 !important;
     height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
     z-index: auto !important;
     backdrop-filter: none !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-container {
@@ -1490,15 +1496,20 @@ body {
     opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
-    margin: 0 !important;
-    width: 80mm !important;
+    margin: 0 auto !important;
+    width: 100% !important;
     max-width: 80mm !important;
-    min-height: auto !important;
+    min-height: 0 !important;
     height: auto !important;
+    max-height: none !important;
     box-shadow: none !important;
     border: none !important;
     transform: none !important;
     overflow: visible !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-body {
@@ -1506,17 +1517,22 @@ body {
     margin: 0 !important;
     background: transparent !important;
     overflow: visible !important;
-    min-height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     height: auto !important;
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
   }
 
   body.print-receipt-mode #thermal-receipt-printable {
     position: static !important;
     display: block !important;
-    width: 76mm !important;
-    max-width: 76mm !important;
+    width: 100% !important;
+    max-width: 78mm !important;
     margin: 0 auto !important;
-    padding: 3mm 1mm !important;
+    padding: 1mm 1mm 4mm 1mm !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
@@ -1524,10 +1540,10 @@ body {
     color: #000000 !important;
     font-size: 11px !important;
     line-height: 1.25 !important;
-    page-break-inside: avoid !important;
-    page-break-after: avoid !important;
-    page-break-before: avoid !important;
-    break-inside: avoid !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    height: auto !important;
   }
 
   body.print-receipt-mode #thermal-receipt-printable * {
@@ -1536,10 +1552,33 @@ body {
     color: #000000 !important;
   }
 
+  body.print-receipt-mode .receipt-header,
+  body.print-receipt-mode .receipt-client-info,
+  body.print-receipt-mode .receipt-items-table,
+  body.print-receipt-mode .receipt-totals,
+  body.print-receipt-mode .receipt-nfce-info,
+  body.print-receipt-mode .receipt-qrcode-container,
+  body.print-receipt-mode .receipt-footer {
+    page-break-before: avoid !important;
+    page-break-after: avoid !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
+    margin: 2px 0 !important;
+  }
+
+  body.print-receipt-mode table,
+  body.print-receipt-mode tbody,
+  body.print-receipt-mode tr,
+  body.print-receipt-mode td,
+  body.print-receipt-mode th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
   body.print-receipt-mode .receipt-client-info {
     font-size: 11px !important;
     line-height: 1.3 !important;
-    margin: 4px 0 !important;
+    margin: 3px 0 !important;
   }
 
   body.print-receipt-mode .rec-cli-name-highlight {
@@ -1561,7 +1600,7 @@ body {
 
   body.print-receipt-mode .receipt-divider {
     font-size: 9px !important;
-    margin: 3px 0 !important;
+    margin: 2px 0 !important;
     letter-spacing: -1px;
   }
 
@@ -1570,15 +1609,15 @@ body {
   }
 
   body.print-receipt-mode #rec-company-logo-wrap {
-    margin-bottom: 6px !important;
+    margin-bottom: 4px !important;
   }
 
   body.print-receipt-mode #rec-company-logo {
-    max-height: 95px !important;
-    max-width: 230px !important;
+    max-height: 80px !important;
+    max-width: 220px !important;
     width: auto !important;
     height: auto !important;
-    margin: 0 auto 4px auto !important;
+    margin: 0 auto 3px auto !important;
     display: block !important;
   }
 }
