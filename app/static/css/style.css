@@ -1438,6 +1438,7 @@ body {
     background: #ffffff !important;
     color: #000000 !important;
     overflow: visible !important;
+    text-align: left !important;
   }
 
   /* Ocultar rigorosamente toda a UI fora do recibo térmico */
@@ -1473,6 +1474,8 @@ body {
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     width: 80mm !important;
     max-width: 80mm !important;
     min-height: 0 !important;
@@ -1487,6 +1490,7 @@ body {
     page-break-after: avoid !important;
     break-before: avoid !important;
     break-after: avoid !important;
+    text-align: left !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-container {
@@ -1497,6 +1501,8 @@ body {
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     width: 80mm !important;
     max-width: 80mm !important;
     min-height: 0 !important;
@@ -1510,11 +1516,14 @@ body {
     page-break-after: avoid !important;
     break-before: avoid !important;
     break-after: avoid !important;
+    text-align: left !important;
   }
 
   body.print-receipt-mode #pdv-receipt-modal .modal-body {
     padding: 0 !important;
     margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     background: transparent !important;
     overflow: visible !important;
     min-height: 0 !important;
@@ -1524,6 +1533,7 @@ body {
     page-break-after: avoid !important;
     break-before: avoid !important;
     break-after: avoid !important;
+    text-align: left !important;
   }
 
   body.print-receipt-mode #thermal-receipt-printable {
@@ -1532,6 +1542,8 @@ body {
     width: 76mm !important;
     max-width: 76mm !important;
     margin: 0 !important;
+    margin-left: 0 !important;
+    margin-right: auto !important;
     padding: 1mm 1mm 4mm 1mm !important;
     box-shadow: none !important;
     border: none !important;
@@ -1544,6 +1556,7 @@ body {
     min-height: 0 !important;
     max-height: none !important;
     height: auto !important;
+    text-align: left !important;
   }
 
   body.print-receipt-mode #thermal-receipt-printable * {
