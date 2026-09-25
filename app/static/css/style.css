@@ -1428,12 +1428,12 @@ body {
   }
 
   html, body {
-    width: 100% !important;
+    width: 80mm !important;
     max-width: 80mm !important;
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
@@ -1472,8 +1472,8 @@ body {
     opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
-    margin: 0 auto !important;
-    width: 100% !important;
+    margin: 0 !important;
+    width: 80mm !important;
     max-width: 80mm !important;
     min-height: 0 !important;
     height: auto !important;
@@ -1496,8 +1496,8 @@ body {
     opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
-    margin: 0 auto !important;
-    width: 100% !important;
+    margin: 0 !important;
+    width: 80mm !important;
     max-width: 80mm !important;
     min-height: 0 !important;
     height: auto !important;
@@ -1529,9 +1529,9 @@ body {
   body.print-receipt-mode #thermal-receipt-printable {
     position: static !important;
     display: block !important;
-    width: 100% !important;
-    max-width: 78mm !important;
-    margin: 0 auto !important;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 !important;
     padding: 1mm 1mm 4mm 1mm !important;
     box-shadow: none !important;
     border: none !important;
