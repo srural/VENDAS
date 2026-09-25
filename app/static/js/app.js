@@ -2196,9 +2196,21 @@ function renderThermalReceipt(saleData, mode = 'nfce', openModal = true) {
   }
 
   document.getElementById('rec-cliente-nome').innerText = isGeneric ? 'CONSUMIDOR FINAL' : clientName;
-  const pedNumStr = String(venda.CodPed || venda.Pedido || 1).padStart(6, '0');
+  const rawPedId = venda.CodPed || venda.Pedido || 1;
+  const pedNumStr = String(rawPedId).padStart(6, '0');
+  const fullDateTime = `${venda.DataEmiss || ''} ${venda.Hora || ''}`.trim() || (new Date()).toLocaleString('pt-BR');
+
+  const recPedNumVal = document.getElementById('rec-ped-num-val');
+  if (recPedNumVal) {
+    recPedNumVal.innerText = `#${rawPedId}`;
+  }
+  const recPedDateVal = document.getElementById('rec-ped-date-val');
+  if (recPedDateVal) {
+    recPedDateVal.innerText = fullDateTime;
+  }
+
   document.getElementById('rec-nfe-num').innerText = pedNumStr;
-  document.getElementById('rec-nfe-data').innerText = `${venda.DataEmiss || ''} ${venda.Hora || ''}`;
+  document.getElementById('rec-nfe-data').innerText = fullDateTime;
 
   const vSub = floatOrZero(venda.SubTotal || venda.Total);
   const vDesc = floatOrZero(venda.Desconto);

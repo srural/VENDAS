@@ -1299,6 +1299,34 @@ body {
   font-size: 10px;
 }
 
+.receipt-ped-highlight-box {
+  margin: 6px 0;
+  padding: 4px 6px;
+  border: 1px dashed #000;
+  border-radius: 3px;
+  text-align: center;
+  background: #f8fafc;
+}
+
+.rec-ped-highlight-num {
+  font-size: 15px;
+  font-weight: 900;
+  color: #000;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.rec-ped-highlight-num span {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.rec-ped-highlight-date {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #000;
+}
+
 .receipt-divider {
   text-align: center;
   overflow: hidden;
@@ -1600,6 +1628,37 @@ body {
     color: #000000 !important;
     display: inline-block !important;
     -webkit-text-stroke: 0.3px #000 !important;
+  }
+
+  body.print-receipt-mode .receipt-ped-highlight-box {
+    margin: 4px 0 !important;
+    padding: 3px 4px !important;
+    border: 1px dashed #000 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    text-align: center !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  body.print-receipt-mode .rec-ped-highlight-num {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+    -webkit-text-stroke: 0.3px #000 !important;
+    margin-bottom: 1px !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  body.print-receipt-mode .rec-ped-highlight-num span {
+    font-size: 15px !important;
+    font-weight: 900 !important;
+  }
+
+  body.print-receipt-mode .rec-ped-highlight-date {
+    font-size: 10px !important;
+    font-weight: bold !important;
+    color: #000000 !important;
   }
 
   body.print-receipt-mode .receipt-homolog-banner {
