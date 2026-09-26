@@ -2465,6 +2465,409 @@ def get_relatorio_vendas_produto_detalhes(cod_prd, data_inicio=None, data_fim=No
     finally:
         conn.close()
 
+def get_relatorio_vendas_cliente(data_inicio=None, data_fim=None, cod_entidade=None, grupo=None, q=None, id_empresa=None, status="ativos", sort_by="total_valor", sort_order="DESC", page=1, limit=50):
+    params = []
+    where_clauses = [
+        """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
+    ]
+    
+    # Status do Pedido e Emissão Fiscal
+    st = str(status).lower() if status else "ativos"
+    if st in ("ativos", "todos_ativos"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL)
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("com_nota", "faturados"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != ''))
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("sem_nota", "pendentes"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            COALESCE(PED."NroNt", 0) = 0 AND 
+            (NFE."NroChave" IS NULL OR NFE."NroChave" = '')
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("cancelados", "cancel"):
+        where_clauses.append("""(
+            UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
+            UPPER(PED."Cfo") LIKE %s OR
+            PED."Operacao" = 4
+        )""")
+        params.append('%CANCEL%')
+
+    # Filtro por Período de Emissão
+    iso_inicio = _parse_to_iso_date(data_inicio)
+    if iso_inicio:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') >= %s::date")
+        params.append(iso_inicio)
+
+    iso_fim = _parse_to_iso_date(data_fim)
+    if iso_fim:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') <= %s::date")
+        params.append(iso_fim)
+
+    # Filtro de Cliente Específico
+    if cod_entidade is not None and str(cod_entidade).strip() not in ('', 'all', '0'):
+        try:
+            where_clauses.append('PED."Entidade" = %s')
+            params.append(int(cod_entidade))
+        except ValueError:
+            pass
+
+    # Filtro de Empresa / Filial
+    if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
+        try:
+            emp_id = int(id_empresa)
+            if emp_id == 1:
+                where_clauses.append('(PED."id_empresa" = %s OR PED."id_empresa" IS NULL)')
+            else:
+                where_clauses.append('PED."id_empresa" = %s')
+            params.append(emp_id)
+        except ValueError:
+            pass
+
+    # Filtro de Grupo de Produtos
+    if grupo is not None and str(grupo).lower() not in ('all', ''):
+        try:
+            where_clauses.append('PRD."Grupo" = %s')
+            params.append(int(grupo))
+        except ValueError:
+            pass
+
+    # Busca por Nome do Cliente, Fantasia, CPF, CNPJ, Cidade, Código ou Descrição do Produto
+    if q and q.strip():
+        search = f"%{q.strip()}%"
+        where_clauses.append(f"""(
+            CAST(PED."Entidade" AS TEXT) ILIKE %s OR
+            ENT."Nome" ILIKE %s OR
+            ENT."Fantasia" ILIKE %s OR
+            ENT."CPF" ILIKE %s OR
+            ENT."CGC" ILIKE %s OR
+            ENT."Cidade" ILIKE %s OR
+            PRD."{DESC_PRD_COL}" ILIKE %s OR
+            CAST(PRD."CodPrd" AS TEXT) ILIKE %s
+        )""")
+        params.extend([search] * 8)
+
+    where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+    # Mapeamento de Ordenação
+    sort_map = {
+        "total_valor": "total_valor",
+        "total_qtd": "total_qtd",
+        "total_pedidos": "total_pedidos",
+        "ticket_medio": "ticket_medio",
+        "nome_cliente": "COALESCE(ENT.\"Nome\", 'CONSUMIDOR')",
+        "cidade": "COALESCE(ENT.\"Cidade\", '')",
+        "codentidade": "PED.\"Entidade\""
+    }
+    sort_col = sort_map.get(sort_by.lower(), "total_valor")
+    sort_dir = "DESC" if sort_order.upper() == "DESC" else "ASC"
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1. Totalizadores Globais (KPIs)
+            summary_sql = f"""
+                SELECT 
+                    COUNT(DISTINCT PED."Entidade") as total_clientes_distintos,
+                    COUNT(DISTINCT PED."CodPed") as total_pedidos_geral,
+                    COUNT(DISTINCT ITP."Produto") as total_produtos_distintos,
+                    COUNT(DISTINCT CASE WHEN (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != '')) THEN PED."CodPed" END) as total_pedidos_com_nota,
+                    COUNT(DISTINCT CASE WHEN (COALESCE(PED."NroNt", 0) = 0 AND (NFE."NroChave" IS NULL OR NFE."NroChave" = '')) THEN PED."CodPed" END) as total_pedidos_sem_nota,
+                    COALESCE(SUM(ITP."Qtd"), 0) as total_qtd_geral,
+                    COALESCE(SUM(ITP."Qtd" * ITP."ValorUnit"), 0) as total_bruto_geral,
+                    COALESCE(SUM(ITP."Desconto"), 0) as total_desconto_geral,
+                    COALESCE(SUM(ITP."Valor"), 0) as total_faturamento_geral
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
+                LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
+                LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                {where_sql}
+            """
+            cursor.execute(summary_sql, params)
+            sum_row = _convert_row(cursor.fetchone())
+            
+            faturamento_geral = float(sum_row.get("total_faturamento_geral", 0.0))
+            qtd_geral = float(sum_row.get("total_qtd_geral", 0.0))
+            pedidos_geral = int(sum_row.get("total_pedidos_geral", 0))
+            clientes_geral = int(sum_row.get("total_clientes_distintos", 0))
+            ticket_medio_cliente = (faturamento_geral / clientes_geral) if clientes_geral > 0 else 0.0
+            ticket_medio_pedido = (faturamento_geral / pedidos_geral) if pedidos_geral > 0 else 0.0
+
+            summary = {
+                "total_clientes_distintos": clientes_geral,
+                "total_pedidos_geral": pedidos_geral,
+                "total_produtos_distintos": int(sum_row.get("total_produtos_distintos", 0)),
+                "total_pedidos_com_nota": int(sum_row.get("total_pedidos_com_nota", 0)),
+                "total_pedidos_sem_nota": int(sum_row.get("total_pedidos_sem_nota", 0)),
+                "total_qtd_geral": qtd_geral,
+                "total_bruto_geral": float(sum_row.get("total_bruto_geral", 0.0)),
+                "total_desconto_geral": float(sum_row.get("total_desconto_geral", 0.0)),
+                "total_faturamento_geral": faturamento_geral,
+                "ticket_medio_cliente": round(ticket_medio_cliente, 2),
+                "ticket_medio_pedido": round(ticket_medio_pedido, 2)
+            }
+
+            # 2. Agrupamento por Cliente
+            offset = (page - 1) * limit if page > 0 and limit > 0 else 0
+            limit_clause = f"LIMIT {limit} OFFSET {offset}" if limit > 0 else ""
+            
+            clients_sql = f"""
+                SELECT 
+                    PED."Entidade" as "CodEntidade",
+                    COALESCE(ENT."Nome", 'CONSUMIDOR FINAL') as "NomeCliente",
+                    ENT."Fantasia",
+                    COALESCE(ENT."CPF", ENT."CGC", '') as "Documento",
+                    ENT."Cidade",
+                    ENT."Uf",
+                    ENT."Fone",
+                    ENT."Endereco",
+                    ENT."Bairro",
+                    COUNT(DISTINCT PED."CodPed") as total_pedidos,
+                    COUNT(DISTINCT ITP."Produto") as total_produtos_comprados,
+                    SUM(ITP."Qtd") as total_qtd,
+                    SUM(ITP."Qtd" * ITP."ValorUnit") as total_bruto,
+                    SUM(ITP."Desconto") as total_desconto,
+                    SUM(ITP."Valor") as total_valor,
+                    (SUM(ITP."Valor") / NULLIF(COUNT(DISTINCT PED."CodPed"), 0)) as ticket_medio,
+                    MIN(PED."DataEmiss") as primeira_compra,
+                    MAX(PED."DataEmiss") as ultima_compra
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
+                LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
+                LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                {where_sql}
+                GROUP BY 
+                    PED."Entidade", ENT."Nome", ENT."Fantasia", ENT."CPF", ENT."CGC",
+                    ENT."Cidade", ENT."Uf", ENT."Fone", ENT."Endereco", ENT."Bairro"
+                ORDER BY {sort_col} {sort_dir}
+                {limit_clause}
+            """
+            cursor.execute(clients_sql, params)
+            raw_clients = cursor.fetchall()
+
+            client_ids = []
+            clients = []
+            for r in raw_clients:
+                c = _convert_row(r)
+                val_tot = float(c.get("total_valor", 0.0))
+                c["participacao_pct"] = round((val_tot / faturamento_geral * 100.0), 2) if faturamento_geral > 0 else 0.0
+                c["ticket_medio"] = round(float(c.get("ticket_medio", 0.0)), 2)
+                c["total_bruto"] = round(float(c.get("total_bruto", 0.0)), 2)
+                c["total_desconto"] = round(float(c.get("total_desconto", 0.0)), 2)
+                c["total_valor"] = round(val_tot, 2)
+                c["total_qtd"] = float(c.get("total_qtd", 0.0))
+                c["produtos"] = []
+                clients.append(c)
+                client_ids.append(c["CodEntidade"])
+
+            # 3. Produtos comprados por cada cliente exibido na página (otimizado sem N+1)
+            if client_ids:
+                prd_where = list(where_clauses)
+                prd_params = list(params)
+                
+                prd_where.append('PED."Entidade" = ANY(%s)')
+                prd_params.append(client_ids)
+                
+                prd_where_sql = " WHERE " + " AND ".join(prd_where)
+                
+                products_by_client_sql = f"""
+                    SELECT 
+                        PED."Entidade" as "CodEntidade",
+                        PRD."CodPrd",
+                        COALESCE(PRD."{DESC_PRD_COL}", 'PRODUTO NÃO IDENTIFICADO') as "Descricao_Produto",
+                        PRD."CodBar",
+                        PRD."Foto",
+                        COALESCE(PRD."Embalagem", 'UN') as "Embalagem",
+                        GRU."CodGru",
+                        COALESCE(GRU."{DESC_GRU_COL}", 'SEM GRUPO') as "Descricao_Grupo",
+                        COUNT(DISTINCT PED."CodPed") as total_pedidos_produto,
+                        SUM(ITP."Qtd") as qtd_comprada,
+                        SUM(ITP."Valor") as valor_total_produto,
+                        (SUM(ITP."Valor") / NULLIF(SUM(ITP."Qtd"), 0)) as preco_medio,
+                        SUM(ITP."Desconto") as desconto_total_produto
+                    FROM "ITP" ITP
+                    JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                    LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
+                    LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
+                    LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                    LEFT JOIN "GRU" GRU ON PRD."Grupo" = GRU."CodGru"
+                    {prd_where_sql}
+                    GROUP BY 
+                        PED."Entidade", PRD."CodPrd", PRD."{DESC_PRD_COL}", PRD."CodBar", PRD."Foto",
+                        PRD."Embalagem", GRU."CodGru", GRU."{DESC_GRU_COL}"
+                    ORDER BY PED."Entidade", valor_total_produto DESC
+                """
+                cursor.execute(products_by_client_sql, prd_params)
+                raw_prods = cursor.fetchall()
+                
+                products_map = {}
+                for rp in raw_prods:
+                    p = _convert_row(rp)
+                    cid = p["CodEntidade"]
+                    p["qtd_comprada"] = float(p.get("qtd_comprada", 0.0))
+                    p["valor_total_produto"] = round(float(p.get("valor_total_produto", 0.0)), 2)
+                    p["preco_medio"] = round(float(p.get("preco_medio", 0.0)), 2)
+                    p["desconto_total_produto"] = round(float(p.get("desconto_total_produto", 0.0)), 2)
+                    
+                    if cid not in products_map:
+                        products_map[cid] = []
+                    products_map[cid].append(p)
+                
+                for c in clients:
+                    cid = c["CodEntidade"]
+                    c["produtos"] = products_map.get(cid, [])
+
+            total_clientes = summary["total_clientes_distintos"]
+            pages = (total_clientes + limit - 1) // limit if limit > 0 else 1
+
+            return {
+                "summary": summary,
+                "items": clients,
+                "page": page,
+                "limit": limit,
+                "total": total_clientes,
+                "pages": pages
+            }
+    finally:
+        conn.close()
+
+def get_relatorio_vendas_cliente_detalhes(cod_entidade, data_inicio=None, data_fim=None, id_empresa=None, status="ativos"):
+    params = [cod_entidade]
+    where_clauses = [
+        'PED."Entidade" = %s',
+        """PED."DataEmiss" IS NOT NULL AND PED."DataEmiss" != ''"""
+    ]
+
+    st = str(status).lower() if status else "ativos"
+    if st in ("ativos", "todos_ativos"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL)
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("com_nota", "faturados"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            (COALESCE(PED."NroNt", 0) > 0 OR (NFE."NroChave" IS NOT NULL AND NFE."NroChave" != ''))
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("sem_nota", "pendentes"):
+        where_clauses.append("""(
+            (PED."PrevEntrega" IS NULL OR UPPER(PED."PrevEntrega") != 'CANCELADO') AND 
+            (PED."Cfo" IS NULL OR UPPER(PED."Cfo") NOT LIKE %s) AND
+            (PED."Operacao" != 4 OR PED."Operacao" IS NULL) AND
+            COALESCE(PED."NroNt", 0) = 0 AND 
+            (NFE."NroChave" IS NULL OR NFE."NroChave" = '')
+        )""")
+        params.append('%CANCEL%')
+    elif st in ("cancelados", "cancel"):
+        where_clauses.append("""(
+            UPPER(PED."PrevEntrega") = 'CANCELADO' OR 
+            UPPER(PED."Cfo") LIKE %s OR
+            PED."Operacao" = 4
+        )""")
+        params.append('%CANCEL%')
+
+    iso_inicio = _parse_to_iso_date(data_inicio)
+    if iso_inicio:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') >= %s::date")
+        params.append(iso_inicio)
+
+    iso_fim = _parse_to_iso_date(data_fim)
+    if iso_fim:
+        where_clauses.append("TO_DATE(PED.\"DataEmiss\", 'DD/MM/YYYY') <= %s::date")
+        params.append(iso_fim)
+
+    if id_empresa is not None and str(id_empresa).lower() not in ('all', ''):
+        try:
+            emp_id = int(id_empresa)
+            if emp_id == 1:
+                where_clauses.append('(PED."id_empresa" = %s OR PED."id_empresa" IS NULL)')
+            else:
+                where_clauses.append('PED."id_empresa" = %s')
+            params.append(emp_id)
+        except ValueError:
+            pass
+
+    where_sql = " WHERE " + " AND ".join(where_clauses)
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute('''
+                SELECT "CodEntidade", "Nome", "Fantasia", "CPF", "CGC", "Endereco", "Nro", "Bairro", "Cidade", "Uf", "Cep", "Fone"
+                FROM "ENT" WHERE "CodEntidade" = %s
+            ''', (cod_entidade,))
+            ent_row = cursor.fetchone()
+            ent_info = _convert_row(ent_row) if ent_row else {"CodEntidade": cod_entidade, "Nome": f"Cliente #{cod_entidade}"}
+
+            sql = f"""
+                SELECT 
+                    PED."CodPed",
+                    PED."DataEmiss",
+                    PED."Hora",
+                    PED."Total" as "TotalPedido",
+                    PED."CondPgto",
+                    PED."Cfo",
+                    PED."PrevEntrega",
+                    PED."NroNt",
+                    NFE."NroChave",
+                    ITP."CodItp",
+                    ITP."Produto" as "CodPrd",
+                    COALESCE(PRD."{DESC_PRD_COL}", 'PRODUTO NÃO IDENTIFICADO') as "Descricao_Produto",
+                    PRD."CodBar",
+                    COALESCE(PRD."Embalagem", 'UN') as "Embalagem",
+                    ITP."Qtd",
+                    ITP."ValorUnit",
+                    ITP."Desconto",
+                    ITP."Valor" as "ValorTotal"
+                FROM "ITP" ITP
+                JOIN "PED" PED ON ITP."Pedido" = PED."CodPed"
+                LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
+                LEFT JOIN "PRD" PRD ON ITP."Produto" = PRD."CodPrd"
+                {where_sql}
+                ORDER BY TO_DATE(PED."DataEmiss", 'DD/MM/YYYY') DESC, PED."CodPed" DESC, ITP."CodItp" ASC
+                LIMIT 300
+            """
+            cursor.execute(sql, params)
+            vendas_raw = cursor.fetchall()
+            
+            vendas = [_convert_row(r) for r in vendas_raw]
+            total_qtd = sum(float(v.get("Qtd", 0)) for v in vendas)
+            total_valor = sum(float(v.get("ValorTotal", 0)) for v in vendas)
+            pedidos_distintos = len(set(v.get("CodPed") for v in vendas))
+
+            return {
+                "cliente": ent_info,
+                "vendas": vendas,
+                "resumo": {
+                    "total_pedidos": pedidos_distintos,
+                    "total_itens": len(vendas),
+                    "total_qtd": total_qtd,
+                    "total_valor": round(total_valor, 2),
+                    "ticket_medio": round(total_valor / pedidos_distintos, 2) if pedidos_distintos > 0 else 0.0
+                }
+            }
+    finally:
+        conn.close()
+
 
 
 

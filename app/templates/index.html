@@ -70,6 +70,10 @@
               <i class="fa-solid fa-boxes-stacked"></i>
               <span>Vendas por Produto</span>
             </button>
+            <button type="button" class="nav-sub-item" id="nav-rel-vendas-cliente" onclick="switchModule('rel-vendas-cliente')" title="Relatório de Vendas de Produtos por Cliente">
+              <i class="fa-solid fa-users-viewfinder"></i>
+              <span>Vendas por Cliente</span>
+            </button>
           </div>
         </div>
         <button class="nav-item" id="nav-entidades" onclick="switchModule('entidades')" title="Entidades">
@@ -1578,6 +1582,233 @@
                 </button>
                 <span class="page-indicator" id="rel-page-indicator" style="font-size: 0.85rem; font-weight: 600; padding: 0 0.5rem;">1 / 1</span>
                 <button class="page-btn" id="rel-btn-next" onclick="changeRelatorioPage(1)" disabled>
+                  Próxima <i class="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE: RELATÓRIO DE VENDAS POR CLIENTE ==================== -->
+        <section class="module-view" id="view-rel-vendas-cliente">
+          <!-- Filtros Avançados do Relatório -->
+          <div class="table-card" style="padding: 1.25rem; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-filter" style="color: var(--accent-blue);"></i> Filtros e Parâmetros - Vendas por Cliente
+              </h3>
+
+              <!-- Atalhos de Período -->
+              <div class="period-shortcuts" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelCliPeriodo('hoje')">Hoje</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelCliPeriodo('7dias')">7 Dias</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelCliPeriodo('mes')">Este Mês</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelCliPeriodo('ano')">Este Ano</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelCliPeriodo('tudo')">Todo Histórico</button>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group col-2">
+                <label>Data Inicial</label>
+                <input type="date" id="rel-cli-filtro-data-inicio" class="form-control" onchange="fetchRelatorioVendasCliente(1)">
+              </div>
+
+              <div class="form-group col-2">
+                <label>Data Final</label>
+                <input type="date" id="rel-cli-filtro-data-fim" class="form-control" onchange="fetchRelatorioVendasCliente(1)">
+              </div>
+
+              <div class="form-group col-3">
+                <label>Grupo / Categoria</label>
+                <select id="rel-cli-filtro-grupo" class="form-control" onchange="fetchRelatorioVendasCliente(1)">
+                  <option value="all">Todos os Grupos</option>
+                </select>
+              </div>
+
+              <div class="form-group col-3">
+                <label>Status & Emissão Fiscal</label>
+                <select id="rel-cli-filtro-status" class="form-control" onchange="fetchRelatorioVendasCliente(1)">
+                  <option value="ativos" selected>Todos os Pedidos (Com e Sem Nota)</option>
+                  <option value="com_nota">Apenas com Nota Fiscal (Faturados)</option>
+                  <option value="sem_nota">Apenas Pendentes de Nota (Sem NF)</option>
+                  <option value="cancelados">Apenas Cancelados</option>
+                  <option value="todos">Todos (Inclusive Cancelados)</option>
+                </select>
+              </div>
+
+              <div class="form-group col-2">
+                <label>Ordenar Por</label>
+                <select id="rel-cli-filtro-ordenacao" class="form-control" onchange="fetchRelatorioVendasCliente(1)">
+                  <option value="total_valor|DESC">Maior Faturamento (R$)</option>
+                  <option value="total_qtd|DESC">Maior Qtd de Produtos/Peças</option>
+                  <option value="total_pedidos|DESC">Mais Pedidos</option>
+                  <option value="ticket_medio|DESC">Maior Ticket Médio (R$)</option>
+                  <option value="nome|ASC">Nome do Cliente (A-Z)</option>
+                  <option value="codentidade|ASC">Código do Cliente (Crescente)</option>
+                </select>
+              </div>
+
+              <div class="form-group col-5">
+                <label>Buscar Cliente ou Produto</label>
+                <div class="search-input-wrapper">
+                  <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                  <input type="text" id="rel-cli-filtro-busca" class="search-input" placeholder="Pesquisar por Nome, Fantasia, CPF/CNPJ, Cidade ou Produto...">
+                  <button type="button" class="btn btn-icon btn-sm" onclick="clearRelCliFiltroBusca()" style="position: absolute; right: 6px; top: 6px; color: var(--text-muted);" title="Limpar busca">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group col-7" style="display: flex; align-items: flex-end; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-primary" onclick="fetchRelatorioVendasCliente(1)" style="flex: 1; min-width: 140px;">
+                  <i class="fa-solid fa-rotate-right"></i> Aplicar Filtros
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="toggleAllClientesProdutos()" id="btn-toggle-all-cli-prods" title="Expandir ou recolher todos os produtos dos clientes">
+                  <i class="fa-solid fa-layer-group"></i> <span id="txt-toggle-all-cli">Expandir Produtos</span>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="limparFiltrosRelatorioVendasCliente()" title="Restaurar filtros padrão">
+                  <i class="fa-solid fa-eraser"></i> Limpar
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="imprimirRelatorioVendasCliente()" title="Imprimir Relatório Formatado A4 / PDF">
+                  <i class="fa-solid fa-print"></i> Imprimir
+                </button>
+                <button type="button" class="btn btn-emerald" onclick="exportarRelatorioVendasClienteCSV()" title="Exportar para Planilha Excel (CSV)">
+                  <i class="fa-solid fa-file-excel"></i> Exportar CSV
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cards de Resumo / KPIs -->
+          <div class="stats-grid" style="margin-bottom: 1.25rem;">
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Faturamento Total</h3>
+                <div class="stat-value" id="rel-cli-kpi-faturamento" style="color: var(--accent-emerald);">R$ 0,00</div>
+                <div class="stat-subtext" id="rel-cli-kpi-bruto-sub">Total Bruto: R$ 0,00</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-money">
+                <i class="fa-solid fa-sack-dollar"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Total de Clientes</h3>
+                <div class="stat-value" id="rel-cli-kpi-clientes">0</div>
+                <div class="stat-subtext">Clientes com compras</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-clients">
+                <i class="fa-solid fa-users"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Total de Pedidos</h3>
+                <div class="stat-value" id="rel-cli-kpi-pedidos">0</div>
+                <div class="stat-subtext" id="rel-cli-kpi-pedidos-sub">Vendas realizadas</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-active">
+                <i class="fa-solid fa-receipt"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Qtd Total de Itens</h3>
+                <div class="stat-value" id="rel-cli-kpi-qtd">0</div>
+                <div class="stat-subtext" id="rel-cli-kpi-descontos-sub">Descontos: R$ 0,00</div>
+              </div>
+              <div class="stat-icon-wrapper stat-icon-total">
+                <i class="fa-solid fa-cubes-stacked"></i>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-info">
+                <h3>Ticket Médio Geral</h3>
+                <div class="stat-value" id="rel-cli-kpi-ticket-medio" style="color: var(--accent-blue);">R$ 0,00</div>
+                <div class="stat-subtext">Por pedido no período</div>
+              </div>
+              <div class="stat-icon-wrapper" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue);">
+                <i class="fa-solid fa-chart-line"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ranking Visual Top 5 Clientes -->
+          <div class="table-card" style="padding: 1.25rem; margin-bottom: 1.25rem;">
+            <div class="panel-header" style="margin-bottom: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-trophy" style="color: var(--accent-amber);"></i> Top 5 Clientes com Maior Volume de Compras no Período
+              </h3>
+            </div>
+            <div id="rel-cli-top-ranking-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
+              <div class="loading-td">Carregando ranking de clientes...</div>
+            </div>
+          </div>
+
+          <!-- Tabela Principal de Clientes e Produtos -->
+          <div class="table-card">
+            <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-primary);">
+                  <i class="fa-solid fa-table-list" style="color: var(--accent-blue);"></i> Clientes e Produtos Adquiridos
+                </h3>
+                <span class="badge badge-group" id="rel-cli-badge-total-registros">0 clientes</span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary);">Clientes por página:</label>
+                <select id="rel-cli-limit-select" class="filter-select" onchange="fetchRelatorioVendasCliente(1)" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">
+                  <option value="20">20</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                  <option value="250">250</option>
+                  <option value="0">Todos (Sem Paginação)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table" id="table-rel-vendas-cliente">
+                <thead>
+                  <tr>
+                    <th style="width: 45px; text-align: center;"></th>
+                    <th style="width: 70px; text-align: center;">Cód.</th>
+                    <th>Cliente / Razão Social</th>
+                    <th>Fantasia / CPF / CNPJ</th>
+                    <th>Cidade / UF</th>
+                    <th style="text-align: center; width: 75px;">Pedidos</th>
+                    <th style="text-align: right;">Qtd Peças</th>
+                    <th style="text-align: right;">Ticket Médio</th>
+                    <th style="text-align: right;">Total Compras</th>
+                    <th style="width: 120px;">% Partic.</th>
+                    <th style="text-align: center; width: 95px;">Última Compra</th>
+                    <th style="text-align: center; width: 90px;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-rel-vendas-cliente">
+                  <tr>
+                    <td colspan="12" class="loading-td">Carregando relatório de vendas por cliente...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Paginação do Relatório -->
+            <div class="table-footer" id="rel-cli-table-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.5rem;">
+              <div class="table-info" id="rel-cli-pagination-info" style="font-size: 0.85rem; color: var(--text-secondary);">
+                Mostrando 0 de 0 clientes
+              </div>
+              <div class="pagination" id="rel-cli-pagination-controls">
+                <button class="page-btn" id="rel-cli-btn-prev" onclick="changeRelatorioClientePage(-1)" disabled>
+                  <i class="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <span class="page-indicator" id="rel-cli-page-indicator" style="font-size: 0.85rem; font-weight: 600; padding: 0 0.5rem;">1 / 1</span>
+                <button class="page-btn" id="rel-cli-btn-next" onclick="changeRelatorioClientePage(1)" disabled>
                   Próxima <i class="fa-solid fa-chevron-right"></i>
                 </button>
               </div>
@@ -4172,6 +4403,106 @@
       <div class="modal-footer" style="justify-content: space-between;">
         <span style="font-size: 0.8rem; color: var(--text-muted);">Dica: Para ver a Nota/Pedido completo, acesse a tela de Pedidos de Vendas.</span>
         <button type="button" class="btn btn-secondary" onclick="closeProdutoVendasDetalhesModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: DETALHES DE COMPRAS DO CLIENTE ==================== -->
+  <div class="modal-backdrop" id="rel-cli-detalhes-modal">
+    <div class="modal-container modal-lg" style="max-width: 1050px;">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title-rel-cli-detalhes">
+          <i class="fa-solid fa-users-viewfinder"></i> Detalhamento de Compras do Cliente
+        </div>
+        <button class="modal-close" onclick="closeClienteRelatorioDetalhesModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem;">
+        <!-- Customer Header Information Card -->
+        <div id="rel-detalhes-cli-header" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
+          <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent-blue);">
+            <i class="fa-solid fa-user-tie fa-2x"></i>
+          </div>
+          <div style="flex: 1; min-width: 260px;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+              <span class="badge badge-group" id="rel-det-cli-badge-cod">Cód: #00000</span>
+              <span class="badge badge-active" id="rel-det-cli-badge-doc">CPF/CNPJ</span>
+              <span class="badge badge-group" id="rel-det-cli-badge-cidade">Cidade - UF</span>
+            </div>
+            <h3 id="rel-det-cli-nome" style="margin: 0 0 0.35rem 0; font-size: 1.15rem; color: var(--text-primary);">Razão Social / Nome do Cliente</h3>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; gap: 1rem; flex-wrap: wrap;">
+              <span><strong>Fantasia:</strong> <span id="rel-det-cli-fantasia">-</span></span>
+              <span><strong>Telefone:</strong> <span id="rel-det-cli-fone">-</span></span>
+              <span><strong>Endereço:</strong> <span id="rel-det-cli-endereco">-</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Customer Purchase Summary Badges -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.25rem;">
+          <div class="stat-card" style="padding: 0.75rem 1rem;">
+            <div class="stat-info">
+              <h3 style="font-size: 0.75rem;">Total de Pedidos</h3>
+              <div class="stat-value" id="rel-det-cli-kpi-pedidos" style="font-size: 1.25rem;">0</div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding: 0.75rem 1rem;">
+            <div class="stat-info">
+              <h3 style="font-size: 0.75rem;">Qtd Total de Peças</h3>
+              <div class="stat-value" id="rel-det-cli-kpi-qtd" style="font-size: 1.25rem;">0</div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding: 0.75rem 1rem;">
+            <div class="stat-info">
+              <h3 style="font-size: 0.75rem;">Ticket Médio</h3>
+              <div class="stat-value" id="rel-det-cli-kpi-ticket-medio" style="font-size: 1.25rem; color: var(--accent-blue);">R$ 0,00</div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding: 0.75rem 1rem;">
+            <div class="stat-info">
+              <h3 style="font-size: 0.75rem;">Total em Compras</h3>
+              <div class="stat-value" id="rel-det-cli-kpi-faturamento" style="font-size: 1.25rem; color: var(--accent-emerald);">R$ 0,00</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchases Table for this Customer -->
+        <div class="table-card">
+          <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 0.9rem; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-solid fa-cart-shopping" style="color: var(--accent-blue);"></i> Itens Comprados no Período</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Extrato de compras e itens detalhados</span>
+          </div>
+          <div class="table-responsive" style="max-height: 340px; overflow-y: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 80px;">Nº Pedido</th>
+                  <th style="width: 120px;">Status / Nota</th>
+                  <th style="width: 95px;">Data</th>
+                  <th>Produto Comprado</th>
+                  <th style="text-align: center; width: 50px;">UN</th>
+                  <th style="text-align: right; width: 65px;">Qtd</th>
+                  <th style="text-align: right; width: 95px;">Vlr. Unit</th>
+                  <th style="text-align: right; width: 85px;">Desconto</th>
+                  <th style="text-align: right; width: 105px;">Total (R$)</th>
+                  <th style="width: 100px;">Cond. Pgto</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-rel-detalhes-compras-cliente">
+                <tr>
+                  <td colspan="10" class="loading-td">Carregando compras do cliente...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Dica: Use a tela de Pedidos de Vendas para reimprimir DANFE ou recibo térmico.</span>
+        <button type="button" class="btn btn-secondary" onclick="closeClienteRelatorioDetalhesModal()">Fechar</button>
       </div>
     </div>
   </div>

@@ -1569,6 +1569,182 @@ def export_relatorio_vendas_produto_csv_route():
         return jsonify({"error": str(e)}), 500
 
 
+# --- RELATORIO VENDAS POR CLIENTE ---
+
+@main_bp.route('/api/relatorios/vendas-por-cliente', methods=['GET'])
+def get_relatorio_vendas_cliente_route():
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        cod_entidade = request.args.get('cod_entidade', None)
+        grupo = request.args.get('grupo', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+        sort_by = request.args.get('sort_by', 'total_valor')
+        sort_order = request.args.get('sort_order', 'DESC')
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 50, type=int)
+
+        relatorio = db.get_relatorio_vendas_cliente(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            cod_entidade=cod_entidade,
+            grupo=grupo,
+            q=q,
+            id_empresa=id_empresa,
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            limit=limit
+        )
+        return jsonify(relatorio)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/vendas-por-cliente/detalhes/<int:cod_entidade>', methods=['GET'])
+def get_relatorio_vendas_cliente_detalhes_route(cod_entidade):
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+
+        detalhes = db.get_relatorio_vendas_cliente_detalhes(
+            cod_entidade=cod_entidade,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            id_empresa=id_empresa,
+            status=status
+        )
+        return jsonify(detalhes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/vendas-por-cliente/export/csv', methods=['GET'])
+def export_relatorio_vendas_cliente_csv_route():
+    import io
+    import csv
+    try:
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        cod_entidade = request.args.get('cod_entidade', None)
+        grupo = request.args.get('grupo', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        status = request.args.get('status', 'ativos')
+        sort_by = request.args.get('sort_by', 'total_valor')
+        sort_order = request.args.get('sort_order', 'DESC')
+
+        # Limit 0 to get all rows for export
+        relatorio = db.get_relatorio_vendas_cliente(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            cod_entidade=cod_entidade,
+            grupo=grupo,
+            q=q,
+            id_empresa=id_empresa,
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=1,
+            limit=0
+        )
+
+        output = io.StringIO()
+        output.write('\ufeff')
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+
+        writer.writerow(['RELATORIO DE VENDAS DE PRODUTOS POR CLIENTE'])
+        periodo_str = f"Periodo: {data_inicio or 'Inicio'} ate {data_fim or 'Hoje'}"
+        writer.writerow([periodo_str, f"Status: {status.upper()}", f"Total Clientes: {relatorio['summary']['total_clientes_distintos']}"])
+        writer.writerow([
+            f"Faturamento Total: R$ {relatorio['summary']['total_faturamento_geral']:,.2f}",
+            f"Total de Pedidos: {relatorio['summary']['total_pedidos_geral']}",
+            f"Total de Itens/Qtd: {relatorio['summary']['total_qtd_geral']}",
+            f"Ticket Medio: R$ {relatorio['summary']['ticket_medio_geral']:,.2f}"
+        ])
+        writer.writerow([])
+
+        # Table header
+        writer.writerow([
+            'Cod Cliente',
+            'Razao Social / Nome',
+            'Nome Fantasia',
+            'CPF / CNPJ',
+            'Cidade',
+            'UF',
+            'Telefone',
+            'Qtd Pedidos',
+            'Qtd Itens/Pecas',
+            'Itens Distintos',
+            'Desconto Total (R$)',
+            'Total Compras (R$)',
+            'Participacao (%)',
+            'Ticket Medio (R$)',
+            'Ultima Compra',
+            'Cod Produto',
+            'Descricao do Produto',
+            'Qtd Produto',
+            'Unidade',
+            'Preco Medio (R$)',
+            'Total Produto (R$)'
+        ])
+
+        for cli in relatorio['items']:
+            cli_base = [
+                cli.get('CodEntidade', ''),
+                cli.get('Nome', ''),
+                cli.get('Fantasia', ''),
+                cli.get('Documento', ''),
+                cli.get('Cidade', ''),
+                cli.get('Uf', ''),
+                cli.get('Fone', ''),
+                cli.get('total_pedidos', 0),
+                f"{float(cli.get('total_qtd', 0)):.2f}".replace('.', ','),
+                cli.get('total_itens_distintos', 0),
+                f"{float(cli.get('total_desconto', 0)):.2f}".replace('.', ','),
+                f"{float(cli.get('total_valor', 0)):.2f}".replace('.', ','),
+                f"{float(cli.get('participacao_pct', 0)):.2f}%".replace('.', ','),
+                f"{float(cli.get('ticket_medio', 0)):.2f}".replace('.', ','),
+                cli.get('ultima_compra', '')
+            ]
+            
+            prods = cli.get('produtos', [])
+            if not prods:
+                writer.writerow(cli_base + ['', '', '', '', '', ''])
+            else:
+                for idx, prod in enumerate(prods):
+                    prod_cols = [
+                        prod.get('CodPrd', ''),
+                        prod.get('Descricao_Produto', ''),
+                        f"{float(prod.get('total_qtd', 0)):.2f}".replace('.', ','),
+                        prod.get('Embalagem', 'UN'),
+                        f"{float(prod.get('preco_medio', 0)):.2f}".replace('.', ','),
+                        f"{float(prod.get('total_valor', 0)):.2f}".replace('.', ',')
+                    ]
+                    if idx == 0:
+                        writer.writerow(cli_base + prod_cols)
+                    else:
+                        # Blank customer info for subsequent product rows for cleaner reading
+                        writer.writerow([''] * len(cli_base) + prod_cols)
+
+        csv_content = output.getvalue()
+        now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Relatorio_Vendas_Por_Cliente_{now_str}.csv"
+
+        return csv_content, 200, {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 
 
 

@@ -2742,3 +2742,68 @@ textarea.form-control {
   }
 }
 
+/* Relatório de Vendas por Cliente - Nested Subtables and Badges */
+.btn-toggle-client-prods {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-toggle-client-prods:hover {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: var(--accent-blue);
+}
+
+.btn-toggle-client-prods.expanded i {
+  transform: rotate(90deg);
+}
+
+.client-prods-row {
+  background: var(--bg-surface-elevated);
+}
+
+.client-prods-wrapper {
+  padding: 0.75rem 1rem 1rem 2rem;
+  border-left: 3px solid var(--accent-blue);
+  margin: 0.25rem 0.5rem 0.5rem 0.5rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.subtable-prods {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.subtable-prods th {
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+  text-transform: uppercase;
+}
+
+.subtable-prods td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.subtable-prods tr:last-child td {
+  border-bottom: none;
+}
+
+

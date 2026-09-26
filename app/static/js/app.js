@@ -220,6 +220,12 @@ onReady(() => {
     relCurrentPage = 1;
     fetchRelatorioVendasProduto(1);
   });
+
+  setupDebounce('rel-cli-filtro-busca', (val) => {
+    relCliFiltros.q = val;
+    relCliCurrentPage = 1;
+    fetchRelatorioVendasCliente(1);
+  });
 });
 
 function setupDebounce(inputId, callback) {
@@ -307,6 +313,8 @@ function switchModule(moduleName) {
     titleEl.innerHTML = `<i class="fa-solid fa-database"></i> <span>Configuração e Diagnóstico do Banco PostgreSQL 18</span>`;
   } else if (moduleName === 'rel-vendas-produto') {
     titleEl.innerHTML = `<i class="fa-solid fa-chart-column"></i> <span>Relatório de Vendas Agrupado por Produto</span>`;
+  } else if (moduleName === 'rel-vendas-cliente') {
+    titleEl.innerHTML = `<i class="fa-solid fa-users-viewfinder"></i> <span>Relatório de Vendas de Produtos por Cliente</span>`;
   }
 
   document.querySelectorAll('.module-btn').forEach(btn => {
@@ -329,6 +337,9 @@ function switchModule(moduleName) {
   else if (moduleName === 'rel-vendas-produto') {
     loadGroupOptions();
     fetchRelatorioVendasProduto(1);
+  } else if (moduleName === 'rel-vendas-cliente') {
+    loadGroupOptions();
+    fetchRelatorioVendasCliente(1);
   } else if (moduleName === 'cfop') fetchCfops();
   else if (moduleName === 'formas-pgto') fetchFormasPgto();
   else if (moduleName === 'natureza-op') fetchNaturezasOperacao();
@@ -6975,6 +6986,962 @@ function exportarRelatorioVendasProdutoCSV() {
   showToast('Iniciando download do relatório em CSV/Excel...', 'info', 2000);
   window.location.href = `/api/relatorios/vendas-por-produto/export/csv?${params.toString()}`;
 }
+
+
+// ==========================================
+// RELATÓRIO DE VENDAS AGRUPADO POR CLIENTE
+// ==========================================
+
+let relCliCurrentPage = 1;
+let relCliTotalPages = 1;
+let relCliReportData = null;
+let relCliExpandedClients = new Set();
+let relCliFiltros = {
+  data_inicio: '',
+  data_fim: '',
+  grupo: 'all',
+  status: 'ativos',
+  sort_by: 'total_valor',
+  sort_order: 'DESC',
+  q: '',
+  limit: 50
+};
+
+function setRelCliPeriodo(tipo) {
+  const dtInicioEl = document.getElementById('rel-cli-filtro-data-inicio');
+  const dtFimEl = document.getElementById('rel-cli-filtro-data-fim');
+  if (!dtInicioEl || !dtFimEl) return;
+
+  const now = new Date();
+  const formatYMD = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  if (tipo === 'hoje') {
+    dtInicioEl.value = formatYMD(now);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === '7dias') {
+    const d7 = new Date();
+    d7.setDate(d7.getDate() - 7);
+    dtInicioEl.value = formatYMD(d7);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'mes') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    dtInicioEl.value = formatYMD(firstDay);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'ano') {
+    const firstDayYear = new Date(now.getFullYear(), 0, 1);
+    dtInicioEl.value = formatYMD(firstDayYear);
+    dtFimEl.value = formatYMD(now);
+  } else if (tipo === 'tudo') {
+    dtInicioEl.value = '';
+    dtFimEl.value = '';
+  }
+
+  fetchRelatorioVendasCliente(1);
+}
+
+function clearRelCliFiltroBusca() {
+  const el = document.getElementById('rel-cli-filtro-busca');
+  if (el) {
+    el.value = '';
+    relCliFiltros.q = '';
+    fetchRelatorioVendasCliente(1);
+  }
+}
+
+function limparFiltrosRelatorioVendasCliente() {
+  const dtInicioEl = document.getElementById('rel-cli-filtro-data-inicio');
+  const dtFimEl = document.getElementById('rel-cli-filtro-data-fim');
+  const grupoEl = document.getElementById('rel-cli-filtro-grupo');
+  const statusEl = document.getElementById('rel-cli-filtro-status');
+  const ordEl = document.getElementById('rel-cli-filtro-ordenacao');
+  const buscaEl = document.getElementById('rel-cli-filtro-busca');
+  const limitEl = document.getElementById('rel-cli-limit-select');
+
+  if (dtInicioEl) dtInicioEl.value = '';
+  if (dtFimEl) dtFimEl.value = '';
+  if (grupoEl) grupoEl.value = 'all';
+  if (statusEl) statusEl.value = 'ativos';
+  if (ordEl) ordEl.value = 'total_valor|DESC';
+  if (buscaEl) buscaEl.value = '';
+  if (limitEl) limitEl.value = '50';
+
+  relCliFiltros.q = '';
+  relCliCurrentPage = 1;
+  fetchRelatorioVendasCliente(1);
+  showToast('Filtros de cliente restaurados para o padrão', 'info', 1500);
+}
+
+function changeRelatorioClientePage(delta) {
+  const newPage = relCliCurrentPage + delta;
+  if (newPage >= 1 && newPage <= relCliTotalPages) {
+    fetchRelatorioVendasCliente(newPage);
+  }
+}
+
+async function fetchRelatorioVendasCliente(page = 1) {
+  relCliCurrentPage = page;
+
+  const dtInicio = document.getElementById('rel-cli-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-cli-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-cli-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-cli-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-cli-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-cli-filtro-busca')?.value || '';
+  const limitVal = parseInt(document.getElementById('rel-cli-limit-select')?.value || '50', 10);
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  const tbody = document.getElementById('tbody-rel-vendas-cliente');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="12" class="loading-td">
+          <i class="fa-solid fa-spinner fa-spin fa-2x" style="color: var(--accent-blue);"></i>
+          <div style="margin-top: 0.5rem; font-weight: 500;">Consolidando compras por cliente...</div>
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      page: relCliCurrentPage,
+      limit: limitVal,
+      sort_by: sort_by || 'total_valor',
+      sort_order: sort_order || 'DESC',
+      status: status
+    });
+
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (grupo && grupo !== 'all') params.append('grupo', grupo);
+    if (qVal && qVal.trim()) params.append('q', qVal.trim());
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const res = await fetch(`/api/relatorios/vendas-por-cliente?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Falha ao consultar relatório');
+
+    relCliReportData = data;
+    relCliTotalPages = data.pages || 1;
+
+    renderRelatorioClienteKPIs(data.summary);
+    renderRelatorioClienteRanking(data.items, data.summary);
+    renderRelatorioClienteTabela(data.items, data.summary);
+    renderRelatorioClientePaginacao(data.total, data.page, data.limit);
+
+  } catch (err) {
+    console.error('Erro no relatório de vendas por cliente:', err);
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="12" style="text-align: center; color: var(--accent-rose); padding: 2rem;">
+            <i class="fa-solid fa-circle-exclamation fa-2x"></i>
+            <div style="margin-top: 0.5rem;">Erro ao gerar relatório: ${escapeHtml(err.message)}</div>
+          </td>
+        </tr>
+      `;
+    }
+  }
+}
+
+function renderRelatorioClienteKPIs(sum) {
+  if (!sum) return;
+  const faturamento = sum.total_faturamento_geral || 0;
+  const bruto = sum.total_bruto_geral || 0;
+  const descontos = sum.total_desconto_geral || 0;
+  const qtd = sum.total_qtd_geral || 0;
+  const pedidos = sum.total_pedidos_geral || 0;
+  const clientes = sum.total_clientes_distintos || 0;
+  const ticketMedio = sum.ticket_medio_geral || 0;
+
+  setElementText('rel-cli-kpi-faturamento', `R$ ${faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-cli-kpi-bruto-sub', `Total Bruto: R$ ${bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-cli-kpi-clientes', clientes.toLocaleString());
+  setElementText('rel-cli-kpi-pedidos', pedidos.toLocaleString());
+  
+  const comNota = sum.total_pedidos_com_nota || 0;
+  const semNota = sum.total_pedidos_sem_nota || 0;
+  if (comNota > 0 || semNota > 0) {
+    setElementText('rel-cli-kpi-pedidos-sub', `${pedidos.toLocaleString()} pedidos (${comNota.toLocaleString()} c/ NF • ${semNota.toLocaleString()} s/ NF)`);
+  } else {
+    setElementText('rel-cli-kpi-pedidos-sub', `${pedidos.toLocaleString()} vendas realizadas`);
+  }
+
+  setElementText('rel-cli-kpi-qtd', qtd.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+  setElementText('rel-cli-kpi-descontos-sub', `Descontos: R$ ${descontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-cli-kpi-ticket-medio', `R$ ${ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setElementText('rel-cli-badge-total-registros', `${clientes.toLocaleString()} clientes listados`);
+}
+
+function renderRelatorioClienteRanking(items, sum) {
+  const container = document.getElementById('rel-cli-top-ranking-container');
+  if (!container) return;
+
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Nenhum dado de cliente para o período selecionado.</div>';
+    return;
+  }
+
+  const top5 = [...items].sort((a, b) => (b.total_valor || 0) - (a.total_valor || 0)).slice(0, 5);
+  const maxVal = Math.max(...top5.map(t => t.total_valor || 0), 1);
+
+  const medalColors = ['#f59e0b', '#94a3b8', '#d97706', '#3b82f6', '#8b5cf6'];
+  const medalIcons = ['1º', '2º', '3º', '4º', '5º'];
+
+  container.innerHTML = top5.map((item, idx) => {
+    const val = item.total_valor || 0;
+    const part = item.participacao_pct || 0;
+    const barWidth = Math.min(Math.max((val / maxVal) * 100, 4), 100);
+    const color = medalColors[idx] || '#3b82f6';
+    const rankLabel = medalIcons[idx] || `${idx + 1}º`;
+    const docStr = item.Documento ? ` • ${escapeHtml(item.Documento)}` : '';
+    const cidStr = item.Cidade ? ` (${escapeHtml(item.Cidade)}${item.Uf ? '/' + escapeHtml(item.Uf) : ''})` : '';
+
+    return `
+      <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span style="font-weight: 700; color: ${color}; min-width: 24px;">${rankLabel}</span>
+            <strong style="color: var(--text-primary); cursor: pointer;" onclick="openClienteRelatorioDetalhesModal(${item.CodEntidade})" title="Clique para ver compras detalhadas">
+              #${item.CodEntidade} - ${escapeHtml(item.Nome || 'CLIENTE SEM NOME')}
+            </strong>
+            <span style="font-size: 0.78rem; color: var(--text-muted);">${docStr}${cidStr}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; white-space: nowrap;">
+            <span style="color: var(--text-secondary);">${item.total_pedidos} pedidos (${(item.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} peças)</span>
+            <strong style="color: var(--accent-emerald);">R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            <span class="badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); font-size: 0.75rem; padding: 0.1rem 0.4rem;">${part.toFixed(2)}%</span>
+          </div>
+        </div>
+        <div style="width: 100%; height: 8px; background: var(--bg-surface-elevated); border-radius: 4px; overflow: hidden; border: 1px solid var(--border-color);">
+          <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, ${color} 0%, var(--accent-emerald) 100%); border-radius: 4px; transition: width 0.4s ease;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRelatorioClienteTabela(items, sum) {
+  const tbody = document.getElementById('tbody-rel-vendas-cliente');
+  if (!tbody) return;
+
+  if (!items || items.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="12" class="loading-td">Nenhuma venda encontrada para os filtros selecionados.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map(c => {
+    const faturamentoStr = `R$ ${c.total_valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const ticketMedioStr = `R$ ${c.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const barWidth = Math.min(Math.max(c.participacao_pct, 2), 100);
+    const isExpanded = relCliExpandedClients.has(c.CodEntidade);
+
+    const prods = c.produtos || [];
+    let prodsRowsHtml = '';
+    if (prods.length === 0) {
+      prodsRowsHtml = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 0.6rem;">Nenhum produto individual identificado nos pedidos deste cliente.</td></tr>`;
+    } else {
+      prodsRowsHtml = prods.map(p => {
+        const vlrTotalProd = `R$ ${(p.total_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const pMedioProd = `R$ ${(p.preco_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const descProd = p.total_desconto > 0 ? `R$ ${(p.total_desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+
+        return `
+          <tr>
+            <td style="text-align: center; font-weight: 600; width: 60px;">#${p.CodPrd}</td>
+            <td>
+              <strong style="color: var(--text-primary); cursor: pointer;" onclick="openProdutoVendasDetalhesModal(${p.CodPrd})" title="Ver detalhes do produto">${escapeHtml(p.Descricao_Produto)}</strong>
+              ${p.CodBar ? `<span style="font-size: 0.72rem; color: var(--text-muted); margin-left: 0.5rem;">EAN: ${escapeHtml(p.CodBar)}</span>` : ''}
+            </td>
+            <td><span class="badge badge-group" style="font-size: 0.7rem; padding: 0.1rem 0.35rem;">${escapeHtml(p.Descricao_Grupo || 'GERAL')}</span></td>
+            <td style="text-align: center; width: 45px;"><span class="badge" style="background: var(--bg-surface-elevated); font-size: 0.7rem;">${escapeHtml(p.Embalagem || 'UN')}</span></td>
+            <td style="text-align: right; font-weight: 600; width: 80px;">${(p.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+            <td style="text-align: right; color: var(--text-secondary); width: 95px;">${pMedioProd}</td>
+            <td style="text-align: right; color: var(--text-muted); font-size: 0.75rem; width: 80px;">${descProd}</td>
+            <td style="text-align: right; font-weight: 700; color: var(--accent-emerald); width: 110px;">${vlrTotalProd}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const subTableHtml = `
+      <tr class="client-prods-row" id="client-prods-row-${c.CodEntidade}" style="display: ${isExpanded ? 'table-row' : 'none'};">
+        <td colspan="12" style="padding: 0; border-top: none;">
+          <div class="client-prods-wrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-blue);"></i> Produtos adquiridos por ${escapeHtml(c.Nome || 'Cliente')} (${prods.length} itens)
+              </span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openClienteRelatorioDetalhesModal(${c.CodEntidade})" style="padding: 0.15rem 0.5rem; font-size: 0.72rem;">
+                <i class="fa-solid fa-list-check"></i> Ver Histórico Completo de Pedidos
+              </button>
+            </div>
+            <table class="subtable-prods">
+              <thead>
+                <tr>
+                  <th style="text-align: center;">Cód.</th>
+                  <th>Produto / Descrição</th>
+                  <th>Grupo</th>
+                  <th style="text-align: center;">UN</th>
+                  <th style="text-align: right;">Qtd</th>
+                  <th style="text-align: right;">Preço Médio</th>
+                  <th style="text-align: right;">Desconto</th>
+                  <th style="text-align: right;">Total Comprado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${prodsRowsHtml}
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    return `
+      <tr class="client-main-row" id="client-main-row-${c.CodEntidade}">
+        <td style="text-align: center;">
+          <button type="button" class="btn-toggle-client-prods ${isExpanded ? 'expanded' : ''}" id="btn-toggle-cli-${c.CodEntidade}" onclick="toggleClienteProdutos(${c.CodEntidade})" title="Ver produtos comprados">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </td>
+        <td style="text-align: center; font-weight: 700;">#${c.CodEntidade}</td>
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="openClienteRelatorioDetalhesModal(${c.CodEntidade})" title="Clique para ver extrato completo">
+            ${escapeHtml(c.Nome || 'NÃO IDENTIFICADO')}
+          </div>
+        </td>
+        <td>
+          <div style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(c.Fantasia || '-')}</div>
+          ${c.Documento ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(c.Documento)}</div>` : ''}
+        </td>
+        <td>
+          <div style="font-size: 0.85rem;">${escapeHtml(c.Cidade || '-')}${c.Uf ? ` / ${escapeHtml(c.Uf)}` : ''}</div>
+          ${c.Fone ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(c.Fone)}</div>` : ''}
+        </td>
+        <td style="text-align: center; font-weight: 600;">
+          <span class="badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent-blue);">${c.total_pedidos}</span>
+        </td>
+        <td style="text-align: right; font-weight: 600;">${(c.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+        <td style="text-align: right; color: var(--text-secondary);">${ticketMedioStr}</td>
+        <td style="text-align: right; font-weight: 700; color: var(--accent-emerald); font-size: 0.95rem;">${faturamentoStr}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <div style="flex: 1; height: 6px; background: var(--bg-surface-elevated); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div style="width: ${barWidth}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 3px;"></div>
+            </div>
+            <span style="font-size: 0.75rem; font-weight: 600; min-width: 38px; text-align: right; color: var(--text-secondary);">${c.participacao_pct.toFixed(1)}%</span>
+          </div>
+        </td>
+        <td style="text-align: center; font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(c.ultima_compra || '-')}</td>
+        <td style="text-align: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openClienteRelatorioDetalhesModal(${c.CodEntidade})" title="Ver histórico detalhado de compras" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <i class="fa-solid fa-receipt"></i> Extrato
+          </button>
+        </td>
+      </tr>
+      ${subTableHtml}
+    `;
+  }).join('');
+}
+
+function toggleClienteProdutos(codEntidade) {
+  const row = document.getElementById(`client-prods-row-${codEntidade}`);
+  const btn = document.getElementById(`btn-toggle-cli-${codEntidade}`);
+  if (!row) return;
+
+  if (row.style.display === 'none' || !row.style.display) {
+    row.style.display = 'table-row';
+    if (btn) btn.classList.add('expanded');
+    relCliExpandedClients.add(codEntidade);
+  } else {
+    row.style.display = 'none';
+    if (btn) btn.classList.remove('expanded');
+    relCliExpandedClients.delete(codEntidade);
+  }
+}
+
+function toggleAllClientesProdutos() {
+  const allSubRows = document.querySelectorAll('.client-prods-row');
+  const allBtns = document.querySelectorAll('.btn-toggle-client-prods');
+  const toggleTxt = document.getElementById('txt-toggle-all-cli');
+
+  const shouldExpand = relCliExpandedClients.size === 0;
+
+  allSubRows.forEach(row => {
+    row.style.display = shouldExpand ? 'table-row' : 'none';
+  });
+
+  allBtns.forEach(btn => {
+    if (shouldExpand) btn.classList.add('expanded');
+    else btn.classList.remove('expanded');
+  });
+
+  if (shouldExpand) {
+    if (relCliReportData && relCliReportData.items) {
+      relCliReportData.items.forEach(c => relCliExpandedClients.add(c.CodEntidade));
+    }
+    if (toggleTxt) toggleTxt.innerText = 'Recolher Produtos';
+  } else {
+    relCliExpandedClients.clear();
+    if (toggleTxt) toggleTxt.innerText = 'Expandir Produtos';
+  }
+}
+
+function renderRelatorioClientePaginacao(total, page, limit) {
+  const infoEl = document.getElementById('rel-cli-pagination-info');
+  const indicatorEl = document.getElementById('rel-cli-page-indicator');
+  const btnPrev = document.getElementById('rel-cli-btn-prev');
+  const btnNext = document.getElementById('rel-cli-btn-next');
+  const footerEl = document.getElementById('rel-cli-table-footer');
+
+  if (!total || limit === 0) {
+    if (footerEl) footerEl.style.display = limit === 0 ? 'none' : 'flex';
+    if (infoEl) infoEl.innerText = `Total: ${total || 0} clientes`;
+    return;
+  }
+
+  if (footerEl) footerEl.style.display = 'flex';
+
+  const start = ((page - 1) * limit) + 1;
+  const end = Math.min(page * limit, total);
+
+  if (infoEl) infoEl.innerText = `Mostrando ${start} - ${end} de ${total} clientes`;
+  if (indicatorEl) indicatorEl.innerText = `${page} / ${relCliTotalPages}`;
+
+  if (btnPrev) btnPrev.disabled = (page <= 1);
+  if (btnNext) btnNext.disabled = (page >= relCliTotalPages);
+}
+
+async function openClienteRelatorioDetalhesModal(codEntidade) {
+  const modal = document.getElementById('rel-cli-detalhes-modal');
+  if (!modal) return;
+
+  modal.classList.add('active');
+
+  const dtInicio = document.getElementById('rel-cli-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-cli-filtro-data-fim')?.value || '';
+  const status = document.getElementById('rel-cli-filtro-status')?.value || 'ativos';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const tbody = document.getElementById('tbody-rel-detalhes-compras-cliente');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" class="loading-td">
+          <i class="fa-solid fa-spinner fa-spin"></i> Carregando compras do cliente...
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const params = new URLSearchParams({ status });
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const res = await fetch(`/api/relatorios/vendas-por-cliente/detalhes/${codEntidade}?${params.toString()}`);
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Falha ao carregar compras do cliente');
+
+    const cli = data.cliente || {};
+    const resumo = data.resumo || {};
+    const vendas = data.vendas || [];
+
+    // Header info
+    setElementText('rel-det-cli-badge-cod', `Cód: #${cli.CodEntidade || codEntidade}`);
+    const docVal = cli.CGC || cli.CPF || 'SEM DOCUMENTO';
+    setElementText('rel-det-cli-badge-doc', docVal);
+    const cidUf = `${cli.Cidade || '-'}${cli.Uf ? ' / ' + cli.Uf : ''}`;
+    setElementText('rel-det-cli-badge-cidade', cidUf);
+    setElementText('rel-det-cli-nome', cli.Nome || 'Cliente');
+    setElementText('rel-det-cli-fantasia', cli.Fantasia || '-');
+    setElementText('rel-det-cli-fone', cli.Fone || '-');
+    const endStr = `${cli.Endereco || ''}${cli.Nro ? ', ' + cli.Nro : ''}${cli.Bairro ? ' - ' + cli.Bairro : ''}`;
+    setElementText('rel-det-cli-endereco', endStr || '-');
+
+    // KPI Badges
+    setElementText('rel-det-cli-kpi-pedidos', (resumo.total_pedidos || 0).toLocaleString());
+    setElementText('rel-det-cli-kpi-qtd', (resumo.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+    setElementText('rel-det-cli-kpi-ticket-medio', `R$ ${(resumo.ticket_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    setElementText('rel-det-cli-kpi-faturamento', `R$ ${(resumo.total_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+    // Transactions Table
+    if (tbody) {
+      if (vendas.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="loading-td">Nenhuma compra registrada para este cliente no período selecionado.</td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = vendas.map(v => {
+          const vlrTotStr = `R$ ${(v.ValorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const vlrUnitStr = `R$ ${(v.ValorUnit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const descStr = v.Desconto > 0 ? `R$ ${(v.Desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+
+          let statusBadge = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-clock"></i> Sem NF</span>';
+          if (v.PrevEntrega && v.PrevEntrega.toUpperCase() === 'CANCELADO') {
+            statusBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-ban"></i> Cancelado</span>';
+          } else if (v.NroNt > 0 || (v.NroChave && v.NroChave.length > 0)) {
+            const nro = v.NroNt > 0 ? `NF #${v.NroNt}` : 'NF-e Emitida';
+            statusBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.72rem; padding: 0.15rem 0.4rem; white-space: nowrap;"><i class="fa-solid fa-receipt"></i> ${escapeHtml(nro)}</span>`;
+          }
+
+          return `
+            <tr>
+              <td><strong style="color: var(--accent-blue);">#${v.CodPed}</strong></td>
+              <td>${statusBadge}</td>
+              <td>
+                <div>${escapeHtml(v.DataEmiss || '-')}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(v.Hora || '')}</div>
+              </td>
+              <td>
+                <div style="font-weight: 600; color: var(--text-primary);">#${v.CodPrd} - ${escapeHtml(v.Descricao_Produto)}</div>
+                ${v.CodBar ? `<div style="font-size: 0.72rem; color: var(--text-muted);">EAN: ${escapeHtml(v.CodBar)}</div>` : ''}
+              </td>
+              <td style="text-align: center;"><span class="badge" style="background: var(--bg-surface-elevated); font-size: 0.75rem;">${escapeHtml(v.Embalagem || 'UN')}</span></td>
+              <td style="text-align: right; font-weight: 600;">${(v.Qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+              <td style="text-align: right; color: var(--text-secondary);">${vlrUnitStr}</td>
+              <td style="text-align: right; color: var(--text-muted); font-size: 0.8rem;">${descStr}</td>
+              <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">${vlrTotStr}</td>
+              <td><span class="badge" style="background: var(--bg-surface); border: 1px solid var(--border-color); font-size: 0.75rem;">${escapeHtml(v.CondPgto || 'A VISTA')}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+  } catch (err) {
+    showToast(`Erro ao carregar detalhes do cliente: ${err.message}`, 'error');
+  }
+}
+
+function closeClienteRelatorioDetalhesModal() {
+  const modal = document.getElementById('rel-cli-detalhes-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+async function imprimirRelatorioVendasCliente() {
+  const dtInicio = document.getElementById('rel-cli-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-cli-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-cli-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-cli-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-cli-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-cli-filtro-busca')?.value || '';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || '1';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  showToast('Preparando relatório formatado para impressão...', 'info', 2000);
+
+  try {
+    const params = new URLSearchParams({
+      sort_by: sort_by || 'total_valor',
+      sort_order: sort_order || 'DESC',
+      status: status,
+      limit: 0 // Fetch all rows for complete printing
+    });
+
+    if (dtInicio) params.append('data_inicio', dtInicio);
+    if (dtFim) params.append('data_fim', dtFim);
+    if (grupo && grupo !== 'all') params.append('grupo', grupo);
+    if (qVal && qVal.trim()) params.append('q', qVal.trim());
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const [resRel, resEmp] = await Promise.all([
+      fetch(`/api/relatorios/vendas-por-cliente?${params.toString()}`),
+      fetch(`/api/empresas/${idEmpresa}`).catch(() => null)
+    ]);
+
+    const data = await resRel.json();
+    if (!resRel.ok) throw new Error(data.error || 'Falha ao obter dados para impressão');
+
+    let empData = { RazaoSocial: 'SISTEMA DE VENDAS', CNPJ: '', InscrEst: '', Fone: '', Cidade: '', Uf: '' };
+    if (resEmp && resEmp.ok) {
+      try {
+        const empJson = await resEmp.json();
+        if (empJson) empData = { ...empData, ...empJson };
+      } catch (e) {}
+    }
+
+    const items = data.items || [];
+    const sum = data.summary || {};
+
+    if (items.length === 0) {
+      showToast('Nenhum registro encontrado para impressão.', 'warning');
+      return;
+    }
+
+    const now = new Date();
+    const dataHoraEmissao = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR');
+    const periodoFormatado = (dtInicio || dtFim) 
+      ? `De ${dtInicio ? dtInicio.split('-').reverse().join('/') : 'Início'} até ${dtFim ? dtFim.split('-').reverse().join('/') : 'Hoje'}`
+      : 'Todo o Histórico de Vendas';
+
+    const statusLabelsMap = {
+      'ativos': 'Todos os Pedidos (Faturados e Pendentes de Nota)',
+      'com_nota': 'Apenas com Nota Fiscal (Faturados)',
+      'sem_nota': 'Apenas Pendentes de Nota (Sem NF)',
+      'cancelados': 'Apenas Cancelados',
+      'todos': 'Todos os Pedidos (Inclusive Cancelados)'
+    };
+    const statusLabel = statusLabelsMap[status] || 'Todos os Pedidos';
+
+    const faturamentoStr = `R$ ${(sum.total_faturamento_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const brutoStr = `R$ ${(sum.total_bruto_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const descontoStr = `R$ ${(sum.total_desconto_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const ticketMedioStr = `R$ ${(sum.ticket_medio_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    let sectionsHtml = '';
+    items.forEach((c, idx) => {
+      const vlrTotCli = `R$ ${c.total_valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const tickMedCli = `R$ ${c.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const prods = c.produtos || [];
+
+      let prodsTrs = '';
+      if (prods.length === 0) {
+        prodsTrs = `<tr><td colspan="6" style="text-align: center; color: #64748b; font-size: 7.5pt; padding: 4px;">Nenhum produto individual listado.</td></tr>`;
+      } else {
+        prodsTrs = prods.map(p => {
+          const totP = `R$ ${(p.total_valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const pMed = `R$ ${(p.preco_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const descP = p.total_desconto > 0 ? `R$ ${(p.total_desconto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-';
+
+          return `
+            <tr>
+              <td style="text-align: center; font-size: 7.5pt; width: 40px;">#${p.CodPrd}</td>
+              <td style="font-size: 7.5pt;">${escapeHtml(p.Descricao_Produto)}</td>
+              <td style="text-align: center; font-size: 7.5pt; width: 30px;">${escapeHtml(p.Embalagem || 'UN')}</td>
+              <td style="text-align: right; font-size: 7.5pt; font-weight: 600; width: 50px;">${(p.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+              <td style="text-align: right; font-size: 7.5pt; width: 65px;">${pMed}</td>
+              <td style="text-align: right; font-size: 7.5pt; color: #64748b; width: 55px;">${descP}</td>
+              <td style="text-align: right; font-size: 7.5pt; font-weight: 700; color: #047857; width: 75px;">${totP}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      sectionsHtml += `
+        <div style="margin-bottom: 10px; border: 1px solid #cbd5e1; border-radius: 4px; overflow: hidden; page-break-inside: avoid;">
+          <div style="background: #f1f5f9; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1;">
+            <div>
+              <strong style="color: #0f172a; font-size: 8.5pt;">#${c.CodEntidade} - ${escapeHtml(c.Nome || 'CLIENTE')}</strong>
+              <span style="font-size: 7.5pt; color: #475569; margin-left: 6px;">${c.Documento ? `(${escapeHtml(c.Documento)})` : ''} ${c.Cidade ? `• ${escapeHtml(c.Cidade)}/${escapeHtml(c.Uf || '')}` : ''}</span>
+            </div>
+            <div style="font-size: 8pt; font-weight: 700; display: flex; gap: 10px;">
+              <span>Pedidos: ${c.total_pedidos}</span>
+              <span>Peças: ${(c.total_qtd || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+              <span>Ticket Médio: ${tickMedCli}</span>
+              <span style="color: #047857;">Total: ${vlrTotCli} (${c.participacao_pct.toFixed(2)}%)</span>
+            </div>
+          </div>
+          <table class="report-table" style="margin: 0;">
+            <thead>
+              <tr style="background: #e2e8f0;">
+                <th style="width: 40px; text-align: center; color: #334155; font-size: 7pt; padding: 3px 4px;">CÓD.</th>
+                <th style="color: #334155; font-size: 7pt; padding: 3px 4px;">PRODUTO / DESCRIÇÃO</th>
+                <th style="width: 30px; text-align: center; color: #334155; font-size: 7pt; padding: 3px 4px;">UN</th>
+                <th style="width: 50px; text-align: right; color: #334155; font-size: 7pt; padding: 3px 4px;">QTD</th>
+                <th style="width: 65px; text-align: right; color: #334155; font-size: 7pt; padding: 3px 4px;">P. MÉDIO</th>
+                <th style="width: 55px; text-align: right; color: #334155; font-size: 7pt; padding: 3px 4px;">DESC.</th>
+                <th style="width: 75px; text-align: right; color: #334155; font-size: 7pt; padding: 3px 4px;">TOTAL (R$)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${prodsTrs}
+            </tbody>
+          </table>
+        </div>
+      `;
+    });
+
+    const printDoc = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Vendas de Produtos por Cliente - ${empData.RazaoSocial || 'Sistema Vendas'}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 10mm 10mm 12mm 10mm;
+          }
+          * {
+            box-sizing: border-box;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1e293b;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            font-size: 8.5pt;
+            line-height: 1.3;
+          }
+          .header-box {
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+          .company-name {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 2px 0;
+            text-transform: uppercase;
+          }
+          .company-sub {
+            font-size: 8pt;
+            color: #475569;
+            margin: 0;
+          }
+          .report-badge {
+            text-align: right;
+          }
+          .report-title {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #1e3a8a;
+            margin: 0 0 3px 0;
+          }
+          .report-meta {
+            font-size: 7.5pt;
+            color: #64748b;
+          }
+          .filter-box {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            font-size: 8pt;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+          }
+          .filter-item strong {
+            color: #0f172a;
+          }
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+          }
+          .kpi-card {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 6px 8px;
+            text-align: center;
+          }
+          .kpi-card .kpi-label {
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #475569;
+            margin-bottom: 2px;
+          }
+          .kpi-card .kpi-val {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .kpi-card .kpi-sub {
+            font-size: 6.5pt;
+            color: #64748b;
+            margin-top: 2px;
+          }
+          table.report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+          }
+          table.report-table thead {
+            display: table-header-group;
+          }
+          table.report-table tr {
+            page-break-inside: avoid;
+          }
+          table.report-table th {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 7.5pt;
+            padding: 5px 5px;
+            text-align: left;
+            border: 1px solid #cbd5e1;
+          }
+          table.report-table td {
+            padding: 4px 5px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+          }
+          .footer-box {
+            margin-top: 14px;
+            padding-top: 6px;
+            border-top: 1px solid #cbd5e1;
+            font-size: 7pt;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+          }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">
+          <div>
+            <div class="company-name">${escapeHtml(empData.RazaoSocial || 'EMPRESA MATRIZ')}</div>
+            <div class="company-sub">
+              ${empData.CNPJ ? `CNPJ: ${escapeHtml(empData.CNPJ)}` : ''} 
+              ${empData.InscrEst ? ` | IE: ${escapeHtml(empData.InscrEst)}` : ''}
+              ${empData.Fone ? ` | Fone: ${escapeHtml(empData.Fone)}` : ''}
+              ${empData.Cidade ? ` | ${escapeHtml(empData.Cidade)}/${escapeHtml(empData.Uf || '')}` : ''}
+            </div>
+          </div>
+          <div class="report-badge">
+            <div class="report-title">RELATÓRIO DE VENDAS POR CLIENTE</div>
+            <div class="report-meta">Emissão: ${dataHoraEmissao}</div>
+          </div>
+        </div>
+
+        <div class="filter-box">
+          <div class="filter-item"><strong>Período:</strong> ${escapeHtml(periodoFormatado)}</div>
+          <div class="filter-item"><strong>Status:</strong> ${escapeHtml(statusLabel)}</div>
+          ${qVal ? `<div class="filter-item"><strong>Busca:</strong> "${escapeHtml(qVal)}"</div>` : ''}
+          <div class="filter-item"><strong>Total Clientes:</strong> ${items.length} compradores listados</div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card" style="border-top: 3px solid #059669;">
+            <div class="kpi-label">Faturamento Total</div>
+            <div class="kpi-val" style="color: #047857;">${faturamentoStr}</div>
+            <div class="kpi-sub">Bruto: ${brutoStr}</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #2563eb;">
+            <div class="kpi-label">Total de Clientes</div>
+            <div class="kpi-val">${(sum.total_clientes_distintos || 0).toLocaleString()}</div>
+            <div class="kpi-sub">Compradores no período</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #8b5cf6;">
+            <div class="kpi-label">Total de Pedidos</div>
+            <div class="kpi-val">${(sum.total_pedidos_geral || 0).toLocaleString()}</div>
+            <div class="kpi-sub">${(sum.total_pedidos_com_nota || 0).toLocaleString()} c/ NF • ${(sum.total_pedidos_sem_nota || 0).toLocaleString()} s/ NF</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #0284c7;">
+            <div class="kpi-label">Qtd Total de Peças</div>
+            <div class="kpi-val">${(sum.total_qtd_geral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</div>
+            <div class="kpi-sub">Desc: ${descontoStr}</div>
+          </div>
+          <div class="kpi-card" style="border-top: 3px solid #d97706;">
+            <div class="kpi-label">Ticket Médio / Pedido</div>
+            <div class="kpi-val" style="color: #b45309;">${ticketMedioStr}</div>
+            <div class="kpi-sub">Média por transação</div>
+          </div>
+        </div>
+
+        ${sectionsHtml}
+
+        <div class="footer-box">
+          <span>Sistema Vendas - Módulo Gestão Comercial & PDV Multiempresa</span>
+          <span>Página 1 de 1</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 250);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=1000,height=800,menubar=no,toolbar=no,location=no,status=no');
+    if (!printWindow) {
+      let printFrame = document.getElementById('report-print-iframe');
+      if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'report-print-iframe';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        document.body.appendChild(printFrame);
+      }
+      const frameDoc = printFrame.contentWindow.document;
+      frameDoc.open();
+      frameDoc.write(printDoc);
+      frameDoc.close();
+      setTimeout(() => {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      }, 500);
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(printDoc);
+    printWindow.document.close();
+
+  } catch (err) {
+    console.error('Erro ao imprimir relatório por cliente:', err);
+    showToast(`Erro ao preparar impressão: ${err.message}`, 'error');
+  }
+}
+
+function exportarRelatorioVendasClienteCSV() {
+  const dtInicio = document.getElementById('rel-cli-filtro-data-inicio')?.value || '';
+  const dtFim = document.getElementById('rel-cli-filtro-data-fim')?.value || '';
+  const grupo = document.getElementById('rel-cli-filtro-grupo')?.value || 'all';
+  const status = document.getElementById('rel-cli-filtro-status')?.value || 'ativos';
+  const ordVal = document.getElementById('rel-cli-filtro-ordenacao')?.value || 'total_valor|DESC';
+  const qVal = document.getElementById('rel-cli-filtro-busca')?.value || '';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  const [sort_by, sort_order] = ordVal.split('|');
+
+  const params = new URLSearchParams({
+    sort_by: sort_by || 'total_valor',
+    sort_order: sort_order || 'DESC',
+    status: status
+  });
+
+  if (dtInicio) params.append('data_inicio', dtInicio);
+  if (dtFim) params.append('data_fim', dtFim);
+  if (grupo && grupo !== 'all') params.append('grupo', grupo);
+  if (qVal && qVal.trim()) params.append('q', qVal.trim());
+  if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+  showToast('Iniciando download do relatório por cliente em CSV/Excel...', 'info', 2000);
+  window.location.href = `/api/relatorios/vendas-por-cliente/export/csv?${params.toString()}`;
+}
+
 
 
 
