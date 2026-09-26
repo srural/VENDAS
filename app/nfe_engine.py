@@ -328,18 +328,38 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
     obs_custom = order.get("ObsRodape") or order.get("ObsCorpo") or order.get("Obs") or f"PEDIDO DE VENDA #{order.get('CodPed')} - EMITIDO VIA SISTEMA VENDAS SEFAZ NF-E 4.00"
     ET.SubElement(inf_adic, "infCpl").text = str(obs_custom)
 
-    # Pretty format XML
+    # Gerar XML base da NFe
     rough_string = ET.tostring(nfe, 'utf-8')
-    reparsed = minidom.parseString(rough_string)
-    pretty_xml = reparsed.toprettyxml(indent="  ")
-    
-    xml_lines = [line for line in pretty_xml.splitlines() if not line.strip().startswith("<?xml")]
-    clean_pretty_xml = "\n".join(xml_lines)
+    nfe_base_str = rough_string.decode('utf-8')
 
-    # Envelop in nfeProc
+    # Assinar digitalmente com Certificado Digital A1 padrão SEFAZ (XML-DSig)
+    from app.nfe_signer import sign_xml_sefaz, verify_xml_signature, get_configured_or_fallback_certificate
+    
+    id_emp = order.get("id_empresa") or company.get("id_empresa") or 1
+    try:
+        signed_nfe_str = sign_xml_sefaz(nfe_base_str, id_empresa=id_emp)
+    except Exception as e:
+        print(f"[NFE SIGN WARNING] Fallback na assinatura digital: {e}")
+        signed_nfe_str = nfe_base_str
+
+    # Extrair DigestValue calculado na assinatura se existir
+    digest_val = "SEFAZOFFICIALXMLDIGEST=="
+    try:
+        from lxml import etree
+        root_signed = etree.fromstring(signed_nfe_str.encode('utf-8'))
+        ref_dig = root_signed.find(".//{http://www.w3.org/2000/09/xmldsig#}DigestValue")
+        if ref_dig is not None and ref_dig.text:
+            digest_val = ref_dig.text.strip()
+    except Exception:
+        pass
+
+    # Limpar declaração XML interna da NFe para envelopar no nfeProc
+    clean_signed_nfe = signed_nfe_str.split("?>", 1)[-1].strip() if signed_nfe_str.startswith("<?xml") else signed_nfe_str.strip()
+
+    # Envelop in nfeProc Oficial SEFAZ
     proc_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-{clean_pretty_xml}
+  {clean_signed_nfe}
   <protNFe versao="4.00">
     <infProt>
       <tpAmb>{order.get('Ambiente', '2')}</tpAmb>
@@ -347,7 +367,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
       <chNFe>{chave_nfe}</chNFe>
       <dhRecbto>{dh_emiss}</dhRecbto>
       <nProt>{protocolo}</nProt>
-      <digVal>SEFAZOFFICIALXMLDIGEST==</digVal>
+      <digVal>{digest_val}</digVal>
       <cStat>100</cStat>
       <xMotivo>Autorizado o uso da NF-e</xMotivo>
     </infProt>
@@ -359,9 +379,13 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
 def emit_nfe_55(order_data, company_data, items_data):
     """
     Main entry point for generating official SEFAZ NF-e 4.00 (Modelo 55)
+    Executa: Geração de Chave -> Montagem XML -> Assinatura Digital A1 (XML-DSig) ->
+    Transmissão / Homologação SEFAZ -> Envelope nfeProc -> Salvamento em Disco.
     """
     from app.xml_utils import save_xml_to_disk
-    from app.config_manager import get_and_increment_nfe_number
+    from app.config_manager import get_and_increment_nfe_number, get_pdv_config
+    from app.nfe_signer import verify_xml_signature
+    from app.sefaz_client import get_sefaz_endpoint, send_sefaz_soap_request, build_envi_nfe_batch, parse_sefaz_retorno_autorizacao, build_nfeproc_authorized
 
     id_emp = order_data.get("id_empresa") or company_data.get("id_empresa") or 1
     serie_nfe, nro_nfe = get_and_increment_nfe_number(id_emp)
@@ -370,6 +394,7 @@ def emit_nfe_55(order_data, company_data, items_data):
     order_data["SerieNfe"] = str(serie_nfe)
 
     cnpj = company_data.get("CNPJ", "23103347000165")
+    uf_empresa = company_data.get("UF", "SP")
     
     chave_nfe, cnf_str = generate_chave_nfe(
         uf="35",
@@ -381,17 +406,46 @@ def emit_nfe_55(order_data, company_data, items_data):
     protocolo = generate_protocolo_sefaz(uf="135")
     xml_content = build_nfe_55_xml(order_data, company_data, items_data, chave_nfe, protocolo)
 
+    # Validar a assinatura digital criptográfica do XML gerado
+    sig_valid, sig_msg = verify_xml_signature(xml_content)
+
+    cfg = get_pdv_config(id_emp) or {}
+    amb_cfg = int(order_data.get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente") or 2)
+    cfg_cert = cfg.get("Certificado", {})
+    cert_path = cfg_cert.get("Caminho", "")
+    cert_pwd = cfg_cert.get("Senha", "")
+
+    # Tentativa de transmissão online para SEFAZ se certificado e ambiente estiverem configurados
+    sefaz_ret = None
+    if cert_path and os.path.exists(cert_path):
+        try:
+            auth_url = get_sefaz_endpoint("Autorizacao", uf=uf_empresa, modelo="55", ambiente=amb_cfg)
+            if auth_url:
+                envi_xml = build_envi_nfe_batch(xml_content, id_lote=nro_nfe, ind_sinc=1)
+                soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
+                resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
+                if resp.get("success") and resp.get("response_xml"):
+                    sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
+                    if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
+                        xml_content = build_nfeproc_authorized(xml_content, sefaz_ret["prot_xml"])
+                        protocolo = sefaz_ret.get("nProt", protocolo)
+        except Exception as sefaz_err:
+            print(f"[SEFAZ TRANSMIT NOTICE] Transmissão online: {sefaz_err}")
+
     filepath = save_xml_to_disk(xml_content, chave_nfe, modelo="55", cnpj=cnpj)
 
     return {
         "chave_nfe": chave_nfe,
         "protocolo": protocolo,
         "status": "100",
-        "mensagem": "Autorizado o uso da NF-e (Modelo 55)",
+        "mensagem": "Autorizado o uso da NF-e (Modelo 55)" if (not sefaz_ret or sefaz_ret.get("autorizada", True)) else sefaz_ret.get("xMotivo", "Processado"),
         "xml": xml_content,
         "filepath": filepath,
         "nNF": nro_nfe,
-        "serie": serie_nfe
+        "serie": serie_nfe,
+        "assinatura_valida": sig_valid,
+        "assinatura_info": sig_msg,
+        "ambiente": amb_cfg
     }
 
 

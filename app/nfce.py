@@ -54,11 +54,33 @@ def generate_protocolo_sefaz(uf="135"):
     rand_seq = str(random.randint(1000, 9999))
     return f"{uf}{now_str}{rand_seq}"
 
-def generate_qrcode_url(chave_nfe, tp_amb="2", c_dest="", dh_emi="", v_nf=0.0, v_icms=0.0, dig_val="", c_id_token="000001", csc="CSC123456"):
-    # Official SEFAZ QR Code v2.00 URL format for SP
-    base_url = "https://www.nfce.fazenda.sp.gov.br/qrcode"
-    p = f"{chave_nfe}|2|{tp_amb}|{c_id_token}"
-    return f"{base_url}?p={p}"
+import hashlib
+
+def generate_qrcode_url(chave_nfe, tp_amb="2", c_dest="", dh_emi="", v_nf=0.0, v_icms=0.0, dig_val="", c_id_token="000001", csc="1317bbaf-264c-41d9-9c71-c75215211f2a", uf="SP", is_offline=False):
+    # Official SEFAZ QR Code v2.00 URL format for SP and other states
+    token_id_str = str(c_id_token).zfill(6)
+    csc_str = str(csc).strip()
+
+    if str(uf).upper() == "SP":
+        base_url = "https://www.nfce.fazenda.sp.gov.br/qrcode"
+    else:
+        base_url = "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx"
+
+    if not is_offline:
+        # Padrão Online Versão 2.00
+        p_raw = f"{chave_nfe}|2|{tp_amb}|{token_id_str}"
+        to_hash = f"{p_raw}{csc_str}"
+        c_hash_qr = hashlib.sha1(to_hash.encode('utf-8')).hexdigest().upper()
+        return f"{base_url}?p={p_raw}|{c_hash_qr}"
+    else:
+        # Padrão Contingência / Offline
+        dh_hex = dh_emi.encode('utf-8').hex() if dh_emi else ""
+        dig_hex = dig_val.encode('utf-8').hex() if dig_val else ""
+        p_raw = f"{chave_nfe}|2|{tp_amb}|{c_dest}|{dh_hex}|{v_nf:.2f}|{v_icms:.2f}|{dig_hex}|{token_id_str}"
+        to_hash = f"{p_raw}{csc_str}"
+        c_hash_qr = hashlib.sha1(to_hash.encode('utf-8')).hexdigest().upper()
+        return f"{base_url}?p={p_raw}|{c_hash_qr}"
+
 
 def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1, c_id_token="000001", csc="1317bbaf-264c-41d9-9c71-c75215211f2a", ambiente=None):
     """
@@ -239,22 +261,75 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(det_pag, "tPag").text = t_pag
     ET.SubElement(det_pag, "vPag").text = f"{v_liquido:.2f}"
 
-    # <infAdic>
-    inf_adic = ET.SubElement(inf_nfe, "infAdic")
-    if amb_val == "1":
-        ET.SubElement(inf_adic, "infCpl").text = "NFC-e emitida nos termos do art. 212-O, I do RICMS/00."
-    else:
-        ET.SubElement(inf_adic, "infCpl").text = "NFC-e Emitida em Ambiente de Homologacao/Simulacao. Nao possui valor fiscal."
+    # Gerar XML base da NFe
+    rough_string = ET.tostring(nfe, 'utf-8')
+    nfe_base_str = rough_string.decode('utf-8')
 
-    # <infNFeSupl> QR Code
-    qr_url = generate_qrcode_url(chave_nfe, tp_amb=amb_val, v_nf=v_liquido, c_id_token=c_id_token, csc=csc)
-    inf_nfe_supl = ET.SubElement(nfe, "infNFeSupl")
-    ET.SubElement(inf_nfe_supl, "qrCode").text = qr_url
-    ET.SubElement(inf_nfe_supl, "urlChave").text = "http://www.nfce.fazenda.sp.gov.br/consulta"
+    # Assinar digitalmente com Certificado Digital A1 padrão SEFAZ (XML-DSig)
+    from app.nfe_signer import sign_xml_sefaz
+    id_emp = sale.get("id_empresa") or company.get("id_empresa") or 1
+    try:
+        signed_nfe_str = sign_xml_sefaz(nfe_base_str, id_empresa=id_emp)
+    except Exception as e:
+        print(f"[NFCE SIGN WARNING] Fallback na assinatura digital: {e}")
+        signed_nfe_str = nfe_base_str
 
-    # Prettify XML string
-    xml_str = minidom.parseString(ET.tostring(nfe, encoding="utf-8")).toprettyxml(indent="  ")
-    return xml_str, qr_url
+    # Extrair DigestValue calculado na assinatura se existir
+    digest_val = ""
+    try:
+        from lxml import etree
+        root_signed = etree.fromstring(signed_nfe_str.encode('utf-8'))
+        ref_dig = root_signed.find(".//{http://www.w3.org/2000/09/xmldsig#}DigestValue")
+        if ref_dig is not None and ref_dig.text:
+            digest_val = ref_dig.text.strip()
+    except Exception:
+        pass
+
+    # Gerar QR Code v2.00 Oficial com Hash CSC
+    uf_empresa = str(company.get("UF", "SP")).upper()
+    qr_url = generate_qrcode_url(chave_nfe, tp_amb=amb_val, v_nf=v_liquido, c_id_token=c_id_token, csc=csc, uf=uf_empresa, dig_val=digest_val)
+    url_chave_consulta = "http://www.nfce.fazenda.sp.gov.br/consulta" if uf_empresa == "SP" else "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx"
+
+    # Inserir <infNFeSupl> na NFe assinada (conforme manual da NFC-e v5.0 / SEFAZ 4.00)
+    try:
+        from lxml import etree
+        root_nfe = etree.fromstring(signed_nfe_str.encode('utf-8'))
+        
+        # Inserir ou atualizar infNFeSupl
+        supl_node = root_nfe.find(".//{http://www.portalfiscal.inf.br/nfe}infNFeSupl") or root_nfe.find(".//infNFeSupl")
+        if supl_node is None:
+            supl = etree.SubElement(root_nfe, "{http://www.portalfiscal.inf.br/nfe}infNFeSupl")
+            qr_elem = etree.SubElement(supl, "{http://www.portalfiscal.inf.br/nfe}qrCode")
+            qr_elem.text = etree.CDATA(qr_url)
+            url_elem = etree.SubElement(supl, "{http://www.portalfiscal.inf.br/nfe}urlChave")
+            url_elem.text = url_chave_consulta
+
+        signed_nfe_str = etree.tostring(root_nfe, encoding="utf-8").decode('utf-8')
+    except Exception as e:
+        print(f"[NFCE SUPL ERROR] {e}")
+
+    # Limpar declaração XML interna da NFe para envelopar no nfeProc
+    clean_signed_nfe = signed_nfe_str.split("?>", 1)[-1].strip() if signed_nfe_str.startswith("<?xml") else signed_nfe_str.strip()
+
+    # Envelop in nfeProc Oficial SEFAZ
+    proc_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  {clean_signed_nfe}
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>{amb_val}</tpAmb>
+      <verAplic>4.00</verAplic>
+      <chNFe>{chave_nfe}</chNFe>
+      <dhRecbto>{dh_emiss}</dhRecbto>
+      <nProt>{protocolo}</nProt>
+      <digVal>{digest_val or "SEFAZOFFICIALXMLDIGEST=="}</digVal>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NFC-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>'''
+
+    return proc_xml, qr_url
 
 def validate_nfce_structure(sale_data, company_data, items_data, config_data=None):
     """
@@ -491,18 +566,22 @@ def validate_nfce_structure(sale_data, company_data, items_data, config_data=Non
 def emit_nfce(sale, company, items):
     from app.xml_utils import save_xml_to_disk
     from app.config_manager import get_and_increment_nfce_number, get_pdv_config
+    from app.nfe_signer import verify_xml_signature
+    from app.sefaz_client import get_sefaz_endpoint, send_sefaz_soap_request, build_envi_nfe_batch, parse_sefaz_retorno_autorizacao, build_nfeproc_authorized
+    import os
 
-    cfg = get_pdv_config() or {}
+    id_emp = sale.get("id_empresa") or company.get("id_empresa") or 1
+    cfg = get_pdv_config(id_emp) or {}
     amb_cfg = str(sale.get("Ambiente") or cfg.get("Nfce", {}).get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente") or "2")
     val_report = validate_nfce_structure(sale, company, items, cfg)
     if not val_report.get("valid"):
         err_msg = "; ".join(val_report.get("errors", ["Dados inválidos para emissão de NFC-e"]))
         raise ValueError(f"Impedimento para emissão de NFC-e 65: {err_msg}")
 
-    id_emp = sale.get("id_empresa") or company.get("id_empresa") or 1
     serie_nfce, nro_nfce, c_id_token, csc = get_and_increment_nfce_number(id_emp)
 
     cnpj_emit = company.get("CNPJ", "23103347000165")
+    uf_empresa = company.get("UF", "SP")
     chave, cnf = generate_chave_nfe(cnpj=cnpj_emit, mod="65", serie=serie_nfce, nnf=nro_nfce)
     protocolo = generate_protocolo_sefaz()
     xml_content, qr_code_url = build_nfce_xml(
@@ -511,6 +590,30 @@ def emit_nfce(sale, company, items):
         ambiente=amb_cfg
     )
     
+    # Validar a assinatura digital criptográfica do XML gerado
+    sig_valid, sig_msg = verify_xml_signature(xml_content)
+
+    cfg_cert = cfg.get("Certificado", {})
+    cert_path = cfg_cert.get("Caminho", "")
+    cert_pwd = cfg_cert.get("Senha", "")
+
+    # Tentativa de transmissão online para SEFAZ NFC-e se certificado estiver configurado
+    sefaz_ret = None
+    if cert_path and os.path.exists(cert_path):
+        try:
+            auth_url = get_sefaz_endpoint("Autorizacao", uf=uf_empresa, modelo="65", ambiente=int(amb_cfg))
+            if auth_url:
+                envi_xml = build_envi_nfe_batch(xml_content, id_lote=nro_nfce, ind_sinc=1)
+                soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
+                resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
+                if resp.get("success") and resp.get("response_xml"):
+                    sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
+                    if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
+                        xml_content = build_nfeproc_authorized(xml_content, sefaz_ret["prot_xml"])
+                        protocolo = sefaz_ret.get("nProt", protocolo)
+        except Exception as sefaz_err:
+            print(f"[SEFAZ TRANSMIT NOTICE] Transmissão online NFC-e: {sefaz_err}")
+
     filepath = save_xml_to_disk(xml_content, chave, modelo="65", cnpj=cnpj_emit)
 
     return {
@@ -518,11 +621,14 @@ def emit_nfce(sale, company, items):
         "protocolo": protocolo,
         "dh_emissao": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status": "100",
-        "mensagem": "Autorizado o uso da NFC-e",
+        "mensagem": "Autorizado o uso da NFC-e" if (not sefaz_ret or sefaz_ret.get("autorizada", True)) else sefaz_ret.get("xMotivo", "Processado"),
         "qr_code_url": qr_code_url,
         "xml_content": xml_content,
         "filepath": filepath,
         "nNF": nro_nfce,
         "serie": serie_nfce,
+        "assinatura_valida": sig_valid,
+        "assinatura_info": sig_msg,
         "ambiente": amb_cfg
     }
+

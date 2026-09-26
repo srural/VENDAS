@@ -54,7 +54,7 @@ Dados.mdb
 *.mdb
 *.sqlite
 *.sqlite3
-xmls/temp/
+xmls/
 *.tmp
 
 # ==========================================
