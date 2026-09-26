@@ -2873,6 +2873,372 @@ def get_relatorio_vendas_cliente_detalhes(cod_entidade, data_inicio=None, data_f
         conn.close()
 
 
+# --- RELATORIO DE DADOS CADASTRAIS DE ENTIDADES ---
+
+def get_relatorio_entidades(tipo=None, ativo=None, pessoa=None, uf=None, cidade=None, q=None, id_empresa=None, sort_by="Nome", sort_order="ASC", page=1, limit=50):
+    """
+    Retorna a listagem analítica e os KPIs consolidados dos dados cadastrais das Entidades
+    (Clientes, Fornecedores, Vendedores, Transportadoras).
+    """
+    params = []
+    where_clauses = []
+
+    # 1. Filtro de Tipo de Entidade
+    if tipo is not None and str(tipo).strip() not in ("", "all", "todos"):
+        try:
+            t = int(tipo)
+            if t == 1: # Clientes
+                where_clauses.append('("Tipo" = 1 OR "Tipo" = 7)')
+            elif t == 2: # Fornecedores
+                where_clauses.append('("Tipo" = 2 OR "Tipo" = 5)')
+            elif t == 3: # Vendedores
+                where_clauses.append('("Tipo" = 3 OR "Tipo" = 7)')
+            elif t in (4, 5): # Transportadoras
+                where_clauses.append('"Tipo" = 5')
+            else:
+                where_clauses.append('"Tipo" = %s')
+                params.append(t)
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Filtro de Status (Ativo / Inativo)
+    if ativo is not None and str(ativo).strip() not in ("", "all", "todos"):
+        if str(ativo) in ("1", "-1", "true", "True", "ativos"):
+            where_clauses.append('("Ativo" != 0 AND "Ativo" IS NOT NULL)')
+        elif str(ativo) in ("0", "false", "False", "inativos"):
+            where_clauses.append('("Ativo" IS NULL OR "Ativo" = 0)')
+
+    # 3. Filtro de Tipo de Pessoa (Física / Jurídica)
+    if pessoa is not None and str(pessoa).strip() not in ("", "all", "todos"):
+        p_str = str(pessoa).lower().strip()
+        if p_str in ("f", "fisica", "pf"):
+            where_clauses.append("""("CPF" IS NOT NULL AND TRIM("CPF") != '' AND ("CGC" IS NULL OR TRIM("CGC") = ''))""")
+        elif p_str in ("j", "juridica", "pj"):
+            where_clauses.append("""("CGC" IS NOT NULL AND TRIM("CGC") != '')""")
+
+    # 4. Filtro de UF / Estado
+    if uf is not None and str(uf).strip() not in ("", "all", "todos"):
+        where_clauses.append('UPPER(TRIM("Uf")) = UPPER(%s)')
+        params.append(str(uf).strip())
+
+    # 5. Filtro de Cidade
+    if cidade is not None and str(cidade).strip() not in ("", "all", "todos"):
+        where_clauses.append('UPPER(TRIM("Cidade")) = UPPER(%s)')
+        params.append(str(cidade).strip())
+
+    # 6. Filtro de Empresa / Filial
+    if id_empresa is not None and str(id_empresa).lower() not in ('all', '', 'todos'):
+        try:
+            emp_id = int(id_empresa)
+            if emp_id == 1:
+                where_clauses.append('("id_empresa" = %s OR "id_empresa" IS NULL)')
+            else:
+                where_clauses.append('"id_empresa" = %s')
+            params.append(emp_id)
+        except ValueError:
+            pass
+
+    # 7. Busca Textual Rápida
+    if q and q.strip():
+        search_term = q.strip()
+        search_pattern = f"%{search_term}%"
+        where_clauses.append("""(
+            "Nome" ILIKE %s OR 
+            "Fantasia" ILIKE %s OR 
+            "CPF" ILIKE %s OR 
+            "CGC" ILIKE %s OR 
+            "Cidade" ILIKE %s OR 
+            "Uf" ILIKE %s OR 
+            "Email" ILIKE %s OR 
+            "Fone" ILIKE %s OR 
+            "Celular" ILIKE %s OR
+            CAST("CodEntidade" AS TEXT) ILIKE %s
+        )""")
+        params.extend([search_pattern] * 10)
+
+    where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+    # 8. Mapeamento de Ordenação
+    valid_sorts = {
+        "nome": '"Nome"',
+        "fantasia": '"Fantasia"',
+        "codentidade": '"CodEntidade"',
+        "cidade": '"Cidade", "Nome"',
+        "uf": '"Uf", "Cidade", "Nome"',
+        "tipo": '"Tipo", "Nome"',
+        "credito": '"Credito"',
+        "dtcadastro": '"DtCadastro"',
+        "dtultmov": '"DtUltMov"',
+        "ativo": '"Ativo", "Nome"'
+    }
+    sort_field_sql = valid_sorts.get(str(sort_by).lower(), '"Nome"')
+    sort_dir_sql = "DESC" if str(sort_order).upper() == "DESC" else "ASC"
+
+    offset = (page - 1) * limit
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Consulta de Consolidação / KPIs do Relatório
+            summary_sql = f"""
+                SELECT 
+                    COUNT(*) as total_entidades,
+                    COUNT(*) FILTER (WHERE "Ativo" != 0 AND "Ativo" IS NOT NULL) as total_ativos,
+                    COUNT(*) FILTER (WHERE "Ativo" IS NULL OR "Ativo" = 0) as total_inativos,
+                    COUNT(*) FILTER (WHERE "Tipo" IN (1, 7)) as total_clientes,
+                    COUNT(*) FILTER (WHERE "Tipo" IN (2, 5)) as total_fornecedores,
+                    COUNT(*) FILTER (WHERE "Tipo" IN (3, 7)) as total_vendedores,
+                    COUNT(*) FILTER (WHERE "Tipo" = 5) as total_transportadoras,
+                    COUNT(*) FILTER (WHERE ("CPF" IS NOT NULL AND TRIM("CPF") != '' AND ("CGC" IS NULL OR TRIM("CGC") = ''))) as total_pessoa_fisica,
+                    COUNT(*) FILTER (WHERE ("CGC" IS NOT NULL AND TRIM("CGC") != '')) as total_pessoa_juridica,
+                    COALESCE(SUM(CAST("Credito" AS NUMERIC)), 0) as limite_credito_total,
+                    COUNT(DISTINCT "Cidade") as total_cidades_distintas,
+                    COUNT(DISTINCT "Uf") as total_ufs_distintas
+                FROM "ENT"
+                {where_sql}
+            """
+            cursor.execute(summary_sql, params)
+            sum_row = cursor.fetchone()
+            summary = _convert_row(sum_row) if sum_row else {}
+
+            total_ent = int(summary.get("total_entidades", 0))
+            summary["limite_credito_total"] = round(float(summary.get("limite_credito_total", 0.0)), 2)
+            summary["pct_ativos"] = round((float(summary.get("total_ativos", 0)) / total_ent * 100), 1) if total_ent > 0 else 0.0
+
+            # Top 5 Cidades com mais Entidades
+            top_cidades_sql = f"""
+                SELECT COALESCE(NULLIF(TRIM("Cidade"), ''), 'NÃO INFORMADA') as cidade, 
+                       COALESCE(NULLIF(TRIM("Uf"), ''), 'SP') as uf, 
+                       COUNT(*) as qtd
+                FROM "ENT"
+                {where_sql}
+                GROUP BY TRIM("Cidade"), TRIM("Uf")
+                ORDER BY qtd DESC, cidade ASC
+                LIMIT 5
+            """
+            cursor.execute(top_cidades_sql, params)
+            summary["top_cidades"] = [_convert_row(r) for r in cursor.fetchall()]
+
+            # Distribuição por UF
+            top_ufs_sql = f"""
+                SELECT COALESCE(NULLIF(TRIM("Uf"), ''), 'SP') as uf, COUNT(*) as qtd
+                FROM "ENT"
+                {where_sql}
+                GROUP BY TRIM("Uf")
+                ORDER BY qtd DESC
+                LIMIT 6
+            """
+            cursor.execute(top_ufs_sql, params)
+            summary["top_ufs"] = [_convert_row(r) for r in cursor.fetchall()]
+
+            # Consulta Paginada das Entidades
+            items_sql = f"""
+                SELECT 
+                    "CodEntidade",
+                    "Tipo",
+                    "Nome",
+                    "Fantasia",
+                    "Endereco",
+                    "Nro",
+                    "Complemento",
+                    "Bairro",
+                    "Cidade",
+                    "Uf",
+                    "Cep",
+                    "Fone",
+                    "Celular",
+                    "Fone2",
+                    "Email",
+                    "HomePage",
+                    "CPF",
+                    "RG",
+                    "CGC",
+                    "InscrEst",
+                    "Ativo",
+                    "Credito",
+                    "Condicao",
+                    "Prazo",
+                    "DtCadastro",
+                    "DtUltMov",
+                    "Obs",
+                    "id_empresa"
+                FROM "ENT"
+                {where_sql}
+                ORDER BY {sort_field_sql} {sort_dir_sql}, "CodEntidade" ASC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(items_sql, params + [limit, offset])
+            raw_items = cursor.fetchall()
+
+            tipo_desc_map = {
+                1: "Cliente",
+                2: "Fornecedor",
+                3: "Vendedor",
+                4: "Transportadora",
+                5: "Transportadora",
+                7: "Cliente / Vendedor"
+            }
+
+            items = []
+            for r in raw_items:
+                item = _convert_row(r)
+                tipo_num = int(item.get("Tipo", 1) or 1)
+                item["TipoDescricao"] = tipo_desc_map.get(tipo_num, f"Tipo {tipo_num}")
+
+                # Determinar Documento Principal e Tipo de Pessoa
+                cpf_raw = str(item.get("CPF") or "").strip()
+                cgc_raw = str(item.get("CGC") or "").strip()
+                
+                if cgc_raw:
+                    clean_doc = ''.join(filter(str.isdigit, cgc_raw))
+                    if len(clean_doc) == 14:
+                        item["DocumentoFormatado"] = f"{clean_doc[:2]}.{clean_doc[2:5]}.{clean_doc[5:8]}/{clean_doc[8:12]}-{clean_doc[12:]}"
+                    else:
+                        item["DocumentoFormatado"] = cgc_raw
+                    item["TipoPessoa"] = "Jurídica"
+                    item["Documento"] = item["DocumentoFormatado"]
+                elif cpf_raw:
+                    clean_doc = ''.join(filter(str.isdigit, cpf_raw))
+                    if len(clean_doc) == 11:
+                        item["DocumentoFormatado"] = f"{clean_doc[:3]}.{clean_doc[3:6]}.{clean_doc[6:9]}-{clean_doc[9:]}"
+                    else:
+                        item["DocumentoFormatado"] = cpf_raw
+                    item["TipoPessoa"] = "Física"
+                    item["Documento"] = item["DocumentoFormatado"]
+                else:
+                    item["DocumentoFormatado"] = "NÃO INFORMADO"
+                    item["TipoPessoa"] = "Não Definido"
+                    item["Documento"] = ""
+
+                # Endereço Formatado Completo
+                logr = str(item.get("Endereco") or "").strip()
+                nro = str(item.get("Nro") or "").strip()
+                compl = str(item.get("Complemento") or "").strip()
+                bairro = str(item.get("Bairro") or "").strip()
+                cid = str(item.get("Cidade") or "").strip()
+                uf_e = str(item.get("Uf") or "").strip().upper()
+                cep_e = str(item.get("Cep") or "").strip()
+
+                end_parts = []
+                if logr:
+                    end_parts.append(f"{logr}, {nro}" if nro else logr)
+                if compl:
+                    end_parts.append(f"({compl})")
+                if bairro:
+                    end_parts.append(bairro)
+                if cid or uf_e:
+                    end_parts.append(f"{cid}/{uf_e}" if cid and uf_e else (cid or uf_e))
+                if cep_e:
+                    end_parts.append(f"CEP: {cep_e}")
+
+                item["EnderecoCompleto"] = " - ".join(end_parts) if end_parts else "Não Informado"
+                item["Credito"] = round(float(item.get("Credito", 0.0) or 0.0), 2)
+                item["IsAtivo"] = bool(item.get("Ativo") not in (0, "0", None, False))
+
+                items.append(item)
+
+            pages = (total_ent + limit - 1) // limit if limit > 0 else 1
+
+            return {
+                "summary": summary,
+                "items": items,
+                "page": page,
+                "limit": limit,
+                "total": total_ent,
+                "pages": pages
+            }
+    finally:
+        conn.close()
+
+
+def get_relatorio_entidade_ficha(cod_entidade):
+    """
+    Retorna a ficha cadastral 360° completa da Entidade para consulta, modal e impressão individual.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute('SELECT * FROM "ENT" WHERE "CodEntidade" = %s', (cod_entidade,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            entidade = _convert_row(row)
+
+            # Histórico recente de compras / pedidos
+            cursor.execute('''
+                SELECT 
+                    PED."CodPed",
+                    PED."DataEmiss",
+                    PED."Total",
+                    PED."CondPgto",
+                    PED."Cfo",
+                    PED."PrevEntrega",
+                    PED."Sat",
+                    COUNT(ITP."CodItp") as total_itens
+                FROM "PED" PED
+                LEFT JOIN "ITP" ITP ON PED."CodPed" = ITP."Pedido"
+                WHERE PED."Entidade" = %s
+                GROUP BY PED."CodPed", PED."DataEmiss", PED."Total", PED."CondPgto", PED."Cfo", PED."PrevEntrega", PED."Sat"
+                ORDER BY TO_DATE(PED."DataEmiss", 'DD/MM/YYYY') DESC, PED."CodPed" DESC
+                LIMIT 15
+            ''', (cod_entidade,))
+            pedidos_raw = cursor.fetchall()
+            pedidos = [_convert_row(p) for p in pedidos_raw]
+
+            # Totais do histórico
+            cursor.execute('''
+                SELECT 
+                    COUNT(DISTINCT "CodPed") as qtd_total_pedidos,
+                    COALESCE(SUM("Total"), 0) as valor_acumulado_compras,
+                    MAX("DataEmiss") as data_ultima_compra
+                FROM "PED"
+                WHERE "Entidade" = %s AND ("PrevEntrega" IS NULL OR UPPER("PrevEntrega") != 'CANCELADO')
+            ''', (cod_entidade,))
+            hist_row = cursor.fetchone()
+            historico = _convert_row(hist_row) if hist_row else {}
+            historico["valor_acumulado_compras"] = round(float(historico.get("valor_acumulado_compras", 0.0)), 2)
+
+            return {
+                "entidade": entidade,
+                "historico_resumo": historico,
+                "ultimos_pedidos": pedidos
+            }
+    finally:
+        conn.close()
+
+
+def get_relatorio_entidades_ufs_cidades():
+    """
+    Retorna as UFs e Cidades existentes para preenchimento dinâmico dos filtros de busca.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT DISTINCT UPPER(TRIM("Uf")) as uf 
+                FROM "ENT" 
+                WHERE "Uf" IS NOT NULL AND TRIM("Uf") != '' 
+                ORDER BY uf ASC
+            """)
+            ufs = [r["uf"] for r in cursor.fetchall()]
+
+            cursor.execute("""
+                SELECT DISTINCT TRIM("Cidade") as cidade 
+                FROM "ENT" 
+                WHERE "Cidade" IS NOT NULL AND TRIM("Cidade") != '' 
+                ORDER BY cidade ASC
+            """)
+            cidades = [r["cidade"] for r in cursor.fetchall()]
+
+            return {
+                "ufs": ufs,
+                "cidades": cidades
+            }
+    finally:
+        conn.close()
+
+
+
 
 
 

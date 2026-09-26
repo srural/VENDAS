@@ -315,11 +315,16 @@ function switchModule(moduleName) {
     titleEl.innerHTML = `<i class="fa-solid fa-chart-column"></i> <span>Relatório de Vendas Agrupado por Produto</span>`;
   } else if (moduleName === 'rel-vendas-cliente') {
     titleEl.innerHTML = `<i class="fa-solid fa-users-viewfinder"></i> <span>Relatório de Vendas de Produtos por Cliente</span>`;
+  } else if (moduleName === 'rel-entidades') {
+    titleEl.innerHTML = `<i class="fa-solid fa-address-book"></i> <span>Relatório de Dados Cadastrais de Entidades</span>`;
   }
 
   document.querySelectorAll('.module-btn').forEach(btn => {
     let show = (btn.id === `btn-new-${moduleName}` || btn.id === `btn-new-${moduleName.slice(0, -1)}`);
     if (moduleName === 'rel-vendas-produto' && (btn.id === 'btn-print-rel-vendas-produto' || btn.id === 'btn-export-rel-vendas-produto')) {
+      show = true;
+    }
+    if (moduleName === 'rel-entidades' && (btn.id === 'btn-print-rel-entidades' || btn.id === 'btn-export-rel-entidades')) {
       show = true;
     }
     btn.style.display = show ? 'inline-flex' : 'none';
@@ -340,6 +345,9 @@ function switchModule(moduleName) {
   } else if (moduleName === 'rel-vendas-cliente') {
     loadGroupOptions();
     fetchRelatorioVendasCliente(1);
+  } else if (moduleName === 'rel-entidades') {
+    carregarFiltrosUfCidadesEntidades();
+    fetchRelatorioEntidades(1);
   } else if (moduleName === 'cfop') fetchCfops();
   else if (moduleName === 'formas-pgto') fetchFormasPgto();
   else if (moduleName === 'natureza-op') fetchNaturezasOperacao();
@@ -364,6 +372,8 @@ function refreshCurrentModule() {
   else if (currentModule === 'empresas') fetchEmpresas();
   else if (currentModule === 'pedidos') fetchOrders();
   else if (currentModule === 'rel-vendas-produto') fetchRelatorioVendasProduto(relCurrentPage);
+  else if (currentModule === 'rel-vendas-cliente') fetchRelatorioVendasCliente(relCliCurrentPage);
+  else if (currentModule === 'rel-entidades') fetchRelatorioEntidades(relEntCurrentPage);
 }
 
 // Stats & Dashboard Loader
@@ -7943,6 +7953,957 @@ function exportarRelatorioVendasClienteCSV() {
   showToast('Iniciando download do relatório por cliente em CSV/Excel...', 'info', 2000);
   window.location.href = `/api/relatorios/vendas-por-cliente/export/csv?${params.toString()}`;
 }
+
+
+// =============================================================================
+// MODULE: RELATÓRIO DE ENTIDADES (DADOS CADASTRAIS COMPLETOS)
+// =============================================================================
+
+let relEntCurrentPage = 1;
+let relEntCurrentFicha = null;
+let relEntSearchTimeout = null;
+
+async function carregarFiltrosUfCidadesEntidades() {
+  try {
+    const res = await fetch('/api/relatorios/entidades/filtros-locais');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    const selUf = document.getElementById('rel-ent-filtro-uf');
+    if (selUf && data.ufs) {
+      const currentUf = selUf.value;
+      selUf.innerHTML = `<option value="all">Todos os Estados (UFs)</option>`;
+      data.ufs.forEach(uf => {
+        if (uf) {
+          selUf.innerHTML += `<option value="${escapeHTML(uf)}">${escapeHTML(uf)}</option>`;
+        }
+      });
+      if (currentUf) selUf.value = currentUf;
+    }
+  } catch (err) {
+    console.error('Erro ao carregar UFs das entidades:', err);
+  }
+}
+
+function handleRelatorioEntidadesSearchKeyup(event) {
+  if (event.key === 'Enter') {
+    fetchRelatorioEntidades(1);
+    return;
+  }
+  clearTimeout(relEntSearchTimeout);
+  relEntSearchTimeout = setTimeout(() => {
+    fetchRelatorioEntidades(1);
+  }, 400);
+}
+
+function limparFiltrosRelatorioEntidades() {
+  const selTipo = document.getElementById('rel-ent-filtro-tipo');
+  const selStatus = document.getElementById('rel-ent-filtro-status');
+  const selPessoa = document.getElementById('rel-ent-filtro-pessoa');
+  const selUf = document.getElementById('rel-ent-filtro-uf');
+  const inCidade = document.getElementById('rel-ent-filtro-cidade');
+  const selOrd = document.getElementById('rel-ent-filtro-ordenacao');
+  const inSearch = document.getElementById('rel-ent-search-input');
+
+  if (selTipo) selTipo.value = 'all';
+  if (selStatus) selStatus.value = 'ativos';
+  if (selPessoa) selPessoa.value = 'all';
+  if (selUf) selUf.value = 'all';
+  if (inCidade) inCidade.value = '';
+  if (selOrd) selOrd.value = 'nome_asc';
+  if (inSearch) inSearch.value = '';
+
+  showToast('Filtros restaurados para o padrão!', 'info', 1500);
+  fetchRelatorioEntidades(1);
+}
+
+function changeRelatorioEntidadesPage(delta) {
+  const newPage = relEntCurrentPage + delta;
+  if (newPage >= 1) {
+    fetchRelatorioEntidades(newPage);
+  }
+}
+
+async function fetchRelatorioEntidades(page = 1) {
+  relEntCurrentPage = page;
+  const tbody = document.getElementById('tbody-rel-entidades');
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="9" class="loading-td"><i class="fa-solid fa-spinner fa-spin"></i> Processando dados cadastrais das entidades...</td></tr>`;
+  }
+
+  const tipo = document.getElementById('rel-ent-filtro-tipo')?.value || 'all';
+  const status = document.getElementById('rel-ent-filtro-status')?.value || 'ativos';
+  const pessoa = document.getElementById('rel-ent-filtro-pessoa')?.value || 'all';
+  const uf = document.getElementById('rel-ent-filtro-uf')?.value || 'all';
+  const cidade = document.getElementById('rel-ent-filtro-cidade')?.value || '';
+  const ordVal = document.getElementById('rel-ent-filtro-ordenacao')?.value || 'nome_asc';
+  const qVal = document.getElementById('rel-ent-search-input')?.value || '';
+  const limit = parseInt(document.getElementById('rel-ent-limit-select')?.value || '50', 10);
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  let sort_by = 'nome';
+  let sort_order = 'ASC';
+  if (ordVal === 'nome_asc') { sort_by = 'nome'; sort_order = 'ASC'; }
+  else if (ordVal === 'nome_desc') { sort_by = 'nome'; sort_order = 'DESC'; }
+  else if (ordVal === 'cod_asc') { sort_by = 'codentidade'; sort_order = 'ASC'; }
+  else if (ordVal === 'cod_desc') { sort_by = 'codentidade'; sort_order = 'DESC'; }
+  else if (ordVal === 'cidade_asc') { sort_by = 'cidade'; sort_order = 'ASC'; }
+  else if (ordVal === 'credito_desc') { sort_by = 'credito'; sort_order = 'DESC'; }
+  else if (ordVal === 'dtcadastro_desc') { sort_by = 'dtcadastro'; sort_order = 'DESC'; }
+  else if (ordVal === 'dtultmov_desc') { sort_by = 'dtultmov'; sort_order = 'DESC'; }
+
+  const params = new URLSearchParams({
+    page: page,
+    limit: limit,
+    sort_by: sort_by,
+    sort_order: sort_order
+  });
+
+  if (tipo && tipo !== 'all') params.append('tipo', tipo);
+  if (status && status !== 'all') params.append('ativo', status);
+  if (pessoa && pessoa !== 'all') params.append('pessoa', pessoa);
+  if (uf && uf !== 'all') params.append('uf', uf);
+  if (cidade && cidade.trim()) params.append('cidade', cidade.trim());
+  if (qVal && qVal.trim()) params.append('q', qVal.trim());
+  if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+  try {
+    const res = await fetch(`/api/relatorios/entidades?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    renderRelatorioEntidadesKPIs(data.summary || {});
+    renderRelatorioEntidadesInsights(data.summary || {});
+    renderRelatorioEntidadesTable(data.items || []);
+
+    // Atualizar Paginação
+    const infoEl = document.getElementById('rel-ent-pagination-info');
+    const indicatorEl = document.getElementById('rel-ent-page-indicator');
+    const btnPrev = document.getElementById('rel-ent-btn-prev');
+    const btnNext = document.getElementById('rel-ent-btn-next');
+    const counterEl = document.getElementById('rel-ent-table-counter');
+
+    const total = data.total || 0;
+    const pages = data.pages || 1;
+    const offsetStart = total === 0 ? 0 : (page - 1) * limit + 1;
+    const offsetEnd = Math.min(page * limit, total);
+
+    if (infoEl) infoEl.textContent = `Mostrando ${offsetStart} a ${offsetEnd} de ${total} entidades`;
+    if (indicatorEl) indicatorEl.textContent = `${page} / ${pages}`;
+    if (btnPrev) btnPrev.disabled = page <= 1;
+    if (btnNext) btnNext.disabled = page >= pages;
+    if (counterEl) counterEl.textContent = `${total} entidade(s) localizada(s)`;
+
+  } catch (err) {
+    console.error('Erro ao buscar relatório de entidades:', err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--accent-rose); padding: 2rem;"><i class="fa-solid fa-triangle-exclamation"></i> Falha ao carregar relatório: ${escapeHTML(err.message)}</td></tr>`;
+    }
+    showToast(`Erro ao carregar dados: ${err.message}`, 'error');
+  }
+}
+
+function renderRelatorioEntidadesKPIs(summary) {
+  const total = parseInt(summary.total_entidades || 0, 10);
+  const ativos = parseInt(summary.total_ativos || 0, 10);
+  const inativos = parseInt(summary.total_inativos || 0, 10);
+  const clientes = parseInt(summary.total_clientes || 0, 10);
+  const fornecedores = parseInt(summary.total_fornecedores || 0, 10);
+  const transportadoras = parseInt(summary.total_transportadoras || 0, 10);
+  const creditoTotal = parseFloat(summary.limite_credito_total || 0.0);
+  const pctAtivos = summary.pct_ativos || 0;
+
+  const elTotal = document.getElementById('rel-ent-kpi-total');
+  const elTrendTotal = document.getElementById('rel-ent-kpi-trend-total');
+  const elClientes = document.getElementById('rel-ent-kpi-clientes');
+  const elTrendClientes = document.getElementById('rel-ent-kpi-trend-clientes');
+  const elFornec = document.getElementById('rel-ent-kpi-fornecedores');
+  const elTrendFornec = document.getElementById('rel-ent-kpi-trend-fornecedores');
+  const elCredito = document.getElementById('rel-ent-kpi-credito');
+  const elTrendCredito = document.getElementById('rel-ent-kpi-trend-credito');
+
+  if (elTotal) elTotal.textContent = total.toLocaleString('pt-BR');
+  if (elTrendTotal) elTrendTotal.textContent = `${ativos.toLocaleString('pt-BR')} ativas (${pctAtivos}%) | ${inativos} inativas`;
+
+  if (elClientes) elClientes.textContent = clientes.toLocaleString('pt-BR');
+  if (elTrendClientes) elTrendClientes.textContent = `${summary.total_pessoa_fisica || 0} Pessoa Física | ${summary.total_pessoa_juridica || 0} Jurídica`;
+
+  if (elFornec) elFornec.textContent = fornecedores.toLocaleString('pt-BR');
+  if (elTrendFornec) elTrendFornec.textContent = `${transportadoras} transportadoras | ${summary.total_vendedores || 0} vendedores`;
+
+  if (elCredito) elCredito.textContent = `R$ ${creditoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (elTrendCredito) elTrendCredito.textContent = `Limite consolidado em ${summary.total_cidades_distintas || 0} cidades`;
+}
+
+function renderRelatorioEntidadesInsights(summary) {
+  const topCidades = summary.top_cidades || [];
+  const topUfs = summary.top_ufs || [];
+
+  const contCidades = document.getElementById('rel-ent-top-cidades-container');
+  const badgeCidadesCount = document.getElementById('rel-ent-cidades-count');
+  if (badgeCidadesCount) badgeCidadesCount.textContent = `${summary.total_cidades_distintas || 0} cidades no total`;
+
+  if (contCidades) {
+    if (!topCidades.length) {
+      contCidades.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 0.5rem;">Nenhuma cidade encontrada no filtro.</div>`;
+    } else {
+      let html = '';
+      const maxQtd = Math.max(...topCidades.map(c => c.qtd), 1);
+      topCidades.forEach((c, idx) => {
+        const pct = Math.round((c.qtd / maxQtd) * 100);
+        html += `
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.2rem;">
+              <span style="font-weight: 600; color: var(--text-primary);">${idx + 1}. ${escapeHTML(c.cidade)} - ${escapeHTML(c.uf)}</span>
+              <span style="font-weight: 700; color: var(--accent-blue);">${c.qtd} cadastro(s)</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 9999px; overflow: hidden;">
+              <div style="background: var(--accent-blue); width: ${pct}%; height: 100%; border-radius: 9999px;"></div>
+            </div>
+          </div>
+        `;
+      });
+      contCidades.innerHTML = html;
+    }
+  }
+
+  const contUfs = document.getElementById('rel-ent-top-ufs-container');
+  const badgeUfsCount = document.getElementById('rel-ent-ufs-count');
+  if (badgeUfsCount) badgeUfsCount.textContent = `${summary.total_ufs_distintas || 0} estados no total`;
+
+  if (contUfs) {
+    if (!topUfs.length) {
+      contUfs.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; width: 100%; padding: 0.5rem;">Nenhum estado encontrado.</div>`;
+    } else {
+      let html = '';
+      topUfs.forEach(u => {
+        html += `
+          <div style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.4rem 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge badge-group" style="font-size: 0.8rem; font-weight: 700;">${escapeHTML(u.uf)}</span>
+            <span style="font-weight: 700; color: var(--accent-emerald); font-size: 0.9rem;">${u.qtd}</span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">entidades</span>
+          </div>
+        `;
+      });
+      contUfs.innerHTML = html;
+    }
+  }
+}
+
+function renderRelatorioEntidadesTable(items) {
+  const tbody = document.getElementById('tbody-rel-entidades');
+  if (!tbody) return;
+
+  if (!items.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
+          <i class="fa-solid fa-address-book fa-3x" style="opacity: 0.3; margin-bottom: 0.75rem; display: block;"></i>
+          <strong>Nenhuma entidade encontrada para os filtros selecionados.</strong><br>
+          <span style="font-size: 0.85rem; color: var(--text-muted);">Tente alterar o tipo de entidade, status ou limpar o campo de busca.</span>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  items.forEach(ent => {
+    const isAtivo = ent.IsAtivo;
+    const statusBadge = isAtivo
+      ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);"><i class="fa-solid fa-circle-check"></i> Ativo</span>`
+      : `<span class="badge" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose);"><i class="fa-solid fa-circle-xmark"></i> Inativo</span>`;
+
+    let tipoClass = 'badge-group';
+    let tipoColor = 'var(--accent-blue)';
+    const tipoNum = parseInt(ent.Tipo || 1, 10);
+    if (tipoNum === 1) { tipoClass = 'badge-active'; tipoColor = 'var(--accent-blue)'; }
+    else if (tipoNum === 2) { tipoClass = 'badge-success'; tipoColor = 'var(--accent-emerald)'; }
+    else if (tipoNum === 3) { tipoClass = 'badge-group'; tipoColor = 'var(--accent-purple)'; }
+    else if (tipoNum === 5) { tipoClass = 'badge-group'; tipoColor = 'var(--accent-amber)'; }
+
+    const tipoBadge = `<span class="badge ${tipoClass}" style="color: ${tipoColor}; font-weight: 700;">${escapeHTML(ent.TipoDescricao || 'Cliente')}</span>`;
+
+    // Formatar Telefones e WhatsApp
+    const fone = ent.Fone ? escapeHTML(ent.Fone) : '';
+    const cel = ent.Celular ? escapeHTML(ent.Celular) : '';
+    const celDigits = ent.Celular ? ent.Celular.replace(/\D/g, '') : '';
+    const email = ent.Email ? escapeHTML(ent.Email) : '';
+
+    let contatosHtml = '';
+    if (fone) {
+      contatosHtml += `<div style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-phone" style="width: 14px; color: var(--text-muted);"></i> ${fone}</div>`;
+    }
+    if (cel) {
+      if (celDigits.length >= 10) {
+        contatosHtml += `<div style="font-size: 0.8rem; margin-top: 0.15rem;"><a href="https://wa.me/55${celDigits}" target="_blank" style="color: var(--accent-emerald); text-decoration: none; font-weight: 600;" title="Conversar no WhatsApp"><i class="fa-brands fa-whatsapp" style="width: 14px;"></i> ${cel}</a></div>`;
+      } else {
+        contatosHtml += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.15rem;"><i class="fa-solid fa-mobile-screen" style="width: 14px; color: var(--text-muted);"></i> ${cel}</div>`;
+      }
+    }
+    if (email) {
+      contatosHtml += `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${email}"><i class="fa-solid fa-envelope" style="width: 14px;"></i> ${email}</div>`;
+    }
+    if (!contatosHtml) {
+      contatosHtml = `<span style="font-size: 0.8rem; color: var(--text-muted);">Sem contatos</span>`;
+    }
+
+    const docStr = ent.DocumentoFormatado || 'NÃO INFORMADO';
+    const ieStr = ent.InscrEst || ent.RG || '';
+
+    const creditoVal = parseFloat(ent.Credito || 0.0);
+    const creditoFormatted = `R$ ${creditoVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    html += `
+      <tr>
+        <td style="text-align: center; font-weight: 700; color: var(--text-secondary);">${ent.CodEntidade}</td>
+        <td style="text-align: center;">${tipoBadge}</td>
+        <td>
+          <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">
+            ${escapeHTML(ent.Nome || 'NOME NÃO INFORMADO')}
+          </div>
+          ${ent.Fantasia && ent.Fantasia !== ent.Nome ? `<div style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-regular fa-id-badge" style="color: var(--text-muted);"></i> ${escapeHTML(ent.Fantasia)}</div>` : ''}
+        </td>
+        <td>
+          <div style="font-family: monospace; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">${escapeHTML(docStr)}</div>
+          ${ieStr ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">IE/RG: ${escapeHTML(ieStr)}</div>` : ''}
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.1rem;">Pessoa ${escapeHTML(ent.TipoPessoa || '')}</div>
+        </td>
+        <td>${contatosHtml}</td>
+        <td style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.35; max-width: 250px;">
+          ${escapeHTML(ent.EnderecoCompleto || 'Endereço não informado')}
+        </td>
+        <td style="text-align: right;">
+          <div style="font-weight: 700; color: ${creditoVal > 0 ? 'var(--accent-amber)' : 'var(--text-secondary)'}; font-size: 0.9rem;">
+            ${creditoFormatted}
+          </div>
+          ${ent.Condicao ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHTML(ent.Condicao)}</div>` : ''}
+        </td>
+        <td style="text-align: center;">${statusBadge}</td>
+        <td style="text-align: center;">
+          <div style="display: flex; gap: 0.35rem; justify-content: center;">
+            <button class="btn btn-primary btn-sm" onclick="abrirFichaCadastralEntidade(${ent.CodEntidade})" title="Visualizar Ficha Cadastral 360°" style="padding: 0.3rem 0.55rem; font-size: 0.75rem;">
+              <i class="fa-solid fa-address-card"></i> Ficha
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="abrirEdicaoEntidadeDeRelatorio(${ent.CodEntidade})" title="Editar Cadastro da Entidade" style="padding: 0.3rem 0.55rem; font-size: 0.75rem;">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+}
+
+// =============================================================================
+// MODAL: FICHA CADASTRAL 360° DA ENTIDADE
+// =============================================================================
+
+async function abrirFichaCadastralEntidade(codEntidade) {
+  try {
+    showToast('Carregando ficha cadastral completa...', 'info', 1000);
+    const res = await fetch(`/api/relatorios/entidades/ficha/${codEntidade}`);
+    if (!res.ok) throw new Error('Entidade não encontrada');
+    const data = await res.json();
+    relEntCurrentFicha = data;
+
+    const ent = data.entidade || {};
+    const hist = data.historico_resumo || {};
+    const pedidos = data.ultimos_pedidos || [];
+
+    // Header Elements
+    const badgeCod = document.getElementById('ficha-ent-badge-cod');
+    const badgeTipo = document.getElementById('ficha-ent-badge-tipo');
+    const badgeDoc = document.getElementById('ficha-ent-badge-doc');
+    const badgeStatus = document.getElementById('ficha-ent-badge-status');
+    const elNome = document.getElementById('ficha-ent-nome');
+    const elFantasia = document.getElementById('ficha-ent-fantasia');
+    const elCidadeUf = document.getElementById('ficha-ent-cidade-uf');
+
+    if (badgeCod) badgeCod.textContent = `Cód: #${ent.CodEntidade || codEntidade}`;
+    
+    const tipoNum = parseInt(ent.Tipo || 1, 10);
+    const tipoMap = { 1: "Cliente", 2: "Fornecedor", 3: "Vendedor", 5: "Transportadora", 7: "Cliente / Vendedor" };
+    if (badgeTipo) badgeTipo.textContent = tipoMap[tipoNum] || `Tipo ${tipoNum}`;
+
+    const docStr = (ent.CGC && ent.CGC.trim()) ? `CNPJ: ${ent.CGC}` : ((ent.CPF && ent.CPF.trim()) ? `CPF: ${ent.CPF}` : 'SEM DOCUMENTO');
+    if (badgeDoc) badgeDoc.textContent = docStr;
+
+    const isAtivo = ent.Ativo !== 0 && ent.Ativo !== '0' && ent.Ativo !== null && ent.Ativo !== false;
+    if (badgeStatus) {
+      badgeStatus.textContent = isAtivo ? 'ATIVO' : 'INATIVO';
+      badgeStatus.style.background = isAtivo ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)';
+      badgeStatus.style.color = isAtivo ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+    }
+
+    if (elNome) elNome.textContent = ent.Nome || 'NOME NÃO INFORMADO';
+    if (elFantasia) elFantasia.textContent = ent.Fantasia || '-';
+    if (elCidadeUf) elCidadeUf.textContent = `${ent.Cidade || '-'} - ${ent.Uf || '-'}`;
+
+    // KPIs
+    const creditoVal = parseFloat(ent.Credito || 0.0);
+    const comprasVal = parseFloat(hist.valor_acumulado_compras || 0.0);
+    const qtdPed = parseInt(hist.qtd_total_pedidos || 0, 10);
+    const ultMov = ent.DtUltMov || hist.data_ultima_compra || '-';
+
+    document.getElementById('ficha-ent-kpi-credito').textContent = `R$ ${creditoVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    document.getElementById('ficha-ent-kpi-total-compras').textContent = `R$ ${comprasVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    document.getElementById('ficha-ent-kpi-qtd-pedidos').textContent = qtdPed.toLocaleString('pt-BR');
+    document.getElementById('ficha-ent-kpi-ult-mov').textContent = ultMov;
+
+    // Campos detalhados
+    document.getElementById('ficha-campo-doc').textContent = (ent.CGC || ent.CPF || '-');
+    document.getElementById('ficha-campo-ie').textContent = (ent.InscrEst || ent.RG || '-');
+    document.getElementById('ficha-campo-tipo-pessoa').textContent = (ent.CGC ? 'Pessoa Jurídica' : (ent.CPF ? 'Pessoa Física' : '-'));
+    document.getElementById('ficha-campo-dtcadastro').textContent = (ent.DtCadastro || '-');
+    document.getElementById('ficha-campo-condicao').textContent = (ent.Condicao || ent.Prazo || '-');
+    document.getElementById('ficha-campo-vendedor').textContent = (ent.NomeVendedor || ent.Vendedor ? `Cód: ${ent.Vendedor}` : '-');
+
+    document.getElementById('ficha-campo-fone').textContent = (ent.Fone || '-');
+    document.getElementById('ficha-campo-celular').textContent = (ent.Celular || '-');
+    document.getElementById('ficha-campo-email').textContent = (ent.Email || '-');
+    document.getElementById('ficha-campo-site').textContent = (ent.HomePage || '-');
+
+    document.getElementById('ficha-campo-endereco').textContent = (ent.Endereco || '-');
+    document.getElementById('ficha-campo-nro').textContent = (ent.Nro || '-');
+    document.getElementById('ficha-campo-complemento').textContent = (ent.Complemento || '-');
+    document.getElementById('ficha-campo-bairro').textContent = (ent.Bairro || '-');
+    document.getElementById('ficha-campo-cidade').textContent = `${ent.Cidade || '-'} - ${ent.Uf || '-'}`;
+    document.getElementById('ficha-campo-cep').textContent = (ent.Cep || '-');
+
+    // Endereço de Entrega
+    const endEntr = ent['Endereço_Entrega'] || ent['Endereco_Entrega'];
+    const cidEntr = ent['Cidade_Entrega'];
+    const ufEntr = ent['Uf_Entrega'];
+    const campoEntrega = document.getElementById('ficha-campo-entrega');
+    if (campoEntrega) {
+      if (endEntr) {
+        campoEntrega.innerHTML = `<strong>${escapeHTML(endEntr)}, ${escapeHTML(ent['Nro_Entrega'] || '')}</strong><br>${escapeHTML(ent['Bairro_Entrega'] || '')} - ${escapeHTML(cidEntr || '')}/${escapeHTML(ufEntr || '')} CEP: ${escapeHTML(ent['Cep_Entrega'] || '')}`;
+      } else {
+        campoEntrega.textContent = 'Mesmo endereço principal de faturamento';
+      }
+    }
+
+    const elObs = document.getElementById('ficha-campo-obs');
+    if (elObs) elObs.textContent = ent.Obs || 'Nenhuma observação interna cadastrada.';
+
+    // Pedidos Recentes
+    const tbodyPed = document.getElementById('tbody-ficha-entidade-pedidos');
+    if (tbodyPed) {
+      if (!pedidos.length) {
+        tbodyPed.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">Nenhum pedido recente registrado para esta entidade.</td></tr>`;
+      } else {
+        let pedHtml = '';
+        pedidos.forEach(p => {
+          const totPed = parseFloat(p.Total || 0.0);
+          pedHtml += `
+            <tr>
+              <td style="font-weight: 700; color: var(--accent-blue);">#${p.CodPed}</td>
+              <td>${escapeHTML(p.DataEmiss || '')}</td>
+              <td>${escapeHTML(p.Cfo || 'VENDA')}</td>
+              <td style="text-align: center;">${p.total_itens || 1}</td>
+              <td style="text-align: right; font-weight: 700; color: var(--accent-emerald);">R$ ${totPed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td>${escapeHTML(p.CondPgto || 'DINHEIRO')}</td>
+              <td><span class="badge badge-group" style="font-size: 0.75rem;">${p.Sat ? 'Com Chave' : 'Normal'}</span></td>
+            </tr>
+          `;
+        });
+        tbodyPed.innerHTML = pedHtml;
+      }
+    }
+
+    document.getElementById('modal-ficha-entidade')?.classList.add('active');
+
+  } catch (err) {
+    console.error('Erro ao carregar ficha cadastral:', err);
+    showToast(`Falha ao abrir ficha: ${err.message}`, 'error');
+  }
+}
+
+function closeFichaCadastralModal() {
+  document.getElementById('modal-ficha-entidade')?.classList.remove('active');
+  relEntCurrentFicha = null;
+}
+
+function abrirEdicaoEntidadeDeFicha() {
+  if (!relEntCurrentFicha || !relEntCurrentFicha.entidade) return;
+  const cod = relEntCurrentFicha.entidade.CodEntidade;
+  closeFichaCadastralModal();
+  switchModule('entidades');
+  setTimeout(() => {
+    editEntity(cod);
+  }, 300);
+}
+
+function abrirEdicaoEntidadeDeRelatorio(codEntidade) {
+  switchModule('entidades');
+  setTimeout(() => {
+    editEntity(codEntidade);
+  }, 300);
+}
+
+// =============================================================================
+// IMPRESSÃO A4 FORMATADA: RELATÓRIO DE ENTIDADES & FICHA INDIVIDUAL
+// =============================================================================
+
+async function imprimirRelatorioEntidades() {
+  try {
+    showToast('Preparando impressão do relatório cadastral...', 'info', 1500);
+
+    const tipo = document.getElementById('rel-ent-filtro-tipo')?.value || 'all';
+    const status = document.getElementById('rel-ent-filtro-status')?.value || 'ativos';
+    const pessoa = document.getElementById('rel-ent-filtro-pessoa')?.value || 'all';
+    const uf = document.getElementById('rel-ent-filtro-uf')?.value || 'all';
+    const cidade = document.getElementById('rel-ent-filtro-cidade')?.value || '';
+    const ordVal = document.getElementById('rel-ent-filtro-ordenacao')?.value || 'nome_asc';
+    const qVal = document.getElementById('rel-ent-search-input')?.value || '';
+    const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+    let sort_by = 'nome';
+    let sort_order = 'ASC';
+    if (ordVal === 'nome_asc') { sort_by = 'nome'; sort_order = 'ASC'; }
+    else if (ordVal === 'nome_desc') { sort_by = 'nome'; sort_order = 'DESC'; }
+    else if (ordVal === 'cod_asc') { sort_by = 'codentidade'; sort_order = 'ASC'; }
+    else if (ordVal === 'cod_desc') { sort_by = 'codentidade'; sort_order = 'DESC'; }
+    else if (ordVal === 'cidade_asc') { sort_by = 'cidade'; sort_order = 'ASC'; }
+    else if (ordVal === 'credito_desc') { sort_by = 'credito'; sort_order = 'DESC'; }
+    else if (ordVal === 'dtcadastro_desc') { sort_by = 'dtcadastro'; sort_order = 'DESC'; }
+
+    const params = new URLSearchParams({
+      page: 1,
+      limit: 1000,
+      sort_by: sort_by,
+      sort_order: sort_order
+    });
+
+    if (tipo && tipo !== 'all') params.append('tipo', tipo);
+    if (status && status !== 'all') params.append('ativo', status);
+    if (pessoa && pessoa !== 'all') params.append('pessoa', pessoa);
+    if (uf && uf !== 'all') params.append('uf', uf);
+    if (cidade && cidade.trim()) params.append('cidade', cidade.trim());
+    if (qVal && qVal.trim()) params.append('q', qVal.trim());
+    if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+    const [repRes, empRes] = await Promise.all([
+      fetch(`/api/relatorios/entidades?${params.toString()}`),
+      fetch(`/api/empresas/${idEmpresa !== 'all' ? idEmpresa : '1'}`)
+    ]);
+
+    const reportData = await repRes.json();
+    const companyData = empRes.ok ? await empRes.json() : {};
+
+    const summary = reportData.summary || {};
+    const items = reportData.items || [];
+    const nowStr = new Date().toLocaleString('pt-BR');
+
+    let rowsHtml = '';
+    items.forEach((ent, idx) => {
+      const cred = parseFloat(ent.Credito || 0.0);
+      rowsHtml += `
+        <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+          <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${ent.CodEntidade}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px;">
+            <strong style="color: #0f172a;">${escapeHTML(ent.Nome || '')}</strong>
+            ${ent.Fantasia && ent.Fantasia !== ent.Nome ? `<br><span style="color: #64748b; font-size: 8pt;">Fantasia: ${escapeHTML(ent.Fantasia)}</span>` : ''}
+          </td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8.5pt;">${escapeHTML(ent.TipoDescricao || 'Cliente')}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-family: monospace; font-size: 8.5pt;">
+            ${escapeHTML(ent.DocumentoFormatado || '-')}
+            ${ent.InscrEst ? `<br><span style="font-size: 7.5pt; color: #64748b;">IE: ${escapeHTML(ent.InscrEst)}</span>` : ''}
+          </td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt;">
+            ${ent.Fone ? `Tel: ${escapeHTML(ent.Fone)}<br>` : ''}
+            ${ent.Celular ? `Cel: ${escapeHTML(ent.Celular)}<br>` : ''}
+            ${ent.Email ? `${escapeHTML(ent.Email)}` : ''}
+          </td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt;">${escapeHTML(ent.EnderecoCompleto || '-')}</td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; padding: 5px; font-weight: bold;">
+            R$ ${cred.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </td>
+          <td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt; font-weight: bold; color: ${ent.IsAtivo ? '#16a34a' : '#dc2626'};">
+            ${ent.IsAtivo ? 'ATIVO' : 'INATIVO'}
+          </td>
+        </tr>
+      `;
+    });
+
+    const printDoc = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório Cadastral de Entidades - ${nowStr}</title>
+        <style>
+          @page { size: A4 landscape; margin: 10mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; font-size: 9pt; margin: 0; padding: 0; }
+          .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
+          .title { font-size: 14pt; font-weight: bold; color: #0369a1; text-transform: uppercase; margin: 0; }
+          .subtitle { font-size: 8.5pt; color: #475569; margin-top: 2px; }
+          .kpi-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+          .kpi-box { border: 1px solid #94a3b8; padding: 6px 10px; background: #f1f5f9; border-radius: 4px; }
+          .kpi-title { font-size: 7.5pt; text-transform: uppercase; color: #475569; font-weight: bold; }
+          .kpi-val { font-size: 11pt; font-weight: bold; color: #0369a1; }
+          .data-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+          .data-table th { background: #0284c7; color: #ffffff; padding: 6px 5px; border: 1px solid #0369a1; text-align: left; font-size: 8pt; text-transform: uppercase; }
+          .footer { margin-top: 15px; font-size: 7.5pt; color: #64748b; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <table class="header-table">
+          <tr>
+            <td style="width: 65%;">
+              <h1 class="title">${escapeHTML(companyData.RazaoSocial || companyData.NomeEmpresa || 'SISTEMA VENDAS')}</h1>
+              <div class="subtitle">
+                CNPJ: ${escapeHTML(companyData.CNPJ || '-')} | IE: ${escapeHTML(companyData.InscEst || companyData.IE || '-')} | ${escapeHTML(companyData.Cidade || '')} - ${escapeHTML(companyData.UF || '')}
+              </div>
+            </td>
+            <td style="text-align: right; width: 35%;">
+              <div style="font-size: 11pt; font-weight: bold; color: #0f172a;">RELATÓRIO CADASTRAL DE ENTIDADES</div>
+              <div style="font-size: 8pt; color: #64748b;">Emissão: ${nowStr}</div>
+              <div style="font-size: 8pt; color: #64748b;">Total de Registros: ${items.length}</div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="kpi-table">
+          <tr>
+            <td style="width: 25%; padding-right: 5px;">
+              <div class="kpi-box">
+                <div class="kpi-title">Total Entidades</div>
+                <div class="kpi-val">${summary.total_entidades || items.length}</div>
+              </div>
+            </td>
+            <td style="width: 25%; padding-right: 5px;">
+              <div class="kpi-box">
+                <div class="kpi-title">Clientes Ativos</div>
+                <div class="kpi-val" style="color: #16a34a;">${summary.total_clientes || 0}</div>
+              </div>
+            </td>
+            <td style="width: 25%; padding-right: 5px;">
+              <div class="kpi-box">
+                <div class="kpi-title">Fornecedores / Parceiros</div>
+                <div class="kpi-val" style="color: #7c3aed;">${summary.total_fornecedores || 0}</div>
+              </div>
+            </td>
+            <td style="width: 25%;">
+              <div class="kpi-box">
+                <div class="kpi-title">Limite de Crédito Total</div>
+                <div class="kpi-val" style="color: #d97706;">R$ ${parseFloat(summary.limite_credito_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">Cód</th>
+              <th style="width: 220px;">Razão Social / Nome</th>
+              <th style="width: 75px;">Tipo</th>
+              <th style="width: 130px;">CPF / CNPJ & IE</th>
+              <th style="width: 140px;">Contatos</th>
+              <th>Endereço Completo</th>
+              <th style="width: 95px; text-align: right;">Crédito</th>
+              <th style="width: 60px; text-align: center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <span>Sistema Vendas - Relatório Gerencial Cadastral</span>
+          <span>Página 1 de 1</span>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=1100,height=750');
+    if (!printWindow) {
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+      const frameDoc = printFrame.contentWindow.document;
+      frameDoc.open();
+      frameDoc.write(printDoc);
+      frameDoc.close();
+      setTimeout(() => {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+      }, 500);
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(printDoc);
+    printWindow.document.close();
+
+  } catch (err) {
+    console.error('Erro ao imprimir relatório de entidades:', err);
+    showToast(`Erro ao preparar impressão: ${err.message}`, 'error');
+  }
+}
+
+async function imprimirFichaCadastralIndividual() {
+  if (!relEntCurrentFicha || !relEntCurrentFicha.entidade) {
+    showToast('Nenhuma ficha carregada para impressão.', 'warn');
+    return;
+  }
+
+  const ent = relEntCurrentFicha.entidade;
+  const hist = relEntCurrentFicha.historico_resumo || {};
+  const pedidos = relEntCurrentFicha.ultimos_pedidos || [];
+  const nowStr = new Date().toLocaleString('pt-BR');
+
+  let pedidosRows = '';
+  pedidos.forEach((p, idx) => {
+    const vTot = parseFloat(p.Total || 0.0);
+    pedidosRows += `
+      <tr style="background: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+        <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-weight: bold;">#${p.CodPed}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: center;">${escapeHTML(p.DataEmiss || '-')}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px;">${escapeHTML(p.Cfo || 'VENDA')}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: right; font-weight: bold;">R$ ${vTot.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px;">${escapeHTML(p.CondPgto || 'DINHEIRO')}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: center;">${p.Sat ? 'Com NF-e' : 'Normal'}</td>
+      </tr>
+    `;
+  });
+
+  const printDoc = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Ficha Cadastral - ${escapeHTML(ent.Nome || '')}</title>
+      <style>
+        @page { size: A4 portrait; margin: 12mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; font-size: 9pt; margin: 0; padding: 0; }
+        .header { border-bottom: 2px solid #0284c7; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .title { font-size: 14pt; font-weight: bold; color: #0369a1; text-transform: uppercase; margin: 0; }
+        .section-title { font-size: 9.5pt; font-weight: bold; color: #0369a1; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin: 10px 0 6px 0; text-transform: uppercase; }
+        .info-grid { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        .info-grid td { padding: 4px 6px; border: 1px solid #e2e8f0; font-size: 8.5pt; vertical-align: top; }
+        .label { font-weight: bold; color: #475569; font-size: 7.5pt; text-transform: uppercase; display: block; margin-bottom: 1px; }
+        .val { font-weight: 600; color: #0f172a; }
+        .table-data { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 5px; }
+        .table-data th { background: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 4px; border: 1px solid #cbd5e1; }
+        .footer { margin-top: 20px; font-size: 7.5pt; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; justify-content: space-between; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1 class="title">FICHA CADASTRAL DE ENTIDADE</h1>
+          <div style="font-size: 8.5pt; color: #475569; margin-top: 2px;">Sistema Vendas - Cadastro Unificado de Clientes & Fornecedores</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11pt; font-weight: bold; color: #0284c7;">CÓDIGO: #${ent.CodEntidade}</div>
+          <div style="font-size: 8pt; color: #64748b;">Emissão: ${nowStr}</div>
+        </div>
+      </div>
+
+      <div class="section-title">1. Dados Principais e Identificação</div>
+      <table class="info-grid">
+        <tr>
+          <td style="width: 50%;">
+            <span class="label">Razão Social / Nome Completo</span>
+            <span class="val" style="font-size: 10pt; color: #0369a1;">${escapeHTML(ent.Nome || '-')}</span>
+          </td>
+          <td style="width: 50%;">
+            <span class="label">Nome Fantasia / Apelido</span>
+            <span class="val">${escapeHTML(ent.Fantasia || '-')}</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <span class="label">CPF / CNPJ</span>
+            <span class="val" style="font-family: monospace;">${escapeHTML(ent.CGC || ent.CPF || 'NÃO INFORMADO')}</span>
+          </td>
+          <td>
+            <span class="label">Inscrição Estadual / RG</span>
+            <span class="val">${escapeHTML(ent.InscrEst || ent.RG || '-')}</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <span class="label">Tipo de Entidade / Classificação</span>
+            <span class="val">${escapeHTML(ent.Tipo === 1 ? 'Cliente' : (ent.Tipo === 2 ? 'Fornecedor' : (ent.Tipo === 3 ? 'Vendedor' : (ent.Tipo === 5 ? 'Transportadora' : 'Outro'))))} (${ent.CGC ? 'Pessoa Jurídica' : 'Pessoa Física'})</span>
+          </td>
+          <td>
+            <span class="label">Status do Cadastro</span>
+            <span class="val" style="color: ${ent.Ativo === 0 ? '#dc2626' : '#16a34a'}; font-weight: bold;">${ent.Ativo === 0 ? 'INATIVO / BLOQUEADO' : 'ATIVO E LIBERADO'}</span>
+          </td>
+        </tr>
+      </table>
+
+      <div class="section-title">2. Endereço Principal / Faturamento</div>
+      <table class="info-grid">
+        <tr>
+          <td style="width: 60%;">
+            <span class="label">Logradouro</span>
+            <span class="val">${escapeHTML(ent.Endereco || '-')}</span>
+          </td>
+          <td style="width: 20%;">
+            <span class="label">Número</span>
+            <span class="val">${escapeHTML(ent.Nro || '-')}</span>
+          </td>
+          <td style="width: 20%;">
+            <span class="label">Complemento</span>
+            <span class="val">${escapeHTML(ent.Complemento || '-')}</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <span class="label">Bairro</span>
+            <span class="val">${escapeHTML(ent.Bairro || '-')}</span>
+          </td>
+          <td>
+            <span class="label">Cidade - UF</span>
+            <span class="val">${escapeHTML(ent.Cidade || '-')} / ${escapeHTML(ent.Uf || '-')}</span>
+          </td>
+          <td>
+            <span class="label">CEP</span>
+            <span class="val">${escapeHTML(ent.Cep || '-')}</span>
+          </td>
+        </tr>
+      </table>
+
+      <div class="section-title">3. Contato e Comunicação</div>
+      <table class="info-grid">
+        <tr>
+          <td style="width: 33%;">
+            <span class="label">Telefone Principal</span>
+            <span class="val">${escapeHTML(ent.Fone || '-')}</span>
+          </td>
+          <td style="width: 33%;">
+            <span class="label">Celular / WhatsApp</span>
+            <span class="val">${escapeHTML(ent.Celular || '-')}</span>
+          </td>
+          <td style="width: 34%;">
+            <span class="label">E-mail</span>
+            <span class="val">${escapeHTML(ent.Email || '-')}</span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="3">
+            <span class="label">Site / HomePage</span>
+            <span class="val">${escapeHTML(ent.HomePage || '-')}</span>
+          </td>
+        </tr>
+      </table>
+
+      <div class="section-title">4. Dados Comerciais e Histórico Financeiro</div>
+      <table class="info-grid">
+        <tr>
+          <td style="width: 25%;">
+            <span class="label">Limite de Crédito</span>
+            <span class="val" style="color: #d97706; font-size: 10pt;">R$ ${parseFloat(ent.Credito || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </td>
+          <td style="width: 25%;">
+            <span class="label">Condição de Pagamento</span>
+            <span class="val">${escapeHTML(ent.Condicao || ent.Prazo || 'A VISTA')}</span>
+          </td>
+          <td style="width: 25%;">
+            <span class="label">Total Compras Acumulado</span>
+            <span class="val" style="color: #16a34a; font-size: 10pt;">R$ ${parseFloat(hist.valor_acumulado_compras || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </td>
+          <td style="width: 25%;">
+            <span class="label">Total de Pedidos</span>
+            <span class="val">${hist.qtd_total_pedidos || 0} pedido(s)</span>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="4">
+            <span class="label">Observações Internas</span>
+            <span class="val">${escapeHTML(ent.Obs || 'Nenhuma observação interna cadastrada.')}</span>
+          </td>
+        </tr>
+      </table>
+
+      ${pedidos.length ? `
+        <div class="section-title">5. Últimos Pedidos de Vendas Registrados</div>
+        <table class="table-data">
+          <thead>
+            <tr>
+              <th style="width: 60px; text-align: center;">Pedido</th>
+              <th style="width: 80px; text-align: center;">Data</th>
+              <th>Operação</th>
+              <th style="width: 100px; text-align: right;">Total</th>
+              <th style="width: 120px;">Condição</th>
+              <th style="width: 80px; text-align: center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pedidosRows}
+          </tbody>
+        </table>
+      ` : ''}
+
+      <div class="footer">
+        <span>Sistema Vendas - Ficha Cadastral Oficial</span>
+        <span>Impresso em: ${nowStr}</span>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=900,height=750');
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(printDoc);
+  printWindow.document.close();
+}
+
+function exportarRelatorioEntidadesCSV() {
+  const tipo = document.getElementById('rel-ent-filtro-tipo')?.value || 'all';
+  const status = document.getElementById('rel-ent-filtro-status')?.value || 'ativos';
+  const pessoa = document.getElementById('rel-ent-filtro-pessoa')?.value || 'all';
+  const uf = document.getElementById('rel-ent-filtro-uf')?.value || 'all';
+  const cidade = document.getElementById('rel-ent-filtro-cidade')?.value || '';
+  const ordVal = document.getElementById('rel-ent-filtro-ordenacao')?.value || 'nome_asc';
+  const qVal = document.getElementById('rel-ent-search-input')?.value || '';
+  const idEmpresa = document.getElementById('select-active-empresa')?.value || 'all';
+
+  let sort_by = 'nome';
+  let sort_order = 'ASC';
+  if (ordVal === 'nome_asc') { sort_by = 'nome'; sort_order = 'ASC'; }
+  else if (ordVal === 'nome_desc') { sort_by = 'nome'; sort_order = 'DESC'; }
+  else if (ordVal === 'cod_asc') { sort_by = 'codentidade'; sort_order = 'ASC'; }
+  else if (ordVal === 'cod_desc') { sort_by = 'codentidade'; sort_order = 'DESC'; }
+  else if (ordVal === 'cidade_asc') { sort_by = 'cidade'; sort_order = 'ASC'; }
+  else if (ordVal === 'credito_desc') { sort_by = 'credito'; sort_order = 'DESC'; }
+  else if (ordVal === 'dtcadastro_desc') { sort_by = 'dtcadastro'; sort_order = 'DESC'; }
+
+  const params = new URLSearchParams({
+    sort_by: sort_by,
+    sort_order: sort_order
+  });
+
+  if (tipo && tipo !== 'all') params.append('tipo', tipo);
+  if (status && status !== 'all') params.append('ativo', status);
+  if (pessoa && pessoa !== 'all') params.append('pessoa', pessoa);
+  if (uf && uf !== 'all') params.append('uf', uf);
+  if (cidade && cidade.trim()) params.append('cidade', cidade.trim());
+  if (qVal && qVal.trim()) params.append('q', qVal.trim());
+  if (idEmpresa && idEmpresa !== 'all') params.append('id_empresa', idEmpresa);
+
+  showToast('Iniciando exportação das entidades para Excel (CSV)...', 'info', 2000);
+  window.location.href = `/api/relatorios/entidades/export/csv?${params.toString()}`;
+}
+
 
 
 

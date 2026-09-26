@@ -1744,6 +1744,165 @@ def export_relatorio_vendas_cliente_csv_route():
         return jsonify({"error": str(e)}), 500
 
 
+# --- RELATORIO DE DADOS CADASTRAIS DE ENTIDADES (CLIENTES / FORNECEDORES) ---
+
+@main_bp.route('/api/relatorios/entidades', methods=['GET'])
+def get_relatorio_entidades_route():
+    try:
+        tipo = request.args.get('tipo', None)
+        ativo = request.args.get('ativo', None)
+        pessoa = request.args.get('pessoa', None)
+        uf = request.args.get('uf', None)
+        cidade = request.args.get('cidade', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        sort_by = request.args.get('sort_by', 'Nome')
+        sort_order = request.args.get('sort_order', 'ASC')
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 50, type=int)
+
+        relatorio = db.get_relatorio_entidades(
+            tipo=tipo,
+            ativo=ativo,
+            pessoa=pessoa,
+            uf=uf,
+            cidade=cidade,
+            q=q,
+            id_empresa=id_empresa,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            limit=limit
+        )
+        return jsonify(relatorio)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/entidades/ficha/<int:cod_entidade>', methods=['GET'])
+def get_relatorio_entidade_ficha_route(cod_entidade):
+    try:
+        ficha = db.get_relatorio_entidade_ficha(cod_entidade)
+        if not ficha:
+            return jsonify({"error": "Entidade não encontrada"}), 404
+        return jsonify(ficha)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/entidades/filtros-locais', methods=['GET'])
+def get_relatorio_entidades_filtros_locais_route():
+    try:
+        dados = db.get_relatorio_entidades_ufs_cidades()
+        return jsonify(dados)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@main_bp.route('/api/relatorios/entidades/export/csv', methods=['GET'])
+def export_relatorio_entidades_csv_route():
+    import io
+    import csv
+    import datetime
+
+    try:
+        tipo = request.args.get('tipo', None)
+        ativo = request.args.get('ativo', None)
+        pessoa = request.args.get('pessoa', None)
+        uf = request.args.get('uf', None)
+        cidade = request.args.get('cidade', None)
+        q = request.args.get('q', None)
+        id_empresa = request.args.get('id_empresa', None)
+        sort_by = request.args.get('sort_by', 'Nome')
+        sort_order = request.args.get('sort_order', 'ASC')
+
+        # Buscar todos os registros correspondentes para exportação (limit 5000)
+        relatorio = db.get_relatorio_entidades(
+            tipo=tipo,
+            ativo=ativo,
+            pessoa=pessoa,
+            uf=uf,
+            cidade=cidade,
+            q=q,
+            id_empresa=id_empresa,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=1,
+            limit=5000
+        )
+
+        output = io.StringIO()
+        # UTF-8 BOM para compatibilidade com Microsoft Excel
+        output.write('\ufeff')
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+
+        # Cabeçalho CSV
+        writer.writerow([
+            'Codigo',
+            'Tipo Entidade',
+            'Pessoa',
+            'Razao Social / Nome',
+            'Nome Fantasia',
+            'CPF / CNPJ',
+            'RG / Inscricao Estadual',
+            'Telefone',
+            'Celular',
+            'Email',
+            'Endereco',
+            'Numero',
+            'Complemento',
+            'Bairro',
+            'Cidade',
+            'UF',
+            'CEP',
+            'Limite Credito (R$)',
+            'Condicao Padrao',
+            'Status',
+            'Data Cadastro',
+            'Ultimo Movimento',
+            'Observacoes'
+        ])
+
+        for ent in relatorio.get('items', []):
+            writer.writerow([
+                ent.get('CodEntidade', ''),
+                ent.get('TipoDescricao', ''),
+                ent.get('TipoPessoa', ''),
+                ent.get('Nome', ''),
+                ent.get('Fantasia', ''),
+                ent.get('DocumentoFormatado', ''),
+                ent.get('InscrEst', '') or ent.get('RG', ''),
+                ent.get('Fone', ''),
+                ent.get('Celular', ''),
+                ent.get('Email', ''),
+                ent.get('Endereco', ''),
+                ent.get('Nro', ''),
+                ent.get('Complemento', ''),
+                ent.get('Bairro', ''),
+                ent.get('Cidade', ''),
+                ent.get('Uf', ''),
+                ent.get('Cep', ''),
+                f"{float(ent.get('Credito', 0)):.2f}".replace('.', ','),
+                ent.get('Condicao', '') or ent.get('Prazo', ''),
+                'ATIVO' if ent.get('IsAtivo') else 'INATIVO',
+                ent.get('DtCadastro', ''),
+                ent.get('DtUltMov', ''),
+                str(ent.get('Obs', '')).replace('\n', ' ').replace('\r', ' ')
+            ])
+
+        csv_content = output.getvalue()
+        now_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"Relatorio_Cadastral_Entidades_{now_str}.csv"
+
+        return csv_content, 200, {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 
 
 
