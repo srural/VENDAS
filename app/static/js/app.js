@@ -7963,6 +7963,22 @@ let relEntCurrentPage = 1;
 let relEntCurrentFicha = null;
 let relEntSearchTimeout = null;
 
+function setRelEntTipoRapido(tipo) {
+  const selTipo = document.getElementById('rel-ent-filtro-tipo');
+  if (selTipo) {
+    selTipo.value = tipo;
+    fetchRelatorioEntidades(1);
+  }
+}
+
+function clearRelEntFiltroBusca() {
+  const inSearch = document.getElementById('rel-ent-search-input');
+  if (inSearch) {
+    inSearch.value = '';
+    fetchRelatorioEntidades(1);
+  }
+}
+
 async function carregarFiltrosUfCidadesEntidades() {
   try {
     const res = await fetch('/api/relatorios/entidades/filtros-locais');

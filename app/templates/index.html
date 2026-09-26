@@ -1828,18 +1828,26 @@
 
         <!-- ==================== MODULE: RELATÓRIO DE ENTIDADES (DADOS CADASTRAIS) ==================== -->
         <section class="module-view" id="view-rel-entidades">
-          <!-- Filtros do Relatório -->
-          <div class="filter-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-              <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                <i class="fa-solid fa-address-book" style="color: var(--accent-blue);"></i> Filtros e Parâmetros - Dados Cadastrais de Entidades
+          <!-- Filtros Avançados do Relatório de Entidades -->
+          <div class="table-card" style="padding: 1.25rem; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+              <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-filter" style="color: var(--accent-blue);"></i> Filtros e Parâmetros - Dados Cadastrais de Entidades
               </h3>
-              <span class="badge badge-group" style="font-size: 0.8rem;">Clientes, Fornecedores, Vendedores & Transportadoras</span>
+
+              <!-- Atalhos Rápidos de Tipos -->
+              <div class="period-shortcuts" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelEntTipoRapido('all')">Todos</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelEntTipoRapido('1')">Clientes</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelEntTipoRapido('2')">Fornecedores</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelEntTipoRapido('3')">Vendedores</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="setRelEntTipoRapido('5')">Transportadoras</button>
+              </div>
             </div>
 
-            <div class="filters-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-              <div class="form-group">
-                <label for="rel-ent-filtro-tipo">Tipo de Entidade</label>
+            <div class="form-grid">
+              <div class="form-group col-2">
+                <label>Tipo de Entidade</label>
                 <select id="rel-ent-filtro-tipo" class="form-control" onchange="fetchRelatorioEntidades(1)">
                   <option value="all">Todos os Tipos</option>
                   <option value="1">Clientes (Tipo 1 / 7)</option>
@@ -1849,8 +1857,8 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label for="rel-ent-filtro-status">Status Cadastral</label>
+              <div class="form-group col-2">
+                <label>Status Cadastral</label>
                 <select id="rel-ent-filtro-status" class="form-control" onchange="fetchRelatorioEntidades(1)">
                   <option value="all">Todos (Ativos e Inativos)</option>
                   <option value="ativos" selected>Apenas Ativos</option>
@@ -1858,8 +1866,8 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label for="rel-ent-filtro-pessoa">Tipo de Pessoa / Documento</label>
+              <div class="form-group col-2">
+                <label>Tipo de Pessoa</label>
                 <select id="rel-ent-filtro-pessoa" class="form-control" onchange="fetchRelatorioEntidades(1)">
                   <option value="all">Todas (Física e Jurídica)</option>
                   <option value="pf">Pessoa Física (CPF)</option>
@@ -1867,52 +1875,55 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label for="rel-ent-filtro-uf">Estado / UF</label>
+              <div class="form-group col-2">
+                <label>Estado / UF</label>
                 <select id="rel-ent-filtro-uf" class="form-control" onchange="fetchRelatorioEntidades(1)">
-                  <option value="all">Todos os Estados (UFs)</option>
+                  <option value="all">Todos os Estados</option>
                 </select>
               </div>
 
-              <div class="form-group">
-                <label for="rel-ent-filtro-cidade">Cidade</label>
+              <div class="form-group col-2">
+                <label>Cidade</label>
                 <input type="text" id="rel-ent-filtro-cidade" class="form-control" placeholder="Filtrar por cidade..." onkeyup="handleRelatorioEntidadesSearchKeyup(event)">
               </div>
 
-              <div class="form-group">
-                <label for="rel-ent-filtro-ordenacao">Ordenar Listagem Por</label>
+              <div class="form-group col-2">
+                <label>Ordenar Por</label>
                 <select id="rel-ent-filtro-ordenacao" class="form-control" onchange="fetchRelatorioEntidades(1)">
                   <option value="nome_asc" selected>Razão Social / Nome (A-Z)</option>
                   <option value="nome_desc">Razão Social / Nome (Z-A)</option>
-                  <option value="cod_asc">Código (Menor para Maior)</option>
-                  <option value="cod_desc">Código (Maior para Menor)</option>
+                  <option value="cod_asc">Código do Cadastro (Crescente)</option>
+                  <option value="cod_desc">Código do Cadastro (Decrescente)</option>
                   <option value="cidade_asc">Cidade / UF (A-Z)</option>
-                  <option value="credito_desc">Limite de Crédito (Maior para Menor)</option>
+                  <option value="credito_desc">Maior Limite de Crédito (R$)</option>
                   <option value="dtcadastro_desc">Data de Cadastro (Mais Recente)</option>
                   <option value="dtultmov_desc">Último Movimento (Mais Recente)</option>
                 </select>
               </div>
 
-              <div class="form-group" style="grid-column: 1 / -1;">
-                <label for="rel-ent-search-input">Busca Rápida de Entidade</label>
-                <div class="search-input-wrapper" style="position: relative;">
+              <div class="form-group col-6">
+                <label>Buscar Entidade</label>
+                <div class="search-input-wrapper">
                   <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                  <input type="text" id="rel-ent-search-input" class="search-input" placeholder="Buscar por Código, Razão Social, Fantasia, CPF, CNPJ, Telefone, Celular, E-mail..." onkeyup="handleRelatorioEntidadesSearchKeyup(event)" style="padding-left: 2.5rem;">
+                  <input type="text" id="rel-ent-search-input" class="search-input" placeholder="Pesquisar por Código, Razão Social, Fantasia, CPF, CNPJ, Telefone, Celular, E-mail..." onkeyup="handleRelatorioEntidadesSearchKeyup(event)">
+                  <button type="button" class="btn btn-icon btn-sm" onclick="clearRelEntFiltroBusca()" style="position: absolute; right: 6px; top: 6px; color: var(--text-muted);" title="Limpar busca">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
                 </div>
               </div>
 
-              <div class="form-group" style="grid-column: 1 / -1; display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center; margin-top: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-primary" onclick="fetchRelatorioEntidades(1)" style="flex: 1; min-width: 140px;">
-                  <i class="fa-solid fa-filter"></i> Aplicar Filtros
+              <div class="form-group col-6" style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <button type="button" class="btn btn-primary" onclick="fetchRelatorioEntidades(1)" style="flex: 1;">
+                  <i class="fa-solid fa-rotate-right"></i> Aplicar Filtros
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="limparFiltrosRelatorioEntidades()" title="Restaurar filtros padrão">
-                  <i class="fa-solid fa-rotate-left"></i> Limpar
+                  <i class="fa-solid fa-eraser"></i> Limpar
                 </button>
-                <button type="button" class="btn btn-secondary" onclick="imprimirRelatorioEntidades()" title="Imprimir Relatório Cadastral A4 / PDF">
-                  <i class="fa-solid fa-print"></i> Imprimir A4 / PDF
+                <button type="button" class="btn btn-secondary" onclick="imprimirRelatorioEntidades()" title="Imprimir Relatório Formatado A4 / PDF">
+                  <i class="fa-solid fa-print"></i> Imprimir
                 </button>
                 <button type="button" class="btn btn-emerald" onclick="exportarRelatorioEntidadesCSV()" title="Exportar para Planilha Excel (CSV)">
-                  <i class="fa-solid fa-file-excel"></i> Exportar Excel (CSV)
+                  <i class="fa-solid fa-file-excel"></i> Exportar CSV
                 </button>
               </div>
             </div>
