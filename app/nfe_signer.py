@@ -1,11 +1,23 @@
 import base64
 import os
 import io
-from lxml import etree
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import pkcs12, Encoding
-from cryptography import x509
+
+try:
+    from lxml import etree
+except ImportError:
+    etree = None
+
+try:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives.serialization import pkcs12, Encoding
+    from cryptography import x509
+except ImportError:
+    hashes = None
+    padding = None
+    pkcs12 = None
+    Encoding = None
+    x509 = None
 
 XMLDSIG_NS = "http://www.w3.org/2000/09/xmldsig#"
 C14N_ALGO = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
@@ -25,6 +37,9 @@ def load_pfx_certificate(pfx_path, password=None):
     Carrega o certificado A1 (.pfx / .p12) e retorna:
     (private_key, certificate, cert_chain, cert_der_b64)
     """
+    if pkcs12 is None:
+        raise CertificateError("A biblioteca 'cryptography' não está instalada no ambiente Python. Execute: pip install cryptography")
+
     if not os.path.exists(pfx_path):
         raise CertificateError(f"Arquivo de certificado digital não encontrado: '{pfx_path}'")
 
@@ -92,6 +107,9 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
 
     Tags assinadas: <infNFe Id="NFe...">, <infNFCe Id="NFe..."> ou <infEvento Id="ID...">.
     """
+    if etree is None:
+        raise SignatureError("A biblioteca 'lxml' não está instalada no ambiente Python. Execute: pip install lxml")
+
     if cert_info is None:
         cert_info = get_configured_or_fallback_certificate(id_empresa=id_empresa, pfx_path=pfx_path, password=password)
 

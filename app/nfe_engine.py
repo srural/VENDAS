@@ -3,7 +3,11 @@ import datetime
 import random
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-import xmlschema
+
+try:
+    import xmlschema
+except ImportError:
+    xmlschema = None
 
 _cached_sefaz_schema = None
 
@@ -12,6 +16,8 @@ def get_sefaz_nfe_schema():
     Retorna o schema oficial da SEFAZ 4.00 (nfe_v4.00.xsd) carregado e compilado em memória.
     """
     global _cached_sefaz_schema
+    if xmlschema is None:
+        return None
     if _cached_sefaz_schema is None:
         schema_path = os.path.join(os.path.dirname(__file__), "schemas", "nfe_v4.00", "nfe_v4.00.xsd")
         if os.path.exists(schema_path):

@@ -4,8 +4,20 @@ import time
 import tempfile
 import urllib.request
 import urllib.error
-from lxml import etree
-from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+
+try:
+    from lxml import etree
+except ImportError:
+    etree = None
+
+try:
+    from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+except ImportError:
+    pkcs12 = None
+    Encoding = None
+    PrivateFormat = None
+    NoEncryption = None
+
 from app.nfe_signer import load_pfx_certificate, sign_xml_sefaz
 
 SEFAZ_URLS = {
