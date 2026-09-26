@@ -8525,7 +8525,7 @@ async function imprimirRelatorioEntidades() {
             <strong style="color: #0f172a;">${escapeHTML(ent.Nome || '')}</strong>
             ${ent.Fantasia && ent.Fantasia !== ent.Nome ? `<br><span style="color: #64748b; font-size: 8pt;">Fantasia: ${escapeHTML(ent.Fantasia)}</span>` : ''}
           </td>
-          <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8.5pt;">${escapeHTML(ent.TipoDescricao || 'Cliente')}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8.5pt; text-align: center;">${escapeHTML(ent.TipoDescricao || 'Cliente')}</td>
           <td style="border: 1px solid #cbd5e1; padding: 5px; font-family: monospace; font-size: 8.5pt;">
             ${escapeHTML(ent.DocumentoFormatado || '-')}
             ${ent.InscrEst ? `<br><span style="font-size: 7.5pt; color: #64748b;">IE: ${escapeHTML(ent.InscrEst)}</span>` : ''}
@@ -8536,9 +8536,6 @@ async function imprimirRelatorioEntidades() {
             ${ent.Email ? `${escapeHTML(ent.Email)}` : ''}
           </td>
           <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt;">${escapeHTML(ent.EnderecoCompleto || '-')}</td>
-          <td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt; font-weight: bold; color: ${ent.IsAtivo ? '#16a34a' : '#dc2626'};">
-            ${ent.IsAtivo ? 'ATIVO' : 'INATIVO'}
-          </td>
         </tr>
       `;
     });
@@ -8633,12 +8630,11 @@ async function imprimirRelatorioEntidades() {
           <thead>
             <tr>
               <th style="width: 50px; text-align: center;">Cód</th>
-              <th style="width: 240px;">Razão Social / Nome</th>
-              <th style="width: 80px;">Tipo</th>
-              <th style="width: 140px;">CPF / CNPJ & IE</th>
-              <th style="width: 150px;">Contatos</th>
+              <th style="width: 250px;">Razão Social / Nome</th>
+              <th style="width: 90px; text-align: center;">Tipo</th>
+              <th style="width: 150px;">CPF / CNPJ & IE</th>
+              <th style="width: 160px;">Contatos</th>
               <th>Endereço Completo</th>
-              <th style="width: 70px; text-align: center;">Status</th>
             </tr>
           </thead>
           <tbody>
