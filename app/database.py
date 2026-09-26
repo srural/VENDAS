@@ -2627,7 +2627,8 @@ def get_relatorio_vendas_cliente(data_inicio=None, data_fim=None, cod_entidade=N
             clients_sql = f"""
                 SELECT 
                     PED."Entidade" as "CodEntidade",
-                    COALESCE(ENT."Nome", 'CONSUMIDOR FINAL') as "NomeCliente",
+                    COALESCE(ENT."Nome", 'CONSUMIDOR') as "Nome",
+                    COALESCE(ENT."Nome", 'CONSUMIDOR') as "NomeCliente",
                     ENT."Fantasia",
                     COALESCE(ENT."CPF", ENT."CGC", '') as "Documento",
                     ENT."Cidade",
@@ -2663,6 +2664,9 @@ def get_relatorio_vendas_cliente(data_inicio=None, data_fim=None, cod_entidade=N
             clients = []
             for r in raw_clients:
                 c = _convert_row(r)
+                nome_cliente = c.get("Nome") or c.get("NomeCliente") or ("CONSUMIDOR" if c.get("CodEntidade") == 1 else f"Cliente #{c.get('CodEntidade')}")
+                c["Nome"] = nome_cliente
+                c["NomeCliente"] = nome_cliente
                 val_tot = float(c.get("total_valor", 0.0))
                 c["participacao_pct"] = round((val_tot / faturamento_geral * 100.0), 2) if faturamento_geral > 0 else 0.0
                 c["ticket_medio"] = round(float(c.get("ticket_medio", 0.0)), 2)

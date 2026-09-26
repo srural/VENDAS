@@ -7202,6 +7202,7 @@ function renderRelatorioClienteRanking(items, sum) {
     const barWidth = Math.min(Math.max((val / maxVal) * 100, 4), 100);
     const color = medalColors[idx] || '#3b82f6';
     const rankLabel = medalIcons[idx] || `${idx + 1}º`;
+    const nomeExibicao = item.Nome || item.NomeCliente || (item.CodEntidade === 1 ? 'CONSUMIDOR' : `Cliente #${item.CodEntidade}`);
     const docStr = item.Documento ? ` • ${escapeHtml(item.Documento)}` : '';
     const cidStr = item.Cidade ? ` (${escapeHtml(item.Cidade)}${item.Uf ? '/' + escapeHtml(item.Uf) : ''})` : '';
 
@@ -7211,7 +7212,7 @@ function renderRelatorioClienteRanking(items, sum) {
           <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
             <span style="font-weight: 700; color: ${color}; min-width: 24px;">${rankLabel}</span>
             <strong style="color: var(--text-primary); cursor: pointer;" onclick="openClienteRelatorioDetalhesModal(${item.CodEntidade})" title="Clique para ver compras detalhadas">
-              #${item.CodEntidade} - ${escapeHtml(item.Nome || 'CLIENTE SEM NOME')}
+              #${item.CodEntidade} - ${escapeHtml(nomeExibicao)}
             </strong>
             <span style="font-size: 0.78rem; color: var(--text-muted);">${docStr}${cidStr}</span>
           </div>
@@ -7247,6 +7248,7 @@ function renderRelatorioClienteTabela(items, sum) {
     const ticketMedioStr = `R$ ${c.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const barWidth = Math.min(Math.max(c.participacao_pct, 2), 100);
     const isExpanded = relCliExpandedClients.has(c.CodEntidade);
+    const nomeCliente = c.Nome || c.NomeCliente || (c.CodEntidade === 1 ? 'CONSUMIDOR' : `Cliente #${c.CodEntidade}`);
 
     const prods = c.produtos || [];
     let prodsRowsHtml = '';
@@ -7282,7 +7284,7 @@ function renderRelatorioClienteTabela(items, sum) {
           <div class="client-prods-wrapper">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
               <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-blue);"></i> Produtos adquiridos por ${escapeHtml(c.Nome || 'Cliente')} (${prods.length} itens)
+                <i class="fa-solid fa-boxes-stacked" style="color: var(--accent-blue);"></i> Produtos adquiridos por ${escapeHtml(nomeCliente)} (${prods.length} itens)
               </span>
               <button type="button" class="btn btn-secondary btn-sm" onclick="openClienteRelatorioDetalhesModal(${c.CodEntidade})" style="padding: 0.15rem 0.5rem; font-size: 0.72rem;">
                 <i class="fa-solid fa-list-check"></i> Ver Histórico Completo de Pedidos
@@ -7320,7 +7322,7 @@ function renderRelatorioClienteTabela(items, sum) {
         <td style="text-align: center; font-weight: 700;">#${c.CodEntidade}</td>
         <td>
           <div style="font-weight: 600; color: var(--text-primary); cursor: pointer;" onclick="openClienteRelatorioDetalhesModal(${c.CodEntidade})" title="Clique para ver extrato completo">
-            ${escapeHtml(c.Nome || 'NÃO IDENTIFICADO')}
+            ${escapeHtml(nomeCliente)}
           </div>
         </td>
         <td>
