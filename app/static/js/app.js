@@ -8518,7 +8518,6 @@ async function imprimirRelatorioEntidades() {
 
     let rowsHtml = '';
     items.forEach((ent, idx) => {
-      const cred = parseFloat(ent.Credito || 0.0);
       rowsHtml += `
         <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
           <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1; padding: 5px;">${ent.CodEntidade}</td>
@@ -8537,9 +8536,6 @@ async function imprimirRelatorioEntidades() {
             ${ent.Email ? `${escapeHTML(ent.Email)}` : ''}
           </td>
           <td style="border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt;">${escapeHTML(ent.EnderecoCompleto || '-')}</td>
-          <td style="text-align: right; border: 1px solid #cbd5e1; padding: 5px; font-weight: bold;">
-            R$ ${cred.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </td>
           <td style="text-align: center; border: 1px solid #cbd5e1; padding: 5px; font-size: 8pt; font-weight: bold; color: ${ent.IsAtivo ? '#16a34a' : '#dc2626'};">
             ${ent.IsAtivo ? 'ATIVO' : 'INATIVO'}
           </td>
@@ -8555,7 +8551,7 @@ async function imprimirRelatorioEntidades() {
         <title>Relatório Cadastral de Entidades - ${nowStr}</title>
         <style>
           @page { size: A4 landscape; margin: 10mm; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; font-size: 9pt; margin: 0; padding: 0; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; font-size: 9pt; margin: 0; padding: 0; background: #ffffff; }
           .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; border-bottom: 2px solid #0284c7; padding-bottom: 8px; }
           .title { font-size: 14pt; font-weight: bold; color: #0369a1; text-transform: uppercase; margin: 0; }
           .subtitle { font-size: 8.5pt; color: #475569; margin-top: 2px; }
@@ -8566,9 +8562,28 @@ async function imprimirRelatorioEntidades() {
           .data-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
           .data-table th { background: #0284c7; color: #ffffff; padding: 6px 5px; border: 1px solid #0369a1; text-align: left; font-size: 8pt; text-transform: uppercase; }
           .footer { margin-top: 15px; font-size: 7.5pt; color: #64748b; display: flex; justify-content: space-between; border-top: 1px solid #cbd5e1; padding-top: 5px; }
+          @media print {
+            .no-print { display: none !important; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
         </style>
       </head>
       <body>
+        <!-- Barra de Ações Superior para Visualização e Geração de PDF -->
+        <div class="no-print" style="position: sticky; top: 0; background: #0f172a; color: #ffffff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 9999; margin-bottom: 12px; border-radius: 6px;">
+          <div style="font-size: 10pt; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <span>📄 Relatório Cadastral de Entidades (Visualização de Impressão / PDF)</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" onclick="window.print()" style="background: #2563eb; color: #ffffff; border: none; padding: 7px 16px; font-size: 9pt; font-weight: bold; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              🖨️ Imprimir / Salvar em PDF
+            </button>
+            <button type="button" onclick="window.close()" style="background: #475569; color: #ffffff; border: none; padding: 7px 14px; font-size: 9pt; font-weight: bold; border-radius: 4px; cursor: pointer;">
+              ✖ Fechar
+            </button>
+          </div>
+        </div>
+
         <table class="header-table">
           <tr>
             <td style="width: 65%;">
@@ -8601,14 +8616,14 @@ async function imprimirRelatorioEntidades() {
             </td>
             <td style="width: 25%; padding-right: 5px;">
               <div class="kpi-box">
-                <div class="kpi-title">Fornecedores / Parceiros</div>
+                <div class="kpi-title">Fornecedores</div>
                 <div class="kpi-val" style="color: #7c3aed;">${summary.total_fornecedores || 0}</div>
               </div>
             </td>
             <td style="width: 25%;">
               <div class="kpi-box">
-                <div class="kpi-title">Limite de Crédito Total</div>
-                <div class="kpi-val" style="color: #d97706;">R$ ${parseFloat(summary.limite_credito_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div class="kpi-title">Vendedores & Transportadoras</div>
+                <div class="kpi-val" style="color: #0284c7;">${(parseInt(summary.total_vendedores || 0) + parseInt(summary.total_transportadoras || 0))}</div>
               </div>
             </td>
           </tr>
@@ -8617,14 +8632,13 @@ async function imprimirRelatorioEntidades() {
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 45px; text-align: center;">Cód</th>
-              <th style="width: 220px;">Razão Social / Nome</th>
-              <th style="width: 75px;">Tipo</th>
-              <th style="width: 130px;">CPF / CNPJ & IE</th>
-              <th style="width: 140px;">Contatos</th>
+              <th style="width: 50px; text-align: center;">Cód</th>
+              <th style="width: 240px;">Razão Social / Nome</th>
+              <th style="width: 80px;">Tipo</th>
+              <th style="width: 140px;">CPF / CNPJ & IE</th>
+              <th style="width: 150px;">Contatos</th>
               <th>Endereço Completo</th>
-              <th style="width: 95px; text-align: right;">Crédito</th>
-              <th style="width: 60px; text-align: center;">Status</th>
+              <th style="width: 70px; text-align: center;">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -8634,8 +8648,16 @@ async function imprimirRelatorioEntidades() {
 
         <div class="footer">
           <span>Sistema Vendas - Relatório Gerencial Cadastral</span>
-          <span>Página 1 de 1</span>
+          <span>Emissão: ${nowStr}</span>
         </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 350);
+          };
+        </script>
       </body>
       </html>
     `;
@@ -8716,9 +8738,28 @@ async function imprimirFichaCadastralIndividual() {
         .table-data { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 5px; }
         .table-data th { background: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 4px; border: 1px solid #cbd5e1; }
         .footer { margin-top: 20px; font-size: 7.5pt; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 5px; display: flex; justify-content: space-between; }
+        @media print {
+          .no-print { display: none !important; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
       </style>
     </head>
     <body>
+      <!-- Barra de Ações Superior -->
+      <div class="no-print" style="position: sticky; top: 0; background: #0f172a; color: #ffffff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 9999; margin-bottom: 12px; border-radius: 6px;">
+        <div style="font-size: 10pt; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+          <span>📄 Ficha Cadastral 360° (Visualização de Impressão / PDF)</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" onclick="window.print()" style="background: #2563eb; color: #ffffff; border: none; padding: 7px 16px; font-size: 9pt; font-weight: bold; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            🖨️ Imprimir / Salvar em PDF
+          </button>
+          <button type="button" onclick="window.close()" style="background: #475569; color: #ffffff; border: none; padding: 7px 14px; font-size: 9pt; font-weight: bold; border-radius: 4px; cursor: pointer;">
+            ✖ Fechar
+          </button>
+        </div>
+      </div>
+
       <div class="header">
         <div>
           <h1 class="title">FICHA CADASTRAL DE ENTIDADE</h1>
@@ -8871,6 +8912,14 @@ async function imprimirFichaCadastralIndividual() {
         <span>Sistema Vendas - Ficha Cadastral Oficial</span>
         <span>Impresso em: ${nowStr}</span>
       </div>
+
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 350);
+        };
+      </script>
     </body>
     </html>
   `;
