@@ -12,6 +12,8 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+const escapeHTML = escapeHtml;
+
 function escapeJsString(str) {
   if (str === null || str === undefined) return '';
   return String(str)
