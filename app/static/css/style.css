@@ -1469,8 +1469,8 @@ body {
   }
 
   html, body {
-    width: 100% !important;
-    max-width: 78mm !important;
+    width: auto !important;
+    max-width: none !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -1480,9 +1480,6 @@ body {
     color: #000000 !important;
     overflow: visible !important;
     text-align: left !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
   }
 
   /* Ocultar rigorosamente toda a UI fora do recibo térmico */
@@ -1510,16 +1507,17 @@ body {
     opacity: 1 !important;
   }
 
-  body.print-receipt-mode #pdv-receipt-modal {
+  body.print-receipt-mode #pdv-receipt-modal,
+  body.print-receipt-mode #pdv-receipt-modal.modal-backdrop,
+  body.print-receipt-mode #pdv-receipt-modal .modal-container,
+  body.print-receipt-mode #pdv-receipt-modal .modal-body {
     position: static !important;
     display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
-    width: 76mm !important;
-    max-width: 76mm !important;
+    width: auto !important;
+    max-width: none !important;
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
@@ -1528,58 +1526,7 @@ body {
     border: none !important;
     z-index: auto !important;
     backdrop-filter: none !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-before: avoid !important;
-    page-break-after: avoid !important;
-    break-before: avoid !important;
-    break-after: avoid !important;
-    text-align: left !important;
-  }
-
-  body.print-receipt-mode #pdv-receipt-modal .modal-container {
-    position: static !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 76mm !important;
-    max-width: 76mm !important;
-    min-height: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    box-shadow: none !important;
-    border: none !important;
     transform: none !important;
-    overflow: visible !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-before: avoid !important;
-    page-break-after: avoid !important;
-    break-before: avoid !important;
-    break-after: avoid !important;
-    text-align: left !important;
-  }
-
-  body.print-receipt-mode #pdv-receipt-modal .modal-body {
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    overflow: visible !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    height: auto !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-before: avoid !important;
-    page-break-after: avoid !important;
-    break-before: avoid !important;
-    break-after: avoid !important;
     text-align: left !important;
   }
 
@@ -1603,9 +1550,6 @@ body {
     min-height: 0 !important;
     max-height: none !important;
     height: auto !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
     text-align: left !important;
   }
 
@@ -1623,24 +1567,18 @@ body {
   body.print-receipt-mode .receipt-nfce-info,
   body.print-receipt-mode .receipt-qrcode-container,
   body.print-receipt-mode .receipt-footer {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-before: avoid !important;
-    page-break-after: avoid !important;
-    break-before: avoid !important;
-    break-after: avoid !important;
     margin: 1px 0 !important;
   }
 
   body.print-receipt-mode table,
-  body.print-receipt-mode tbody,
-  body.print-receipt-mode tr,
-  body.print-receipt-mode td,
-  body.print-receipt-mode th {
+  body.print-receipt-mode tbody {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  body.print-receipt-mode tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    break-inside: avoid-page !important;
   }
 
   body.print-receipt-mode .rec-item-row-title td {
