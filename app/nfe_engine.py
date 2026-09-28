@@ -394,7 +394,23 @@ def emit_nfe_55(order_data, company_data, items_data):
     from app.sefaz_client import get_sefaz_endpoint, send_sefaz_soap_request, build_envi_nfe_batch, parse_sefaz_retorno_autorizacao, build_nfeproc_authorized
 
     id_emp = order_data.get("id_empresa") or company_data.get("id_empresa") or 1
-    serie_nfe, nro_nfe = get_and_increment_nfe_number(id_emp)
+    
+    custom_nro = str(order_data.get("NroNfe") or "").strip()
+    custom_serie = str(order_data.get("SerieNfe") or "").strip()
+    
+    if custom_nro and custom_nro.isdigit() and int(custom_nro) > 0:
+        nro_nfe = int(custom_nro)
+        serie_nfe = custom_serie if custom_serie else "1"
+        from app.config_manager import save_pdv_config
+        save_pdv_config({
+            "id_empresa": id_emp,
+            "Nfe": {
+                "SerieNfe": str(serie_nfe),
+                "NroNfe": str(nro_nfe + 1)
+            }
+        })
+    else:
+        serie_nfe, nro_nfe = get_and_increment_nfe_number(id_emp)
 
     order_data["NroNfe"] = str(nro_nfe)
     order_data["SerieNfe"] = str(serie_nfe)

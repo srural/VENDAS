@@ -5616,7 +5616,7 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     // Populate Cabeçalho & Cliente
     setElVal('FrmNota_CodPed', ped.CodPed);
     setElVal('FrmNota_CodPed_Disp', `#${ped.CodPed}`);
-    setElVal('FrmNota_NroNfe', ped.NroNfe || ped.CodPed || cfgNfe.NroNfe || '1');
+    setElVal('FrmNota_NroNfe', ped.NroNfe || cfgNfe.NroNfe || '1');
     setElVal('FrmNota_SerieNfe', ped.SerieNfe || cfgNfe.SerieNfe || '1');
     setElVal('FrmNota_Cfo', ped.Cfo || '5102 - VENDA DE MERCADORIA ADQUIRIDA OU RECEBIDA DE TERCEIROS');
     setElVal('FrmNota_Emissao', ped.DataEmiss || new Date().toLocaleDateString('pt-BR'));

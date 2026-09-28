@@ -1526,9 +1526,22 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
                 nfe_res["protocolo"], nfe_res["mensagem"], "0"
             ))
 
+            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "NroNfe" TEXT;')
+            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "SerieNfe" TEXT;')
             cursor.execute('''
-                UPDATE "PED" SET "Sat" = %s, "Cfo" = %s WHERE "CodPed" = %s
-            ''', (nfe_res["chave_nfe"], "NFe-55", cod_ped))
+                UPDATE "PED" SET 
+                    "Sat" = %s, 
+                    "Cfo" = %s,
+                    "NroNfe" = %s,
+                    "SerieNfe" = %s
+                WHERE "CodPed" = %s
+            ''', (
+                nfe_res["chave_nfe"], 
+                "NFe-55", 
+                str(nfe_res.get("nNF", order.get("NroNfe", ""))), 
+                str(nfe_res.get("serie", order.get("SerieNfe", "1"))), 
+                cod_ped
+            ))
 
             conn.commit()
     finally:
