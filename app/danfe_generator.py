@@ -978,12 +978,221 @@ def render_danfe_html(order, company, items, nfe_res):
     </div>
 
     <script>
-        window.addEventListener('load', function() {{
-            if (window.location.search.includes('print=1')) {{
+        window.addEventListener('load', function() {
+            if (window.location.search.includes('print=1')) {
                 window.print();
-            }}
-        }});
+            }
+        });
     </script>
 </body>
 </html>"""
     return html_content
+
+
+def render_cupom_termico_html(order_data):
+    order = order_data.get("pedido") or order_data.get("venda") or {}
+    items = order_data.get("itens") or []
+    company = order_data.get("empresa") or {}
+
+    logo_url = company.get("Logo") or company.get("logo") or ""
+    emp_nome = company.get("NomeEmpresa") or company.get("RazaoSocial") or "SIDCOMP VENDAS LTDA"
+    emp_sub = company.get("Cabecalho1") or company.get("Fantasia") or "FRENTE DE CAIXA"
+    emp_cnpj = format_cnpj_cpf(company.get("CNPJ") or "11054174000153")
+    emp_ie = company.get("InscEst") or company.get("IE") or "123456789110"
+
+    cod_ped = order.get("CodPed") or order.get("Pedido") or 1
+    data_emiss = order.get("DataEmiss") or datetime.datetime.now().strftime("%d/%m/%Y")
+    hora = order.get("Hora") or datetime.datetime.now().strftime("%H:%M:%S")
+    full_data = f"{data_emiss} {hora}".strip()
+
+    cli_nome = (order.get("NomeCliente") or order.get("Nome") or "").strip()
+    is_generic = not cli_nome or cli_nome.upper() in ["CONSUMIDOR", "CONSUMIDOR FINAL", "PADRAO", "PADRÃO", "CLIENTE CONSUMIDOR"]
+    doc_cli = format_cnpj_cpf(order.get("CPF") or order.get("CGC") or "")
+    
+    end_cli = (order.get("Endereco") or "").strip()
+    nro_cli = (str(order.get("Nro") or "")).strip()
+    bairro_cli = (order.get("Bairro") or "").strip()
+    cidade_cli = (order.get("Cidade") or "").strip()
+    uf_cli = (order.get("Uf") or "").strip()
+    cep_cli = format_cep(order.get("Cep") or "")
+    fone_cli = (order.get("Fone") or "").strip()
+
+    subtotal = float(order.get("SubTotal") or order.get("Total") or 0.0)
+    desconto = float(order.get("Desconto") or 0.0)
+    total = float(order.get("Total") or (subtotal - desconto))
+    cond_pgto = order.get("CondPgto") or "DINHEIRO"
+
+    items_html = []
+    for idx, it in enumerate(items):
+        prd_cod = it.get("Produto") or it.get("CodPrd") or ""
+        prd_desc = pyhtml.escape(it.get("Descricao_Produto") or it.get("Descricao") or "")
+        qtd = float(it.get("Qtd") or 1.0)
+        emb = pyhtml.escape(it.get("Embalagem") or "UN")
+        v_unit = float(it.get("ValorUnit") or 0.0)
+        v_tot = float(it.get("Valor") or (qtd * v_unit))
+        
+        items_html.append(f"""
+          <tr style="page-break-inside: avoid;">
+            <td colspan="2" style="font-weight: 700; font-size: 10.5px; padding-top: 2px; padding-bottom: 0px; word-break: break-word;">
+              {idx + 1}. {'#' + str(prd_cod) + ' ' if prd_cod else ''}{prd_desc}
+            </td>
+          </tr>
+          <tr style="page-break-inside: avoid;">
+            <td style="padding-bottom: 2px; padding-left: 8px; font-size: 10px;">
+              {qtd:g} {emb} &nbsp;x&nbsp; {format_money(v_unit)}
+            </td>
+            <td style="text-align: right; font-weight: 700; padding-bottom: 2px; font-size: 10.5px;">
+              {format_money(v_tot)}
+            </td>
+          </tr>
+        """)
+    items_rows_str = "".join(items_html)
+
+    client_html = ""
+    if not is_generic:
+        lines = [f'<p style="margin: 1px 0;"><strong>CLIENTE:</strong> <span style="font-size: 12px; font-weight: 900; text-transform: uppercase;">{pyhtml.escape(cli_nome)}</span></p>']
+        if doc_cli:
+            lines.append(f'<p style="margin: 1px 0;"><strong>CPF/CNPJ:</strong> {doc_cli}</p>')
+        if end_cli:
+            full_end = end_cli + (f', {nro_cli}' if nro_cli and nro_cli not in ['0', 'SN', 'sn'] else '') + (f' - {bairro_cli}' if bairro_cli else '')
+            lines.append(f'<p style="margin: 1px 0;"><strong>ENDEREÇO:</strong> {pyhtml.escape(full_end)}</p>')
+        if cidade_cli or uf_cli or cep_cli:
+            cid_str = cidade_cli + (f'/{uf_cli}' if uf_cli else '') + (f' - CEP: {cep_cli}' if cep_cli else '')
+            lines.append(f'<p style="margin: 1px 0;"><strong>CIDADE/UF:</strong> {pyhtml.escape(cid_str)}</p>')
+        if fone_cli:
+            lines.append(f'<p style="margin: 1px 0;"><strong>FONE:</strong> {pyhtml.escape(fone_cli)}</p>')
+        lines.append('<div style="border-top: 1px dashed #000; height: 1px; margin: 3px 0;"></div>')
+        client_html = "".join(lines)
+
+    logo_html = ""
+    if logo_url:
+        logo_html = f'<div style="text-align: center; margin-bottom: 3px;"><img src="{logo_url}" style="max-height: 80px; max-width: 220px; object-fit: contain; margin: 0 auto; display: block;"></div>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Cupom Pedido #{cod_ped}</title>
+  <style>
+    @page {{
+      size: 72mm auto portrait;
+      margin: 0mm;
+      padding: 0mm;
+    }}
+    * {{
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif;
+    }}
+    html, body {{
+      width: 72mm;
+      max-width: 72mm;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #000000;
+      font-size: 10.5px;
+      line-height: 1.2;
+    }}
+    .receipt-container {{
+      width: 68mm;
+      max-width: 68mm;
+      margin: 0;
+      margin-left: 3mm;
+      padding: 0 0 5mm 0;
+      background: #ffffff;
+    }}
+    .table-items {{
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2px 0;
+    }}
+    .table-items thead {{
+      display: table-row-group;
+    }}
+    .table-items th {{
+      border-bottom: 1px dashed #000;
+      padding-bottom: 2px;
+      font-size: 10px;
+      text-align: left;
+    }}
+    .divider {{
+      border-top: 1px dashed #000;
+      height: 1px;
+      margin: 3px 0;
+    }}
+    .rec-row {{
+      display: flex;
+      justify-content: space-between;
+      margin: 1px 0;
+    }}
+  </style>
+</head>
+<body>
+  <div class="receipt-container">
+    {logo_html}
+    <div style="text-align: center; margin-bottom: 2px;">
+      <h2 style="font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 1px;">{pyhtml.escape(emp_nome)}</h2>
+      <p style="font-size: 9.5px; margin: 1px 0;">{pyhtml.escape(emp_sub)}</p>
+      <p style="font-size: 9.5px; margin: 1px 0;">CNPJ: {emp_cnpj} | IE: {emp_ie}</p>
+      <div class="divider"></div>
+      <h3 style="font-size: 11px; font-weight: bold; margin: 2px 0 1px 0;">CUPOM DE VENDA</h3>
+      <p style="font-size: 9.5px; margin: 1px 0;">Comprovante de Venda</p>
+      <p style="font-size: 9.5px; margin: 1px 0;">Documento de Simples Conferência</p>
+      
+      <div style="margin: 3px 0; padding: 2px 3px; border: 1px dashed #000; text-align: center;">
+        <div style="font-size: 13px; font-weight: 900;">PEDIDO Nº <span>#{cod_ped}</span></div>
+        <div style="font-size: 9.5px; font-weight: bold;">DATA / HORA: {full_data}</div>
+      </div>
+      <div class="divider"></div>
+    </div>
+
+    {client_html}
+
+    <table class="table-items">
+      <thead>
+        <tr>
+          <th>ITEM CÓDIGO DESCRIÇÃO</th>
+          <th style="text-align: right;">TOTAL (R$)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items_rows_str}
+      </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <div style="font-size: 10.5px;">
+      <div class="rec-row"><span>QTD. TOTAL DE ITENS:</span><strong>{len(items)}</strong></div>
+      <div class="rec-row"><span>SUBTOTAL R$:</span><strong>{format_money(subtotal)}</strong></div>
+      <div class="rec-row"><span>DESCONTO R$:</span><strong>{format_money(desconto)}</strong></div>
+      <div class="rec-row" style="font-size: 12px; font-weight: bold; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2px 0; margin: 2px 0;">
+        <span>TOTAL R$:</span><strong>{format_money(total)}</strong>
+      </div>
+      <div class="rec-row"><span>FORMA PAGAMENTO:</span><strong>{pyhtml.escape(cond_pgto)}</strong></div>
+      <div class="rec-row"><span>VALOR RECEBIDO R$:</span><strong>{format_money(total)}</strong></div>
+      <div class="rec-row"><span>TROCO R$:</span><strong>0,00</strong></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="text-align: center; font-size: 10.5px; font-weight: bold; margin-top: 4px; padding-bottom: 5mm;">
+      AGRADECEMOS A PREFERENCIA!
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.focus();
+        window.print();
+      }, 150);
+    };
+  </script>
+</body>
+</html>"""
+    return html

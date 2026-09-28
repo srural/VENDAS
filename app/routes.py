@@ -646,6 +646,18 @@ def emitir_nfe_sefaz_direto(cod_ped):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@main_bp.route('/api/pedidos/<int:cod_ped>/cupom-html', methods=['GET'])
+def get_pedido_cupom_html(cod_ped):
+    from app.danfe_generator import render_cupom_termico_html
+    try:
+        order_data = db.get_order_by_id(cod_ped)
+        if not order_data or not order_data.get("pedido"):
+            return "<h3>Pedido não encontrado</h3>", 404
+        html = render_cupom_termico_html(order_data)
+        return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        return f"<h3>Erro ao gerar cupom: {pyhtml.escape(str(e))}</h3>", 500
+
 @main_bp.route('/api/nfe/<int:cod_ped>/danfe-html', methods=['GET'])
 def get_danfe_html(cod_ped):
     from app.nfe_engine import emit_nfe_55, validate_nfe_structure

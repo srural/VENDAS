@@ -2376,234 +2376,132 @@ function executeThermalReceiptPrint(openModal = false) {
 
   const receiptHtml = receiptEl.innerHTML;
 
-  let printFrame = document.getElementById('thermal-print-iframe');
-  if (!printFrame) {
-    printFrame = document.createElement('iframe');
-    printFrame.id = 'thermal-print-iframe';
-    printFrame.style.position = 'fixed';
-    printFrame.style.right = '0';
-    printFrame.style.bottom = '0';
-    printFrame.style.width = '0';
-    printFrame.style.height = '0';
-    printFrame.style.border = '0';
-    printFrame.style.visibility = 'hidden';
-    document.body.appendChild(printFrame);
+  const printDoc = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Cupom Térmico</title>
+  <style>
+    @page {
+      size: 72mm auto portrait !important;
+      margin: 0mm !important;
+      padding: 0mm !important;
+    }
+    * {
+      box-sizing: border-box !important;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif !important;
+    }
+    html, body {
+      width: 72mm !important;
+      max-width: 72mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-size: 10.5px !important;
+      line-height: 1.2 !important;
+    }
+    .thermal-receipt-wrapper {
+      width: 68mm !important;
+      max-width: 68mm !important;
+      margin: 0 !important;
+      margin-left: 3mm !important;
+      padding: 0 0 5mm 0 !important;
+      background: #ffffff !important;
+    }
+    .receipt-header { text-align: center !important; margin-bottom: 2px !important; }
+    .receipt-header h2 { font-size: 12px !important; font-weight: bold !important; text-transform: uppercase !important; margin-bottom: 1px !important; }
+    .receipt-header p { font-size: 9.5px !important; margin: 1px 0 !important; }
+    .receipt-title { font-size: 11px !important; font-weight: bold !important; margin: 2px 0 1px 0 !important; }
+    .receipt-subtitle { font-size: 9.5px !important; margin: 1px 0 !important; }
+    .receipt-ped-highlight-box { margin: 3px 0 !important; padding: 2px 3px !important; border: 1px dashed #000 !important; text-align: center !important; }
+    .rec-ped-highlight-num { font-size: 13px !important; font-weight: 900 !important; margin-bottom: 1px !important; }
+    .rec-ped-highlight-num span { font-size: 14px !important; font-weight: 900 !important; }
+    .rec-ped-highlight-date { font-size: 9.5px !important; font-weight: bold !important; }
+    .receipt-divider { border-top: 1px dashed #000 !important; height: 1px !important; font-size: 0 !important; line-height: 0 !important; margin: 3px 0 !important; overflow: hidden !important; color: transparent !important; }
+    .receipt-client-info { font-size: 10.5px !important; line-height: 1.25 !important; margin: 2px 0 !important; text-align: left !important; }
+    .receipt-client-info p { margin: 1px 0 !important; }
+    .rec-cli-name-highlight { font-size: 12.5px !important; font-weight: 900 !important; text-transform: uppercase !important; }
+    .receipt-items-table { width: 100% !important; border-collapse: collapse !important; margin: 2px 0 !important; }
+    .receipt-items-table thead { display: table-row-group !important; }
+    .receipt-items-table th { border-bottom: 1px dashed #000 !important; padding-bottom: 2px !important; font-size: 10px !important; text-align: left !important; }
+    .receipt-items-table td { padding: 1px 0 !important; vertical-align: top !important; }
+    .rec-item-row-title td { font-weight: bold !important; font-size: 10.5px !important; padding-top: 2px !important; }
+    .rec-item-row-calc td { font-size: 10px !important; padding-bottom: 2px !important; }
+    .receipt-totals { margin: 2px 0 !important; font-size: 10.5px !important; }
+    .rec-row { display: flex !important; justify-content: space-between !important; margin: 1px 0 !important; }
+    .rec-total-bold { font-size: 12px !important; font-weight: bold !important; border-top: 1px dashed #000 !important; border-bottom: 1px dashed #000 !important; padding: 2px 0 !important; margin: 2px 0 !important; }
+    .receipt-footer { text-align: center !important; font-size: 10.5px !important; font-weight: bold !important; margin-top: 4px !important; padding-bottom: 5mm !important; }
+    .receipt-nfce-info { font-size: 9.5px !important; text-align: center !important; margin: 3px 0 !important; }
+    .rec-highlight-code { font-weight: bold !important; font-size: 11px !important; margin: 2px 0 !important; }
+    .rec-key { font-size: 8.5px !important; word-break: break-all !important; font-weight: bold !important; margin: 2px 0 !important; }
+    .receipt-qrcode-container { text-align: center !important; margin: 5px 0 !important; }
+    .rec-consult-url { font-size: 8.5px !important; text-align: center !important; margin-top: 2px !important; }
+    .receipt-homolog-banner { border: 1px dashed #000 !important; font-size: 8.5px !important; padding: 2px !important; text-align: center !important; margin-bottom: 3px !important; }
+    .no-print { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="thermal-receipt-wrapper">
+    ${receiptHtml}
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.focus();
+        window.print();
+      }, 150);
+    };
+  </script>
+</body>
+</html>`;
+
+  // Tenta abrir janela popup compacta isolada
+  const printWin = window.open('', '_blank', 'width=380,height=700,menubar=no,toolbar=no,location=no,status=no');
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(printDoc);
+    printWin.document.close();
+  } else {
+    // Fallback: iframe com dimensão real offscreen
+    let printFrame = document.getElementById('thermal-print-iframe');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'thermal-print-iframe';
+      printFrame.style.position = 'fixed';
+      printFrame.style.top = '-9999px';
+      printFrame.style.left = '-9999px';
+      printFrame.style.width = '72mm';
+      printFrame.style.height = '800px';
+      printFrame.style.border = 'none';
+      document.body.appendChild(printFrame);
+    }
+    const doc = printFrame.contentWindow.document;
+    doc.open();
+    doc.write(printDoc);
+    doc.close();
+    setTimeout(() => {
+      printFrame.contentWindow.focus();
+      printFrame.contentWindow.print();
+    }, 250);
   }
 
-  const doc = printFrame.contentWindow.document;
-  doc.open();
-  doc.write(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="utf-8">
-      <title>Cupom Térmico</title>
-      <style>
-        @page {
-          size: 72mm auto !important;
-          margin: 0mm !important;
-          padding: 0mm !important;
-        }
-        * {
-          box-sizing: border-box !important;
-          margin: 0;
-          padding: 0;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif !important;
-        }
-        html, body {
-          width: 72mm !important;
-          max-width: 72mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #ffffff !important;
-          color: #000000 !important;
-          font-size: 10.5px !important;
-          line-height: 1.2 !important;
-          overflow: visible !important;
-        }
-        .thermal-receipt-wrapper {
-          width: 68mm !important;
-          max-width: 68mm !important;
-          margin: 0 !important;
-          margin-left: 3mm !important;
-          padding: 0mm 0.5mm 3mm 0.5mm !important;
-          background: #ffffff !important;
-        }
-        .receipt-header {
-          text-align: center !important;
-          margin-bottom: 2px !important;
-        }
-        .receipt-header h2 {
-          font-size: 12px !important;
-          font-weight: bold !important;
-          text-transform: uppercase !important;
-          margin-bottom: 1px !important;
-        }
-        .receipt-header p {
-          font-size: 9.5px !important;
-          margin: 1px 0 !important;
-        }
-        .receipt-title {
-          font-size: 11px !important;
-          font-weight: bold !important;
-          margin: 2px 0 1px 0 !important;
-        }
-        .receipt-subtitle {
-          font-size: 9.5px !important;
-          margin: 1px 0 !important;
-        }
-        .receipt-ped-highlight-box {
-          margin: 3px 0 !important;
-          padding: 2px 3px !important;
-          border: 1px dashed #000 !important;
-          text-align: center !important;
-        }
-        .rec-ped-highlight-num {
-          font-size: 13px !important;
-          font-weight: 900 !important;
-          margin-bottom: 1px !important;
-        }
-        .rec-ped-highlight-num span {
-          font-size: 14px !important;
-          font-weight: 900 !important;
-        }
-        .rec-ped-highlight-date {
-          font-size: 9.5px !important;
-          font-weight: bold !important;
-        }
-        .receipt-divider {
-          border-top: 1px dashed #000 !important;
-          height: 1px !important;
-          font-size: 0 !important;
-          line-height: 0 !important;
-          margin: 3px 0 !important;
-          overflow: hidden !important;
-          color: transparent !important;
-        }
-        .receipt-client-info {
-          font-size: 10.5px !important;
-          line-height: 1.25 !important;
-          margin: 2px 0 !important;
-          text-align: left !important;
-        }
-        .receipt-client-info p {
-          margin: 1px 0 !important;
-        }
-        .rec-cli-name-highlight {
-          font-size: 12.5px !important;
-          font-weight: 900 !important;
-          text-transform: uppercase !important;
-        }
-        .receipt-items-table {
-          width: 100% !important;
-          border-collapse: collapse !important;
-          margin: 2px 0 !important;
-        }
-        .receipt-items-table thead {
-          display: table-row-group !important;
-        }
-        .receipt-items-table th {
-          border-bottom: 1px dashed #000 !important;
-          padding-bottom: 2px !important;
-          font-size: 10px !important;
-          text-align: left !important;
-        }
-        .receipt-items-table td {
-          padding: 1px 0 !important;
-          vertical-align: top !important;
-        }
-        .rec-item-row-title td {
-          font-weight: bold !important;
-          font-size: 10.5px !important;
-          padding-top: 2px !important;
-        }
-        .rec-item-row-calc td {
-          font-size: 10px !important;
-          padding-bottom: 2px !important;
-        }
-        .receipt-totals {
-          margin: 2px 0 !important;
-          font-size: 10.5px !important;
-        }
-        .rec-row {
-          display: flex !important;
-          justify-content: space-between !important;
-          margin: 1px 0 !important;
-        }
-        .rec-total-bold {
-          font-size: 12px !important;
-          font-weight: bold !important;
-          border-top: 1px dashed #000 !important;
-          border-bottom: 1px dashed #000 !important;
-          padding: 2px 0 !important;
-          margin: 2px 0 !important;
-        }
-        .receipt-footer {
-          text-align: center !important;
-          font-size: 10.5px !important;
-          font-weight: bold !important;
-          margin-top: 4px !important;
-          padding-bottom: 4mm !important;
-        }
-        .receipt-nfce-info {
-          font-size: 9.5px !important;
-          text-align: center !important;
-          margin: 3px 0 !important;
-        }
-        .rec-highlight-code {
-          font-weight: bold !important;
-          font-size: 11px !important;
-          margin: 2px 0 !important;
-        }
-        .rec-key {
-          font-size: 8.5px !important;
-          word-break: break-all !important;
-          font-weight: bold !important;
-          margin: 2px 0 !important;
-        }
-        .receipt-qrcode-container {
-          text-align: center !important;
-          margin: 5px 0 !important;
-        }
-        .rec-consult-url {
-          font-size: 8.5px !important;
-          text-align: center !important;
-          margin-top: 2px !important;
-        }
-        .receipt-homolog-banner {
-          border: 1px dashed #000 !important;
-          font-size: 8.5px !important;
-          padding: 2px !important;
-          text-align: center !important;
-          margin-bottom: 3px !important;
-        }
-        .no-print {
-          display: none !important;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="thermal-receipt-wrapper">
-        ${receiptHtml}
-      </div>
-    </body>
-    </html>
-  `);
-  doc.close();
-
-  setTimeout(() => {
-    printFrame.contentWindow.focus();
-    printFrame.contentWindow.print();
-    if (!openModal) {
-      const modal = document.getElementById('pdv-receipt-modal');
-      if (modal) modal.classList.remove('active');
-    }
-  }, 200);
+  if (!openModal) {
+    const modal = document.getElementById('pdv-receipt-modal');
+    if (modal) modal.classList.remove('active');
+  }
 }
 
 function printSimpleSaleReceipt(openModal = false) {
+  if (lastSaleData && lastSaleData.venda && (lastSaleData.venda.CodPed || lastSaleData.venda.Pedido)) {
+    const id = lastSaleData.venda.CodPed || lastSaleData.venda.Pedido;
+    window.open(`/api/pedidos/${id}/cupom-html`, '_blank', 'width=380,height=700,menubar=no,toolbar=no,location=no,status=no');
+    return;
+  }
   if (lastSaleData) {
     renderThermalReceipt(lastSaleData, 'venda', openModal);
   }
@@ -3809,26 +3707,10 @@ async function imprimirCupomOrder(codPed) {
       return;
     }
 
-    const res = await fetch(`/api/pedidos/${id}`);
-    const data = await res.json();
-    if (!res.ok || !data || !data.pedido) {
-      throw new Error((data && data.error) || 'Pedido não encontrado');
-    }
-
-    const saleData = {
-      venda: data.pedido,
-      pedido: data.pedido,
-      itens: data.itens || [],
-      nfe: data.nfe || {},
-      empresa: data.empresa || {}
-    };
-
-    lastSaleData = saleData;
-    renderThermalReceipt(saleData, 'venda', false);
-    printSimpleSaleReceipt(false);
+    window.open(`/api/pedidos/${id}/cupom-html`, '_blank', 'width=380,height=700,menubar=no,toolbar=no,location=no,status=no');
   } catch (err) {
-    console.error('Erro ao imprimir pedido:', err);
-    showToast(`Erro ao imprimir pedido: ${err.message}`, 'error');
+    console.error('Erro ao abrir cupom do pedido:', err);
+    showToast(`Erro ao abrir cupom do pedido: ${err.message}`, 'error');
   }
 }
 
