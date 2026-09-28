@@ -2398,11 +2398,11 @@ function executeThermalReceiptPrint(openModal = false) {
 
   const heightMm = Math.max(90, Math.ceil((heightPx * 25.4) / 96) + 12);
 
-  // Injeta @page com a altura contínua exata da bobina para que o navegador NÃO divida em páginas
+  // Injeta @page com a largura útil de 72mm e a altura contínua exata da bobina
   dynamicStyle.innerHTML = `
     @media print {
       @page {
-        size: 80mm ${heightMm}mm !important;
+        size: 72mm ${heightMm}mm !important;
         margin: 0mm !important;
       }
     }
