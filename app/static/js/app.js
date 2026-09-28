@@ -2371,54 +2371,235 @@ function renderFallbackQrCode(container) {
 }
 
 function executeThermalReceiptPrint(openModal = false) {
-  const modal = document.getElementById('pdv-receipt-modal');
   const receiptEl = document.getElementById('thermal-receipt-printable');
+  if (!receiptEl) return;
 
-  // Ativa modo de impressão para renderizar o layout do cupom
-  document.body.classList.add('print-receipt-mode');
+  const receiptHtml = receiptEl.innerHTML;
 
-  // Garante elemento de estilo dinâmico para a altura contínua exata
-  let dynamicStyle = document.getElementById('dynamic-thermal-page-style');
-  if (!dynamicStyle) {
-    dynamicStyle = document.createElement('style');
-    dynamicStyle.id = 'dynamic-thermal-page-style';
-    document.head.appendChild(dynamicStyle);
+  let printFrame = document.getElementById('thermal-print-iframe');
+  if (!printFrame) {
+    printFrame = document.createElement('iframe');
+    printFrame.id = 'thermal-print-iframe';
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    printFrame.style.visibility = 'hidden';
+    document.body.appendChild(printFrame);
   }
 
-  // Mede a altura real do cupom gerado em pixels e converte para milímetros (1in = 25.4mm, 96px = 1in)
-  // Adiciona 12mm de avanço de papel para o corte final da guilhotina
-  let heightPx = 0;
-  if (receiptEl) {
-    heightPx = Math.ceil(receiptEl.scrollHeight || receiptEl.offsetHeight || (receiptEl.getBoundingClientRect && receiptEl.getBoundingClientRect().height) || 0);
-  }
-  if (!heightPx || heightPx < 100) {
-    const itemsCount = (document.querySelectorAll('#rec-items-tbody tr').length / 2) || 5;
-    heightPx = 250 + (itemsCount * 38);
-  }
-
-  const heightMm = Math.max(90, Math.ceil((heightPx * 25.4) / 96) + 12);
-
-  // Injeta @page com a largura útil de 72mm e a altura contínua exata da bobina
-  dynamicStyle.innerHTML = `
-    @media print {
-      @page {
-        size: 72mm ${heightMm}mm !important;
-        margin: 0mm !important;
-      }
-    }
-  `;
+  const doc = printFrame.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <title>Cupom Térmico</title>
+      <style>
+        @page {
+          size: 72mm auto !important;
+          margin: 0mm !important;
+          padding: 0mm !important;
+        }
+        * {
+          box-sizing: border-box !important;
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif !important;
+        }
+        html, body {
+          width: 72mm !important;
+          max-width: 72mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-size: 10.5px !important;
+          line-height: 1.2 !important;
+          overflow: visible !important;
+        }
+        .thermal-receipt-wrapper {
+          width: 68mm !important;
+          max-width: 68mm !important;
+          margin: 0 !important;
+          margin-left: 3mm !important;
+          padding: 0mm 0.5mm 3mm 0.5mm !important;
+          background: #ffffff !important;
+        }
+        .receipt-header {
+          text-align: center !important;
+          margin-bottom: 2px !important;
+        }
+        .receipt-header h2 {
+          font-size: 12px !important;
+          font-weight: bold !important;
+          text-transform: uppercase !important;
+          margin-bottom: 1px !important;
+        }
+        .receipt-header p {
+          font-size: 9.5px !important;
+          margin: 1px 0 !important;
+        }
+        .receipt-title {
+          font-size: 11px !important;
+          font-weight: bold !important;
+          margin: 2px 0 1px 0 !important;
+        }
+        .receipt-subtitle {
+          font-size: 9.5px !important;
+          margin: 1px 0 !important;
+        }
+        .receipt-ped-highlight-box {
+          margin: 3px 0 !important;
+          padding: 2px 3px !important;
+          border: 1px dashed #000 !important;
+          text-align: center !important;
+        }
+        .rec-ped-highlight-num {
+          font-size: 13px !important;
+          font-weight: 900 !important;
+          margin-bottom: 1px !important;
+        }
+        .rec-ped-highlight-num span {
+          font-size: 14px !important;
+          font-weight: 900 !important;
+        }
+        .rec-ped-highlight-date {
+          font-size: 9.5px !important;
+          font-weight: bold !important;
+        }
+        .receipt-divider {
+          border-top: 1px dashed #000 !important;
+          height: 1px !important;
+          font-size: 0 !important;
+          line-height: 0 !important;
+          margin: 3px 0 !important;
+          overflow: hidden !important;
+          color: transparent !important;
+        }
+        .receipt-client-info {
+          font-size: 10.5px !important;
+          line-height: 1.25 !important;
+          margin: 2px 0 !important;
+          text-align: left !important;
+        }
+        .receipt-client-info p {
+          margin: 1px 0 !important;
+        }
+        .rec-cli-name-highlight {
+          font-size: 12.5px !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+        }
+        .receipt-items-table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          margin: 2px 0 !important;
+        }
+        .receipt-items-table thead {
+          display: table-row-group !important;
+        }
+        .receipt-items-table th {
+          border-bottom: 1px dashed #000 !important;
+          padding-bottom: 2px !important;
+          font-size: 10px !important;
+          text-align: left !important;
+        }
+        .receipt-items-table td {
+          padding: 1px 0 !important;
+          vertical-align: top !important;
+        }
+        .rec-item-row-title td {
+          font-weight: bold !important;
+          font-size: 10.5px !important;
+          padding-top: 2px !important;
+        }
+        .rec-item-row-calc td {
+          font-size: 10px !important;
+          padding-bottom: 2px !important;
+        }
+        .receipt-totals {
+          margin: 2px 0 !important;
+          font-size: 10.5px !important;
+        }
+        .rec-row {
+          display: flex !important;
+          justify-content: space-between !important;
+          margin: 1px 0 !important;
+        }
+        .rec-total-bold {
+          font-size: 12px !important;
+          font-weight: bold !important;
+          border-top: 1px dashed #000 !important;
+          border-bottom: 1px dashed #000 !important;
+          padding: 2px 0 !important;
+          margin: 2px 0 !important;
+        }
+        .receipt-footer {
+          text-align: center !important;
+          font-size: 10.5px !important;
+          font-weight: bold !important;
+          margin-top: 4px !important;
+          padding-bottom: 4mm !important;
+        }
+        .receipt-nfce-info {
+          font-size: 9.5px !important;
+          text-align: center !important;
+          margin: 3px 0 !important;
+        }
+        .rec-highlight-code {
+          font-weight: bold !important;
+          font-size: 11px !important;
+          margin: 2px 0 !important;
+        }
+        .rec-key {
+          font-size: 8.5px !important;
+          word-break: break-all !important;
+          font-weight: bold !important;
+          margin: 2px 0 !important;
+        }
+        .receipt-qrcode-container {
+          text-align: center !important;
+          margin: 5px 0 !important;
+        }
+        .rec-consult-url {
+          font-size: 8.5px !important;
+          text-align: center !important;
+          margin-top: 2px !important;
+        }
+        .receipt-homolog-banner {
+          border: 1px dashed #000 !important;
+          font-size: 8.5px !important;
+          padding: 2px !important;
+          text-align: center !important;
+          margin-bottom: 3px !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="thermal-receipt-wrapper">
+        ${receiptHtml}
+      </div>
+    </body>
+    </html>
+  `);
+  doc.close();
 
   setTimeout(() => {
-    window.print();
-    setTimeout(() => {
-      document.body.classList.remove('print-receipt-mode');
-      if (!openModal && modal) {
-        modal.classList.remove('active');
-      }
-      if (dynamicStyle) {
-        dynamicStyle.innerHTML = '';
-      }
-    }, 1000);
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+    if (!openModal) {
+      const modal = document.getElementById('pdv-receipt-modal');
+      if (modal) modal.classList.remove('active');
+    }
   }, 200);
 }
 
