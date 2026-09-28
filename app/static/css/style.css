@@ -1576,6 +1576,12 @@ body {
     border-collapse: collapse !important;
   }
 
+  body.print-receipt-mode thead,
+  body.print-receipt-mode thead tr,
+  body.print-receipt-mode thead th {
+    display: table-row-group !important;
+  }
+
   body.print-receipt-mode tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;

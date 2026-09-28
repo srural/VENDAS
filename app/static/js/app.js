@@ -2370,36 +2370,70 @@ function renderFallbackQrCode(container) {
   `;
 }
 
-function printSimpleSaleReceipt(openModal = false) {
-  if (lastSaleData) {
-    renderThermalReceipt(lastSaleData, 'venda', openModal);
-  }
+function executeThermalReceiptPrint(openModal = false) {
+  const modal = document.getElementById('pdv-receipt-modal');
+  const receiptEl = document.getElementById('thermal-receipt-printable');
+
+  // Ativa modo de impressão para renderizar o layout do cupom
   document.body.classList.add('print-receipt-mode');
+
+  // Garante elemento de estilo dinâmico para a altura contínua exata
+  let dynamicStyle = document.getElementById('dynamic-thermal-page-style');
+  if (!dynamicStyle) {
+    dynamicStyle = document.createElement('style');
+    dynamicStyle.id = 'dynamic-thermal-page-style';
+    document.head.appendChild(dynamicStyle);
+  }
+
+  // Mede a altura real do cupom gerado em pixels e converte para milímetros (1in = 25.4mm, 96px = 1in)
+  // Adiciona 12mm de avanço de papel para o corte final da guilhotina
+  let heightPx = 0;
+  if (receiptEl) {
+    heightPx = Math.ceil(receiptEl.scrollHeight || receiptEl.offsetHeight || (receiptEl.getBoundingClientRect && receiptEl.getBoundingClientRect().height) || 0);
+  }
+  if (!heightPx || heightPx < 100) {
+    const itemsCount = (document.querySelectorAll('#rec-items-tbody tr').length / 2) || 5;
+    heightPx = 250 + (itemsCount * 38);
+  }
+
+  const heightMm = Math.max(90, Math.ceil((heightPx * 25.4) / 96) + 12);
+
+  // Injeta @page com a altura contínua exata da bobina para que o navegador NÃO divida em páginas
+  dynamicStyle.innerHTML = `
+    @media print {
+      @page {
+        size: 80mm ${heightMm}mm !important;
+        margin: 0mm !important;
+      }
+    }
+  `;
+
   setTimeout(() => {
     window.print();
     setTimeout(() => {
       document.body.classList.remove('print-receipt-mode');
-      if (!openModal) {
-        document.getElementById('pdv-receipt-modal').classList.remove('active');
+      if (!openModal && modal) {
+        modal.classList.remove('active');
       }
-    }, 800);
-  }, 150);
+      if (dynamicStyle) {
+        dynamicStyle.innerHTML = '';
+      }
+    }, 1000);
+  }, 200);
+}
+
+function printSimpleSaleReceipt(openModal = false) {
+  if (lastSaleData) {
+    renderThermalReceipt(lastSaleData, 'venda', openModal);
+  }
+  executeThermalReceiptPrint(openModal);
 }
 
 function printDanfeNfce(openModal = false) {
   if (lastSaleData) {
     renderThermalReceipt(lastSaleData, 'nfce', openModal);
   }
-  document.body.classList.add('print-receipt-mode');
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => {
-      document.body.classList.remove('print-receipt-mode');
-      if (!openModal) {
-        document.getElementById('pdv-receipt-modal').classList.remove('active');
-      }
-    }, 800);
-  }, 150);
+  executeThermalReceiptPrint(openModal);
 }
 
 function closeReceiptModal() {
@@ -2407,11 +2441,7 @@ function closeReceiptModal() {
 }
 
 function printReceipt() {
-  document.body.classList.add('print-receipt-mode');
-  setTimeout(() => {
-    window.print();
-    setTimeout(() => document.body.classList.remove('print-receipt-mode'), 800);
-  }, 150);
+  executeThermalReceiptPrint(true);
 }
 
 /* ==========================================================================
