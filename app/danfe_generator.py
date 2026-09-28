@@ -978,11 +978,11 @@ def render_danfe_html(order, company, items, nfe_res):
     </div>
 
     <script>
-        window.addEventListener('load', function() {
-            if (window.location.search.includes('print=1')) {
+        window.addEventListener('load', function() {{
+            if (window.location.search.includes('print=1')) {{
                 window.print();
-            }
-        });
+            }}
+        }});
     </script>
 </body>
 </html>"""
@@ -1186,12 +1186,12 @@ def render_cupom_termico_html(order_data):
   </div>
 
   <script>
-    window.onload = function() {
-      setTimeout(function() {
+    window.onload = function() {{
+      setTimeout(function() {{
         window.focus();
         window.print();
-      }, 150);
-    };
+      }}, 150);
+    }};
   </script>
 </body>
 </html>"""
