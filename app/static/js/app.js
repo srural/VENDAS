@@ -2201,17 +2201,10 @@ async function submitPdvSale(emitirNfceFlag = true) {
     renderPdvCart();
     resetPdvClient();
 
-    // Render & Open Receipt Modal and trigger print
+    // Render & Open Receipt Modal (operator decides if they want to print receipt, print NFC-e, or simply close)
     if (result.data) {
       lastSaleData = result.data;
       renderThermalReceipt(result.data, emitirNfceFlag ? 'nfce' : 'venda', true);
-      
-      // Auto-trigger printing on successful validation and emission
-      if (emitirNfceFlag) {
-        printDanfeNfce(true);
-      } else {
-        printSimpleSaleReceipt(true);
-      }
     }
   } catch (err) {
     showToast(`Erro na Validação/Emissão da NFC-e: ${err.message}`, 'error');

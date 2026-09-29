@@ -348,8 +348,10 @@ def pdv_process_sale():
             return jsonify({"error": "Dados de venda inválidos"}), 400
 
         result = db.create_pdv_sale(data)
+        emitir_nfce = data.get("EmitirNFCe", True)
+        msg = "Venda realizada e NFC-e emitida com sucesso!" if emitir_nfce else "Venda finalizada com sucesso!"
         return jsonify({
-            "message": "Venda realizada e NFC-e emitida com sucesso!",
+            "message": msg,
             "venda_id": result["venda"]["CodPed"],
             "data": result
         }), 201
