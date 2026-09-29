@@ -1395,7 +1395,13 @@ onReady(() => {
   if (clientInput) {
     clientInput.addEventListener('input', (e) => {
       const val = e.target.value.trim();
-      if (!val) {
+      const matchId = val.match(/^#?(\d+)/);
+      if (matchId && matchId[1]) {
+        const parsedId = parseInt(matchId[1], 10);
+        if (parsedId > 0) {
+          document.getElementById('pdv-select-entidade').value = String(parsedId);
+        }
+      } else if (!val) {
         document.getElementById('pdv-select-entidade').value = '1';
       }
       debouncePdvClientSearch(e.target.value);
@@ -2146,8 +2152,20 @@ async function submitPdvSale(emitirNfceFlag = true) {
   const desconto = parseFloat(document.getElementById('pdv-desconto-input').value) || 0.0;
   const total = Math.max(0.0, subtotal - desconto);
 
-  const selectedEnt = parseInt(document.getElementById('pdv-select-entidade').value, 10) || 1;
-  const selectedVend = parseInt(document.getElementById('pdv-select-vendedor').value, 10) || 1;
+  let selectedEnt = parseInt(document.getElementById('pdv-select-entidade')?.value, 10) || 1;
+  const clientInputEl = document.getElementById('pdv-client-search-input');
+  const clientInputVal = (clientInputEl ? clientInputEl.value : '').trim();
+  if (clientInputVal) {
+    const matchId = clientInputVal.match(/^#?(\d+)/);
+    if (matchId && matchId[1]) {
+      const parsedId = parseInt(matchId[1], 10);
+      if (parsedId > 0) {
+        selectedEnt = parsedId;
+      }
+    }
+  }
+
+  const selectedVend = parseInt(document.getElementById('pdv-select-vendedor')?.value, 10) || 1;
 
   const payMethod = pdvSelectedPayMethodName || pdvSelectedPayMethod || 'DINHEIRO';
 
