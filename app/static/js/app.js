@@ -1394,10 +1394,47 @@ onReady(() => {
   const clientInput = document.getElementById('pdv-client-search-input');
   if (clientInput) {
     clientInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (!val) {
+        document.getElementById('pdv-select-entidade').value = '1';
+      }
       debouncePdvClientSearch(e.target.value);
     });
     clientInput.addEventListener('focus', () => {
       debouncePdvClientSearch(clientInput.value);
+    });
+    clientInput.addEventListener('keydown', (e) => {
+      const overlay = document.getElementById('pdv-client-results-overlay');
+      const isVisible = overlay && overlay.style.display !== 'none';
+      if (e.key === 'ArrowDown') {
+        if (isVisible && currentPdvClientSearchResults.length) {
+          e.preventDefault();
+          pdvClientHighlightedIdx = Math.min(pdvClientHighlightedIdx + 1, currentPdvClientSearchResults.length - 1);
+          updatePdvClientHighlight();
+        }
+      } else if (e.key === 'ArrowUp') {
+        if (isVisible && currentPdvClientSearchResults.length) {
+          e.preventDefault();
+          pdvClientHighlightedIdx = Math.max(pdvClientHighlightedIdx - 1, 0);
+          updatePdvClientHighlight();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isVisible && pdvClientHighlightedIdx >= 0 && currentPdvClientSearchResults[pdvClientHighlightedIdx]) {
+          selectPdvClientByIndex(pdvClientHighlightedIdx);
+        } else if (clientInput.value.trim()) {
+          const numId = parseInt(clientInput.value.trim(), 10);
+          if (!isNaN(numId) && numId > 0) {
+            fetch(`/api/entidades/${numId}`).then(r => r.ok ? r.json() : null).then(ent => {
+              if (ent && ent.CodEntidade) {
+                selectPdvClient(ent.CodEntidade, ent.Nome, ent.CPF || ent.CGC || '');
+              }
+            });
+          }
+        }
+      } else if (e.key === 'Escape') {
+        if (overlay) overlay.style.display = 'none';
+      }
     });
   }
 
@@ -1421,59 +1458,130 @@ function updatePdvClock() {
 }
 
 let pdvClientSearchTimeout = null;
+let currentPdvClientSearchResults = [];
+let pdvClientHighlightedIdx = -1;
+
 function debouncePdvClientSearch(val) {
   clearTimeout(pdvClientSearchTimeout);
-  pdvClientSearchTimeout = setTimeout(() => searchPdvClients(val), 200);
+  pdvClientSearchTimeout = setTimeout(() => searchPdvClients(val), 150);
+}
+
+function updatePdvClientHighlight() {
+  const overlay = document.getElementById('pdv-client-results-overlay');
+  if (!overlay) return;
+  const items = overlay.querySelectorAll('.pos-result-item');
+  items.forEach((item, idx) => {
+    if (idx === pdvClientHighlightedIdx) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
 }
 
 async function searchPdvClients(q) {
   try {
-    const res = await fetch(`/api/pdv/clientes?q=${encodeURIComponent(q || '')}`);
+    const term = (q || '').trim();
+    const res = await fetch(`/api/pdv/clientes?q=${encodeURIComponent(term)}`);
     const clients = await res.json();
     const overlay = document.getElementById('pdv-client-results-overlay');
     if (!res.ok || !overlay) return;
 
-    if (!clients || !clients.length) {
-      overlay.innerHTML = `<div style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">Nenhum cliente encontrado</div>`;
+    currentPdvClientSearchResults = [];
+    pdvClientHighlightedIdx = -1;
+
+    if (!term) {
+      // Quando o campo está vazio, exibe a opção de Consumidor Final no topo
+      currentPdvClientSearchResults.push({
+        CodEntidade: 1,
+        Nome: 'CONSUMIDOR FINAL',
+        Fantasia: '',
+        CPF: '',
+        CGC: '',
+        Cidade: ''
+      });
+    }
+
+    if (Array.isArray(clients)) {
+      clients.forEach(c => {
+        // Se estiver buscando por termo específico, adiciona o cliente retornado
+        if (term || c.CodEntidade !== 1) {
+          currentPdvClientSearchResults.push(c);
+        }
+      });
+    }
+
+    if (!currentPdvClientSearchResults.length) {
+      overlay.innerHTML = `<div style="padding: 0.75rem; color: var(--text-muted); font-size: 0.85rem;">Nenhum cliente encontrado para "${escapeHtml(term)}"</div>`;
       overlay.style.display = 'block';
       return;
     }
 
-    overlay.innerHTML = `
-      <div class="pos-result-item" onclick="selectPdvClient(1, 'CONSUMIDOR FINAL', '')">
-        <div><strong>1 - CONSUMIDOR FINAL</strong></div>
-      </div>
-      ` + clients.filter(c => c.CodEntidade !== 1).map((c, idx) => {
-        const displayName = c.Fantasia && c.Fantasia.toUpperCase() !== c.Nome.toUpperCase() ? `${c.Nome} (${c.Fantasia})` : c.Nome;
-        return `
-          <div class="pos-result-item" onclick="selectPdvClient(${c.CodEntidade}, '${escapeJsString(c.Nome)}', '${escapeJsString(c.CPF || c.CGC || '')}')">
-            <div>
-              <div class="pos-result-name">#${c.CodEntidade} - ${escapeHtml(displayName)}</div>
-              <div class="pos-result-meta">${c.CPF || c.CGC ? 'CPF/CNPJ: ' + (c.CPF || c.CGC) : ''} ${c.Cidade ? ' | Cidade: ' + c.Cidade : ''}</div>
-            </div>
+    overlay.innerHTML = currentPdvClientSearchResults.map((c, idx) => {
+      const isConsumidor = c.CodEntidade === 1 && (!c.Nome || c.Nome.toUpperCase().includes('CONSUMIDOR'));
+      const displayName = isConsumidor ? '1 - CONSUMIDOR FINAL' : (c.Fantasia && c.Fantasia.toUpperCase() !== c.Nome.toUpperCase() ? `${c.Nome} (${c.Fantasia})` : c.Nome);
+      const docText = c.CPF || c.CGC ? `CPF/CNPJ: ${c.CPF || c.CGC}` : '';
+      const cityText = c.Cidade ? ` | Cidade: ${c.Cidade}` : '';
+      
+      return `
+        <div class="pos-result-item ${idx === 0 ? 'selected' : ''}" data-idx="${idx}" onmousedown="selectPdvClientByIndex(${idx})">
+          <div>
+            <div class="pos-result-name">${isConsumidor ? '<strong>1 - CONSUMIDOR FINAL</strong>' : `#${c.CodEntidade} - <strong>${escapeHtml(displayName)}</strong>`}</div>
+            ${docText || cityText ? `<div class="pos-result-meta">${escapeHtml(docText)}${escapeHtml(cityText)}</div>` : ''}
           </div>
-        `;
-      }).join('');
+        </div>
+      `;
+    }).join('');
     overlay.style.display = 'block';
+    pdvClientHighlightedIdx = 0;
   } catch (err) {
     console.error('Erro na busca de clientes:', err);
   }
 }
 
+function selectPdvClientByIndex(idx) {
+  if (currentPdvClientSearchResults && currentPdvClientSearchResults[idx]) {
+    const c = currentPdvClientSearchResults[idx];
+    selectPdvClient(c.CodEntidade, c.Nome, c.CPF || c.CGC || '');
+  }
+}
+
 function selectPdvClient(id, name, doc) {
-  document.getElementById('pdv-select-entidade').value = id;
+  const entInput = document.getElementById('pdv-select-entidade');
+  if (entInput) entInput.value = String(id);
+  
   const input = document.getElementById('pdv-client-search-input');
   if (input) {
-    input.value = id === 1 ? '' : `#${id} - ${name}`;
-    input.placeholder = id === 1 ? '1 - CONSUMIDOR FINAL (digite para buscar...)' : `#${id} - ${name}`;
+    const isConsumidor = id === 1 || !name || name.toUpperCase() === 'CONSUMIDOR' || name.toUpperCase() === 'CONSUMIDOR FINAL';
+    input.value = isConsumidor ? '' : `#${id} - ${name}`;
+    input.placeholder = isConsumidor ? '1 - CONSUMIDOR FINAL (digite para buscar...)' : `#${id} - ${name}`;
   }
   const overlay = document.getElementById('pdv-client-results-overlay');
   if (overlay) overlay.style.display = 'none';
   showToast(`Cliente selecionado: ${name}`, 'success');
+  
+  const barInput = document.getElementById('pdv-barcode-input');
+  if (barInput) {
+    barInput.focus();
+  }
 }
 
 function resetPdvClient() {
-  selectPdvClient(1, 'CONSUMIDOR FINAL', '');
+  const entInput = document.getElementById('pdv-select-entidade');
+  if (entInput) entInput.value = '1';
+  const input = document.getElementById('pdv-client-search-input');
+  if (input) {
+    input.value = '';
+    input.placeholder = '1 - CONSUMIDOR FINAL (digite para buscar...)';
+  }
+  const overlay = document.getElementById('pdv-client-results-overlay');
+  if (overlay) {
+    overlay.innerHTML = '';
+    overlay.style.display = 'none';
+  }
+  currentPdvClientSearchResults = [];
+  pdvClientHighlightedIdx = -1;
 }
 
 async function loadPdvEntities() {
@@ -1848,6 +1956,7 @@ function cancelPdvSale() {
   pdvCart = [];
   document.getElementById('pdv-desconto-input').value = '0.00';
   renderPdvCart();
+  resetPdvClient();
   showToast('Venda cancelada', 'error');
 }
 
@@ -2067,11 +2176,12 @@ async function submitPdvSale(emitirNfceFlag = true) {
     showToast(result.message || 'Venda finalizada com sucesso!', 'success');
     closePaymentModal();
     
-    // Clear Cart
+    // Clear Cart & Reset Client
     pdvCart = [];
     document.getElementById('pdv-desconto-input').value = '0.00';
     document.getElementById('pay-valor-recebido').value = '0.00';
     renderPdvCart();
+    resetPdvClient();
 
     // Render & Open Receipt Modal and trigger print
     if (result.data) {
