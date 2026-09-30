@@ -876,7 +876,8 @@
 
               <select id="select-status-pedidos" class="filter-select" onchange="applyOrdersFilters()">
                 <option value="all">Todos os Status NF-e</option>
-                <option value="nfe">NF-e Emitida (Modelo 55)</option>
+                <option value="nfe">NF-e Emitida (Produção)</option>
+                <option value="homologacao">NF-e Homologação / Teste</option>
                 <option value="pendente">Sem NF-e / Pendente</option>
               </select>
             </div>
@@ -4937,6 +4938,6 @@
 
   <!-- Local QR Code Library -->
   <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.2.1"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.2.2"></script>
 </body>
 </html>

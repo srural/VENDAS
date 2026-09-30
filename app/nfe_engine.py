@@ -394,7 +394,13 @@ def emit_nfe_55(order_data, company_data, items_data):
     from app.sefaz_client import get_sefaz_endpoint, send_sefaz_soap_request, build_envi_nfe_batch, parse_sefaz_retorno_autorizacao, build_nfeproc_authorized
 
     id_emp = order_data.get("id_empresa") or company_data.get("id_empresa") or 1
-    
+    cfg = get_pdv_config(id_emp) or {}
+
+    # Prioridade do Ambiente: order_data["Ambiente"] > cfg["Nfe"]["Ambiente"] > 2
+    amb_raw = str(order_data.get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente") or "2").strip()
+    amb_cfg = int(amb_raw) if amb_raw in ("1", "2") else 2
+    order_data["Ambiente"] = str(amb_cfg)
+
     custom_nro = str(order_data.get("NroNfe") or "").strip()
     custom_serie = str(order_data.get("SerieNfe") or "").strip()
     
@@ -431,8 +437,6 @@ def emit_nfe_55(order_data, company_data, items_data):
     # Validar a assinatura digital criptográfica do XML gerado
     sig_valid, sig_msg = verify_xml_signature(xml_content)
 
-    cfg = get_pdv_config(id_emp) or {}
-    amb_cfg = int(order_data.get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente") or 2)
     cfg_cert = cfg.get("Certificado", {})
     cert_path = cfg_cert.get("Caminho", "")
     cert_pwd = cfg_cert.get("Senha", "")
@@ -596,15 +600,16 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
     company = company_data or {}
 
     # 1. Identificação do Ambiente e UF
-    amb_config = str(cfg_nfe.get("Ambiente") or order_data.get("Ambiente") or "2")
-    ambiente_nome = "Produção Oficial SEFAZ" if amb_config == "1" else "Homologação / Simulação SEFAZ"
+    amb_config = str(order_data.get("Ambiente") or cfg_nfe.get("Ambiente") or "2").strip()
+    amb_int = int(amb_config) if amb_config in ("1", "2") else 2
+    ambiente_nome = "Produção Oficial SEFAZ" if amb_int == 1 else "Homologação / Simulação SEFAZ"
     uf_empresa = str(company.get("UF") or company.get("Uf") or "SP").upper()
 
     checks.append({
         "categoria": "Ambiente SEFAZ",
         "campo": "Ambiente de Emissão",
-        "detalhe": f"Ambiente {amb_config}: {ambiente_nome} (UF: {uf_empresa})",
-        "status": "OK" if amb_config == "2" else "WARN"
+        "detalhe": f"Ambiente {amb_int}: {ambiente_nome} (UF: {uf_empresa})",
+        "status": "OK"
     })
 
     # 2. Teste de Conexão Real com WebService SEFAZ

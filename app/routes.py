@@ -682,10 +682,12 @@ def get_danfe_html(cod_ped):
         protocolo_existente = (nfe_info and nfe_info.get("Protocolo")) or "135180587979473"
 
         if chave_existente and len(str(chave_existente)) == 44:
+            amb_nota = (nfe_info and nfe_info.get("Ambiente")) or order.get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente", 2)
             nfe_res = {
                 "chave_nfe": str(chave_existente),
                 "protocolo": str(protocolo_existente),
-                "status": str((nfe_info and nfe_info.get("Status")) or "100")
+                "status": str((nfe_info and nfe_info.get("Status")) or "100"),
+                "ambiente": amb_nota
             }
         else:
             val_report = validate_nfe_structure(order, company, items, cfg)
@@ -730,6 +732,16 @@ def download_nfe_xml(cod_ped):
         order_data = db.get_order_by_id(cod_ped)
         if not order_data or not order_data.get("pedido"):
             return jsonify({"error": "Pedido não encontrado"}), 404
+
+        nfe_info = order_data.get("nfe")
+        if nfe_info and nfe_info.get("Xml") and len(str(nfe_info.get("Xml", "")).strip()) > 50:
+            xml_content = nfe_info["Xml"]
+            chave = str(nfe_info.get("NroChave") or order_data.get("pedido", {}).get("Sat") or cod_ped)
+            filename = f"NFe{chave}-nfe.xml"
+            return xml_content, 200, {
+                'Content-Type': 'application/xml; charset=utf-8',
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
 
         order = order_data["pedido"]
         items = order_data["itens"]

@@ -18,6 +18,30 @@ def get_connection():
         cursor_factory=RealDictCursor
     )
 
+_schema_checked = False
+
+def ensure_database_schema():
+    global _schema_checked
+    if _schema_checked:
+        return
+    try:
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('ALTER TABLE "NFE" ADD COLUMN IF NOT EXISTS "Ambiente" INT DEFAULT 2;')
+                cursor.execute('ALTER TABLE "NFE" ADD COLUMN IF NOT EXISTS "Xml" TEXT;')
+                cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "Ambiente" INT DEFAULT 2;')
+                cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "NroNfe" TEXT;')
+                cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "SerieNfe" TEXT;')
+                conn.commit()
+                _schema_checked = True
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[DB SCHEMA NOTICE] {e}")
+
+ensure_database_schema()
+
 # Helper function to convert numeric/decimal values to float or int for JSON serialization
 def _convert_row(r):
     if not r:
@@ -1199,7 +1223,9 @@ def get_orders(page=1, limit=20, q=None, data_inicio=None, data_fim=None, status
         params.append(data_fim)
 
     if status == "nfe":
-        where_clauses.append('NFE."NroChave" IS NOT NULL')
+        where_clauses.append('NFE."NroChave" IS NOT NULL AND (NFE."Ambiente" = 1 OR PED."Ambiente" = 1)')
+    elif status == "homologacao":
+        where_clauses.append('NFE."NroChave" IS NOT NULL AND (NFE."Ambiente" != 1 OR NFE."Ambiente" IS NULL) AND (PED."Ambiente" != 1 OR PED."Ambiente" IS NULL)')
     elif status == "pendente":
         where_clauses.append('NFE."NroChave" IS NULL')
 
@@ -1215,7 +1241,7 @@ def get_orders(page=1, limit=20, q=None, data_inicio=None, data_fim=None, status
 
     sql = f'''
         SELECT PED.*, ENT."Nome" as "NomeCliente", ENT."CPF", ENT."CGC", ENT."Cidade", ENT."Fone",
-               NFE."NroChave", NFE."Status" as StatusNFe, NFE."Protocolo", NFE."Mensagem"
+               NFE."NroChave", NFE."Status" as StatusNFe, NFE."Protocolo", NFE."Mensagem", NFE."Ambiente" as "NfeAmbiente"
         FROM "PED" PED
         LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
         LEFT JOIN "NFE" NFE ON PED."CodPed" = NFE."CodPed"
@@ -1503,7 +1529,12 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
 
     items = order_details["itens"]
     company = order_details["empresa"]
-    cfg = get_pdv_config() or {}
+    id_emp = order.get("id_empresa") or company.get("id_empresa") or 1
+    cfg = get_pdv_config(id_emp) or {}
+
+    # Garantir ambiente correto da configuração SEFAZ
+    if not order.get("Ambiente"):
+        order["Ambiente"] = str(cfg.get("Nfe", {}).get("Ambiente", "2"))
 
     # Validação rigorosa dos parâmetros fiscais SEFAZ Modelo 55
     val_report = validate_nfe_structure(order, company, items, cfg)
@@ -1512,34 +1543,42 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
         raise ValueError(f"Impedimento para emissão de NF-e 55: {err_details}")
 
     nfe_res = emit_nfe_55(order, company, items)
+    amb_salvo = int(nfe_res.get("ambiente", order.get("Ambiente", 2)))
 
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
+            cursor.execute('ALTER TABLE "NFE" ADD COLUMN IF NOT EXISTS "Ambiente" INT DEFAULT 2;')
+            cursor.execute('ALTER TABLE "NFE" ADD COLUMN IF NOT EXISTS "Xml" TEXT;')
+            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "NroNfe" TEXT;')
+            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "SerieNfe" TEXT;')
+            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "Ambiente" INT DEFAULT 2;')
+
             cursor.execute('DELETE FROM "NFE" WHERE "CodPed" = %s', (cod_ped,))
             cursor.execute('''
                 INSERT INTO "NFE" (
-                    "CodPed", "NroChave", "Status", "Protocolo", "Mensagem", "Recibo"
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                    "CodPed", "NroChave", "Status", "Protocolo", "Mensagem", "Recibo", "Ambiente", "Xml"
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
                 cod_ped, nfe_res["chave_nfe"], nfe_res["status"],
-                nfe_res["protocolo"], nfe_res["mensagem"], "0"
+                nfe_res["protocolo"], nfe_res["mensagem"], "0",
+                amb_salvo, nfe_res.get("xml", "")
             ))
 
-            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "NroNfe" TEXT;')
-            cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "SerieNfe" TEXT;')
             cursor.execute('''
                 UPDATE "PED" SET 
                     "Sat" = %s, 
                     "Cfo" = %s,
                     "NroNfe" = %s,
-                    "SerieNfe" = %s
+                    "SerieNfe" = %s,
+                    "Ambiente" = %s
                 WHERE "CodPed" = %s
             ''', (
                 nfe_res["chave_nfe"], 
                 "NFe-55", 
                 str(nfe_res.get("nNF", order.get("NroNfe", ""))), 
                 str(nfe_res.get("serie", order.get("SerieNfe", "1"))), 
+                amb_salvo,
                 cod_ped
             ))
 

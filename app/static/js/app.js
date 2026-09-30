@@ -3359,9 +3359,19 @@ function renderOrdersTable(orders) {
 
   tbody.innerHTML = orders.map(o => {
     const totalStr = `R$ ${floatOrZero(o.Total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const nfeBadge = o.NroChave
-      ? `<span class="badge badge-active" title="Chave: ${o.NroChave}"><i class="fa-solid fa-check-double"></i> NF-e Emitida</span>`
-      : `<span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Sem NF-e</span>`;
+    const hasNfe = !!(o.NroChave || o.Sat);
+    const amb = parseInt(o.NfeAmbiente || o.Ambiente || (window.currentPdvConfig && window.currentPdvConfig.Nfe && window.currentPdvConfig.Nfe.Ambiente) || 2);
+    
+    let nfeBadge = '';
+    if (hasNfe) {
+      if (amb === 1) {
+        nfeBadge = `<span class="badge badge-active" title="NF-e Emitida em Produção Oficial SEFAZ (Chave: ${o.NroChave || o.Sat})"><i class="fa-solid fa-check-double"></i> NF-e Emitida</span>`;
+      } else {
+        nfeBadge = `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);" title="NF-e em Homologação / Simulação (Chave: ${o.NroChave || o.Sat})"><i class="fa-solid fa-flask"></i> Homologação</span>`;
+      }
+    } else {
+      nfeBadge = `<span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Sem NF-e</span>`;
+    }
 
     const clientName = o.NomeCliente || o.nomecliente || 'CONSUMIDOR FINAL';
     return `
@@ -5733,13 +5743,18 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     const chaveBadge = document.getElementById('frmnota-chave-badge');
 
     if (nfe && nfe.NroChave) {
-      if (statusText) statusText.innerText = `Status: NF-e Transmitida & Autorizada SEFAZ! (Prot: ${nfe.Protocolo || '100'})`;
-      if (statusIcon) { statusIcon.className = 'fa-solid fa-circle-check'; statusIcon.style.color = 'var(--accent-emerald)'; }
-      if (chaveBadge) chaveBadge.innerText = `Chave: ${nfe.NroChave}`;
+      const isProd = (String(nfe.Ambiente || ped.Ambiente || cfgNfe.Ambiente || '2') === '1');
+      if (statusText) statusText.innerText = `Status: NF-e Transmitida & Autorizada (${isProd ? 'Produção Oficial SEFAZ' : 'Homologação / Simulação'})! (Prot: ${nfe.Protocolo || '100'})`;
+      if (statusIcon) { 
+        statusIcon.className = isProd ? 'fa-solid fa-circle-check' : 'fa-solid fa-flask'; 
+        statusIcon.style.color = isProd ? 'var(--accent-emerald)' : '#f59e0b'; 
+      }
+      if (chaveBadge) chaveBadge.innerText = `Chave: ${nfe.NroChave} [${isProd ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}]`;
     } else {
-      if (statusText) statusText.innerText = 'Status: Digitação da NF-e (Aguardando Emissão Direta SEFAZ)';
+      const isProdConfig = (String(cfgNfe.Ambiente || '2') === '1');
+      if (statusText) statusText.innerText = `Status: Digitação da NF-e (Pronta para Emissão em ${isProdConfig ? 'Produção Oficial' : 'Homologação'})`;
       if (statusIcon) { statusIcon.className = 'fa-solid fa-circle-info'; statusIcon.style.color = 'var(--accent-blue)'; }
-      if (chaveBadge) chaveBadge.innerText = 'Chave: Gerada na Emissão';
+      if (chaveBadge) chaveBadge.innerText = `Chave: Gerada na Emissão (${isProdConfig ? 'Produção' : 'Homologação'})`;
     }
 
     // Populate Items Table
@@ -5934,7 +5949,9 @@ async function transmitirNfeFrmNota() {
 }
 
 function getFrmNotaFormData() {
+  const currentAmb = (window.currentPdvConfig && window.currentPdvConfig.Nfe && window.currentPdvConfig.Nfe.Ambiente) || (document.getElementById('Cfg_Main_Nfe_Ambiente') ? document.getElementById('Cfg_Main_Nfe_Ambiente').value : (document.getElementById('Cfg_Page_Nfe_Ambiente') ? document.getElementById('Cfg_Page_Nfe_Ambiente').value : '2'));
   return {
+    Ambiente: currentAmb,
     NomeCliente: document.getElementById('FrmNota_NomeCliente') ? document.getElementById('FrmNota_NomeCliente').value : '',
     CpfCnpj: document.getElementById('FrmNota_CpfCnpj') ? document.getElementById('FrmNota_CpfCnpj').value : '',
     InscEst: document.getElementById('FrmNota_InscEst') ? document.getElementById('FrmNota_InscEst').value : '',
