@@ -1139,14 +1139,15 @@ def render_cupom_termico_html(order_data):
       <p style="font-size: 9.5px; margin: 1px 0;">{pyhtml.escape(emp_sub)}</p>
       <p style="font-size: 9.5px; margin: 1px 0;">CNPJ: {emp_cnpj} | IE: {emp_ie}</p>
       <div class="divider"></div>
-      <h3 style="font-size: 11px; font-weight: bold; margin: 2px 0 1px 0;">CUPOM DE VENDA</h3>
-      <p style="font-size: 9.5px; margin: 1px 0;">Comprovante de Venda</p>
-      <p style="font-size: 9.5px; margin: 1px 0;">Documento de Simples Conferência</p>
-      
-      <div style="margin: 3px 0; padding: 2px 3px; border: 1px dashed #000; text-align: center;">
-        <div style="font-size: 13px; font-weight: 900;">PEDIDO Nº <span>#{cod_ped}</span></div>
-        <div style="font-size: 9.5px; font-weight: bold;">DATA / HORA: {full_data}</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0;">
+        <span style="font-size: 12px; font-weight: 900; text-transform: uppercase;">CUPOM DE VENDA</span>
+        <span style="font-size: 13.5px; font-weight: 900; letter-spacing: 0.5px;">PEDIDO Nº #{cod_ped}</span>
       </div>
+      <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 1px 0;">
+        <span>Comprovante de Venda</span>
+        <span>DATA / HORA: {full_data}</span>
+      </div>
+      <p style="font-size: 8.5px; margin: 1px 0; text-align: center; color: #333;">Documento de Simples Conferência</p>
       <div class="divider"></div>
     </div>
 
@@ -1170,8 +1171,8 @@ def render_cupom_termico_html(order_data):
       <div class="rec-row"><span>QTD. TOTAL DE ITENS:</span><strong>{len(items)}</strong></div>
       <div class="rec-row"><span>SUBTOTAL R$:</span><strong>{format_money(subtotal)}</strong></div>
       <div class="rec-row"><span>DESCONTO R$:</span><strong>{format_money(desconto)}</strong></div>
-      <div class="rec-row" style="font-size: 12px; font-weight: bold; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2px 0; margin: 2px 0;">
-        <span>TOTAL R$:</span><strong>{format_money(total)}</strong>
+      <div class="rec-row" style="font-size: 14.5px; font-weight: 900; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 4px 0; margin: 4px 0; letter-spacing: 0.5px;">
+        <span>TOTAL R$:</span><span style="font-size: 16px; font-weight: 900;">{format_money(total)}</span>
       </div>
       <div class="rec-row"><span>FORMA PAGAMENTO:</span><strong>{pyhtml.escape(cond_pgto)}</strong></div>
       <div class="rec-row"><span>VALOR RECEBIDO R$:</span><strong>{format_money(total)}</strong></div>

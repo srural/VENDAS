@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.6">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.7">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
     (function() {
@@ -3216,16 +3216,15 @@
             <p id="rec-company-sub">FRENTE DE CAIXA - PDV</p>
             <p id="rec-company-cnpj">CNPJ: 11.054.174/0001-53 | IE: 123456789110</p>
             <div class="receipt-divider">------------------------------------------------</div>
-            <h3 class="receipt-title" id="rec-doc-title">DANFE NFC-e</h3>
-            <p class="receipt-subtitle" id="rec-doc-subtitle">Nota Fiscal de Consumidor Eletrônica</p>
-            <p class="receipt-subtitle" id="rec-doc-extra">Não Permite Crédito de ICMS</p>
-            
-            <!-- Bloco de Destaque do Número do Pedido e Data -->
-            <div class="receipt-ped-highlight-box" id="rec-ped-highlight-block">
-              <div class="rec-ped-highlight-num">PEDIDO Nº <span id="rec-ped-num-val">#0000</span></div>
-              <div class="rec-ped-highlight-date">DATA / HORA: <span id="rec-ped-date-val">00/00/0000 00:00:00</span></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0;">
+              <h3 class="receipt-title" id="rec-doc-title" style="margin: 0; font-size: 12px; font-weight: 900; text-transform: uppercase;">CUPOM DE VENDA</h3>
+              <div class="rec-ped-highlight-num" style="margin: 0; font-size: 13.5px; font-weight: 900; letter-spacing: 0.5px;">PEDIDO Nº <span id="rec-ped-num-val">#0000</span></div>
             </div>
-
+            <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 1px 0;">
+              <p class="receipt-subtitle" id="rec-doc-subtitle" style="margin: 0;">Comprovante de Venda</p>
+              <div class="rec-ped-highlight-date" style="font-size: 9.5px;">DATA / HORA: <span id="rec-ped-date-val">00/00/0000 00:00:00</span></div>
+            </div>
+            <p class="receipt-subtitle" id="rec-doc-extra" style="margin: 1px 0 0 0; font-size: 8.5px; color: var(--text-muted);">Documento de Simples Conferência</p>
             <div class="receipt-divider">------------------------------------------------</div>
           </div>
 
@@ -4934,6 +4933,6 @@
 
   <!-- Local QR Code Library -->
   <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.1.8"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.1.9"></script>
 </body>
 </html>
