@@ -1024,7 +1024,6 @@ def render_cupom_termico_html(order_data):
 
     items_html = []
     for idx, it in enumerate(items):
-        prd_cod = it.get("Produto") or it.get("CodPrd") or ""
         prd_desc = pyhtml.escape(it.get("Descricao_Produto") or it.get("Descricao") or "")
         qtd = float(it.get("Qtd") or 1.0)
         emb = pyhtml.escape(it.get("Embalagem") or "UN")
@@ -1032,37 +1031,38 @@ def render_cupom_termico_html(order_data):
         v_tot = float(it.get("Valor") or (qtd * v_unit))
         
         items_html.append(f"""
-          <tr style="page-break-inside: avoid;">
-            <td colspan="2" style="font-weight: 700; font-size: 10.5px; padding-top: 2px; padding-bottom: 0px; word-break: break-word;">
-              {idx + 1}. {'#' + str(prd_cod) + ' ' if prd_cod else ''}{prd_desc}
-            </td>
-          </tr>
-          <tr style="page-break-inside: avoid;">
-            <td style="padding-bottom: 2px; padding-left: 8px; font-size: 10px;">
-              {qtd:g} {emb} &nbsp;x&nbsp; {format_money(v_unit)}
-            </td>
-            <td style="text-align: right; font-weight: 700; padding-bottom: 2px; font-size: 10.5px;">
-              {format_money(v_tot)}
-            </td>
+          <tr style="page-break-inside: avoid; font-size: 9.5px;">
+            <td style="text-align: center; font-weight: bold; vertical-align: top; padding: 2px 1px;">{qtd:g}</td>
+            <td style="text-align: center; vertical-align: top; padding: 2px 1px;">{emb}</td>
+            <td style="text-align: left; vertical-align: top; padding: 2px 2px; word-break: break-word; font-weight: 600;">{prd_desc}</td>
+            <td style="text-align: right; vertical-align: top; padding: 2px 1px; white-space: nowrap;">{format_money(v_unit)}</td>
+            <td style="text-align: right; vertical-align: top; padding: 2px 1px; font-weight: bold; white-space: nowrap;">{format_money(v_tot)}</td>
           </tr>
         """)
     items_rows_str = "".join(items_html)
 
     client_html = ""
     if not is_generic:
-        lines = [f'<p style="margin: 1px 0;"><strong>CLIENTE:</strong> <span style="font-size: 12px; font-weight: 900; text-transform: uppercase;">{pyhtml.escape(cli_nome)}</span></p>']
+        lines = [
+            f'<div style="margin: 2px 0;">',
+            f'  <p style="margin: 1px 0; font-size: 9.5px;"><strong>CLIENTE:</strong></p>',
+            f'  <div style="font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 1px 0;">{pyhtml.escape(cli_nome)}</div>'
+        ]
         if doc_cli:
-            lines.append(f'<p style="margin: 1px 0;"><strong>CPF/CNPJ:</strong> {doc_cli}</p>')
+            lines.append(f'  <p style="margin: 1px 0; font-size: 9.5px;"><strong>CPF/CNPJ:</strong> {doc_cli}</p>')
         if end_cli:
             full_end = end_cli + (f', {nro_cli}' if nro_cli and nro_cli not in ['0', 'SN', 'sn'] else '') + (f' - {bairro_cli}' if bairro_cli else '')
-            lines.append(f'<p style="margin: 1px 0;"><strong>ENDEREÇO:</strong> {pyhtml.escape(full_end)}</p>')
+            lines.append(f'  <p style="margin: 1px 0; font-size: 9.5px;"><strong>ENDEREÇO:</strong> {pyhtml.escape(full_end)}</p>')
         if cidade_cli or uf_cli or cep_cli:
             cid_str = cidade_cli + (f'/{uf_cli}' if uf_cli else '') + (f' - CEP: {cep_cli}' if cep_cli else '')
-            lines.append(f'<p style="margin: 1px 0;"><strong>CIDADE/UF:</strong> {pyhtml.escape(cid_str)}</p>')
+            lines.append(f'  <p style="margin: 1px 0; font-size: 9.5px;"><strong>CIDADE/UF:</strong> {pyhtml.escape(cid_str)}</p>')
         if fone_cli:
-            lines.append(f'<p style="margin: 1px 0;"><strong>FONE:</strong> {pyhtml.escape(fone_cli)}</p>')
+            lines.append(f'  <p style="margin: 1px 0; font-size: 9.5px;"><strong>FONE:</strong> {pyhtml.escape(fone_cli)}</p>')
+        lines.append('</div>')
         lines.append('<div style="border-top: 1px dashed #000; height: 1px; margin: 3px 0;"></div>')
         client_html = "".join(lines)
+    else:
+        client_html = '<div style="margin: 2px 0;"><p style="margin: 1px 0; font-size: 9.5px;"><strong>CLIENTE:</strong> <span style="font-size: 11.5px; font-weight: 800;">CONSUMIDOR FINAL</span></p></div><div style="border-top: 1px dashed #000; height: 1px; margin: 3px 0;"></div>'
 
     logo_html = ""
     if logo_url:
@@ -1156,8 +1156,11 @@ def render_cupom_termico_html(order_data):
     <table class="table-items">
       <thead>
         <tr>
-          <th>ITEM CÓDIGO DESCRIÇÃO</th>
-          <th style="text-align: right;">TOTAL (R$)</th>
+          <th style="width: 24px; text-align: center;">QTD</th>
+          <th style="width: 20px; text-align: center;">UN</th>
+          <th style="text-align: left; padding-left: 2px;">DESCRIÇÃO</th>
+          <th style="width: 42px; text-align: right;">UNIT</th>
+          <th style="width: 48px; text-align: right;">TOTAL</th>
         </tr>
       </thead>
       <tbody>

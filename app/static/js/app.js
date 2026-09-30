@@ -2372,10 +2372,9 @@ function renderThermalReceipt(saleData, mode = 'nfce', openModal = true) {
   document.getElementById('rec-vlr-pago').innerText = valRec.toFixed(2);
   document.getElementById('rec-troco').innerText = troco.toFixed(2);
 
-  // Items table (2 linhas por produto: Linha 1 = Código e Descrição, Linha 2 = Qtd x Valor Unitário e Subtotal)
+  // Items table (Linha única: Qtd - Unidade - Descrição - Unitário - Total)
   const tbody = document.getElementById('rec-items-tbody');
-  tbody.innerHTML = itens.map((it, idx) => {
-    const prdCode = it.Produto || it.CodPrd || '';
+  tbody.innerHTML = itens.map((it) => {
     const prdDesc = it.Descricao_Produto || it.Descricao || '';
     const qtd = floatOrZero(it.Qtd || 1);
     const embalagem = it.Embalagem || 'UN';
@@ -2385,18 +2384,12 @@ function renderThermalReceipt(saleData, mode = 'nfce', openModal = true) {
     const vTotItem = it.Valor !== undefined && it.Valor !== null ? floatOrZero(it.Valor) : (qtd * vUnit);
 
     return `
-      <tr class="rec-item-row-title">
-        <td colspan="2" style="font-weight: 700; padding-top: 4px; padding-bottom: 1px; word-break: break-word;">
-          ${idx + 1}. ${prdCode ? '#' + prdCode + ' ' : ''}${escapeHtml(prdDesc)}
-        </td>
-      </tr>
-      <tr class="rec-item-row-calc">
-        <td style="padding-bottom: 4px; padding-left: 10px; font-size: 10.5px;">
-          ${qtd} ${embalagem} &nbsp;x&nbsp; ${vUnit.toFixed(2)}
-        </td>
-        <td style="text-align: right; font-weight: 700; padding-bottom: 4px;">
-          ${vTotItem.toFixed(2)}
-        </td>
+      <tr class="rec-item-single-row" style="font-size: 10px;">
+        <td style="text-align: center; font-weight: bold; vertical-align: top; padding: 2px 1px;">${qtd}</td>
+        <td style="text-align: center; vertical-align: top; padding: 2px 1px;">${escapeHtml(embalagem)}</td>
+        <td style="text-align: left; vertical-align: top; padding: 2px 2px; word-break: break-word; font-weight: 600;">${escapeHtml(prdDesc)}</td>
+        <td style="text-align: right; vertical-align: top; padding: 2px 1px; white-space: nowrap;">${vUnit.toFixed(2)}</td>
+        <td style="text-align: right; vertical-align: top; padding: 2px 1px; font-weight: bold; white-space: nowrap;">${vTotItem.toFixed(2)}</td>
       </tr>
     `;
   }).join('');

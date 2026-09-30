@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.7">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=1.0.8">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script>
     (function() {
@@ -3230,19 +3230,23 @@
 
           <!-- Bloco de Identificação do Cliente (Quando não for consumidor genérico) -->
           <div class="receipt-client-info" id="rec-client-block" style="display: none;">
-            <p class="rec-cli-row"><strong>CLIENTE:</strong> <span id="rec-cli-nome" class="rec-cli-name-highlight"></span></p>
-            <p id="rec-cli-doc-row" style="display: none;"><strong>CPF/CNPJ:</strong> <span id="rec-cli-doc"></span></p>
-            <p id="rec-cli-end-row" style="display: none;"><strong>ENDEREÇO:</strong> <span id="rec-cli-end"></span></p>
-            <p id="rec-cli-cid-row" style="display: none;"><strong>CIDADE/UF:</strong> <span id="rec-cli-cid"></span></p>
-            <p id="rec-cli-fone-row" style="display: none;"><strong>FONE:</strong> <span id="rec-cli-fone"></span></p>
+            <p class="rec-cli-row" style="margin: 2px 0; font-size: 9.5px;"><strong>CLIENTE:</strong></p>
+            <div id="rec-cli-nome" class="rec-cli-name-highlight" style="font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 1px 0;"></div>
+            <p id="rec-cli-doc-row" style="display: none; font-size: 9.5px; margin: 1px 0;"><strong>CPF/CNPJ:</strong> <span id="rec-cli-doc"></span></p>
+            <p id="rec-cli-end-row" style="display: none; font-size: 9.5px; margin: 1px 0;"><strong>ENDEREÇO:</strong> <span id="rec-cli-end"></span></p>
+            <p id="rec-cli-cid-row" style="display: none; font-size: 9.5px; margin: 1px 0;"><strong>CIDADE/UF:</strong> <span id="rec-cli-cid"></span></p>
+            <p id="rec-cli-fone-row" style="display: none; font-size: 9.5px; margin: 1px 0;"><strong>FONE:</strong> <span id="rec-cli-fone"></span></p>
             <div class="receipt-divider">------------------------------------------------</div>
           </div>
 
           <table class="receipt-items-table">
             <thead>
               <tr>
-                <th>ITEM CÓDIGO DESCRIÇÃO</th>
-                <th style="text-align: right;">TOTAL (R$)</th>
+                <th style="width: 24px; text-align: center;">QTD</th>
+                <th style="width: 20px; text-align: center;">UN</th>
+                <th style="text-align: left; padding-left: 2px;">DESCRIÇÃO</th>
+                <th style="width: 42px; text-align: right;">UNIT</th>
+                <th style="width: 48px; text-align: right;">TOTAL</th>
               </tr>
             </thead>
             <tbody id="rec-items-tbody"></tbody>
@@ -4933,6 +4937,6 @@
 
   <!-- Local QR Code Library -->
   <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.1.9"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.2.0"></script>
 </body>
 </html>
