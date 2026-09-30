@@ -258,6 +258,39 @@ function toggleSidebarSubmenu(menuKey) {
 
 // Module Navigation Switcher
 function switchModule(moduleName) {
+  const role = (currentUser?.Perfil || 'OPERADOR').toUpperCase();
+  const isAdmin = role === 'ADMIN';
+  const isGerente = role === 'GERENTE';
+  const isManagerOrAdmin = isAdmin || isGerente;
+
+  // Módulos restritos para perfis de OPERADOR e VENDEDOR
+  const restrictedForStaff = [
+    'dashboard',
+    'rel-vendas-produto',
+    'rel-vendas-cliente',
+    'rel-entidades',
+    'usuarios',
+    'config-db',
+    'empresas',
+    'cfop',
+    'natureza-op'
+  ];
+
+  if (!isManagerOrAdmin && restrictedForStaff.includes(moduleName)) {
+    const target = (role === 'VENDEDOR') ? 'pedidos' : 'pdv';
+    showToast(`Acesso restrito: O perfil ${role} não tem permissão para acessar esta área.`, 'warning');
+    if (currentModule !== target) {
+      switchModule(target);
+    }
+    return;
+  }
+
+  // Apenas ADMIN pode acessar config-db
+  if (moduleName === 'config-db' && !isAdmin) {
+    showToast('Acesso restrito ao Administrador do Sistema.', 'warning');
+    return;
+  }
+
   currentModule = moduleName;
 
   // Update Nav Items & Sub-items active class
@@ -4483,19 +4516,50 @@ async function logout() {
 function applyRolePermissions() {
   if (!currentUser) return;
   const role = (currentUser.Perfil || 'OPERADOR').toUpperCase();
+  const isAdmin = role === 'ADMIN';
+  const isGerente = role === 'GERENTE';
+  const isManagerOrAdmin = isAdmin || isGerente;
 
+  const navDashboard = document.getElementById('nav-dashboard');
+  const navGroupRelatorios = document.getElementById('nav-group-relatorios');
   const navUsuarios = document.getElementById('nav-usuarios');
   const navConfigDb = document.getElementById('nav-config-db');
+  const navEmpresas = document.getElementById('nav-empresas');
+  const navCfop = document.getElementById('nav-cfop');
+  const navNaturezaOp = document.getElementById('nav-natureza-op');
 
-  if (role === 'ADMIN') {
-    if (navUsuarios) navUsuarios.style.display = 'flex';
-    if (navConfigDb) navConfigDb.style.display = 'flex';
-  } else if (role === 'GERENTE') {
-    if (navUsuarios) navUsuarios.style.display = 'flex';
-    if (navConfigDb) navConfigDb.style.display = 'none';
-  } else {
-    if (navUsuarios) navUsuarios.style.display = 'none';
-    if (navConfigDb) navConfigDb.style.display = 'none';
+  // 1. Dashboard e Relatórios (bloqueados para OPERADOR e VENDEDOR)
+  if (navDashboard) navDashboard.style.display = isManagerOrAdmin ? 'flex' : 'none';
+  if (navGroupRelatorios) navGroupRelatorios.style.display = isManagerOrAdmin ? 'block' : 'none';
+
+  // 2. Cadastros Administrativos / Fiscais
+  if (navUsuarios) navUsuarios.style.display = isManagerOrAdmin ? 'flex' : 'none';
+  if (navEmpresas) navEmpresas.style.display = isManagerOrAdmin ? 'flex' : 'none';
+  if (navCfop) navCfop.style.display = isManagerOrAdmin ? 'flex' : 'none';
+  if (navNaturezaOp) navNaturezaOp.style.display = isManagerOrAdmin ? 'flex' : 'none';
+
+  // 3. Configuração do Banco (exclusivo ADMIN)
+  if (navConfigDb) navConfigDb.style.display = isAdmin ? 'flex' : 'none';
+
+  // 4. Redirecionamento automático se o usuário estiver em tela restrita
+  const restrictedForStaff = [
+    'dashboard',
+    'rel-vendas-produto',
+    'rel-vendas-cliente',
+    'rel-entidades',
+    'usuarios',
+    'config-db',
+    'empresas',
+    'cfop',
+    'natureza-op'
+  ];
+
+  if (!isManagerOrAdmin && (restrictedForStaff.includes(currentModule) || currentModule === 'dashboard' || !currentModule)) {
+    if (role === 'VENDEDOR') {
+      switchModule('pedidos');
+    } else {
+      switchModule('pdv');
+    }
   }
 }
 
