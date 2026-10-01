@@ -114,6 +114,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ide, "finNFe").text = "1" # Normal
     ET.SubElement(ide, "indFinal").text = "1" # Consumidor Final
     ET.SubElement(ide, "indPres").text = "1" # Presencial
+    ET.SubElement(ide, "indIntermed").text = "0" # Sem intermediador (NT 2020.006)
     ET.SubElement(ide, "procEmi").text = "0" # Aplicativo do Contribuinte
     ET.SubElement(ide, "verProc").text = "1.0" # Versão do Processo
 
@@ -132,6 +133,8 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ender_emit, "xMun").text = sanitize_sefaz_string(company.get("Cidade", "URUPES"), max_len=60, fallback="URUPES")
     ET.SubElement(ender_emit, "UF").text = sanitize_sefaz_string(company.get("UF", "SP"), max_len=2, fallback="SP")
     ET.SubElement(ender_emit, "CEP").text = ''.join(filter(str.isdigit, str(company.get("CEP", "15850029")))).zfill(8)
+    ET.SubElement(ender_emit, "cPais").text = "1058"
+    ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst") or company.get("IE", "707021792115"))))
     ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib") or company.get("CRT") or "1")
@@ -258,8 +261,10 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     pag = ET.SubElement(inf_nfe, "pag")
     det_pag = ET.SubElement(pag, "detPag")
+    ET.SubElement(det_pag, "indPag").text = "0" # 0=Pagamento à Vista
     ET.SubElement(det_pag, "tPag").text = t_pag
     ET.SubElement(det_pag, "vPag").text = f"{v_liquido:.2f}"
+    ET.SubElement(pag, "vTroco").text = "0.00"
 
     # Gerar XML base da NFe
     rough_string = ET.tostring(nfe, 'utf-8')

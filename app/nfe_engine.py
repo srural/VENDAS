@@ -107,6 +107,8 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     dh_emiss = order.get("Emissao") or now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
     dh_saida = order.get("Saida") or dh_emiss
 
+    from app.nfce import sanitize_sefaz_string
+
     # Root NFe
     nfe = ET.Element("NFe", xmlns="http://www.portalfiscal.inf.br/nfe")
     inf_nfe = ET.SubElement(nfe, "infNFe", Id=f"NFe{chave_nfe}", versao="4.00")
@@ -115,10 +117,10 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ide = ET.SubElement(inf_nfe, "ide")
     ET.SubElement(ide, "cUF").text = str(company.get("CodigoIBGE", "3556008"))[:2] or "35"
     ET.SubElement(ide, "cNF").text = chave_nfe[35:43]
-    ET.SubElement(ide, "natOp").text = str(order.get("Cfo", "VENDA DE MERCADORIAS")).upper()
+    ET.SubElement(ide, "natOp").text = sanitize_sefaz_string(order.get("Cfo", "VENDA DE MERCADORIAS"), max_len=60, fallback="VENDA DE MERCADORIAS").upper()
     ET.SubElement(ide, "mod").text = "55" # Modelo 55 (NF-e Mercantil)
-    ET.SubElement(ide, "serie").text = str(order.get("SerieNfe", "1"))
-    ET.SubElement(ide, "nNF").text = str(order.get("NroNfe", order.get("CodPed", 1)))
+    ET.SubElement(ide, "serie").text = str(int(order.get("SerieNfe", "1") or 1))
+    ET.SubElement(ide, "nNF").text = str(int(order.get("NroNfe", order.get("CodPed", 1)) or 1))
     ET.SubElement(ide, "dhEmi").text = dh_emiss
     ET.SubElement(ide, "dhSaiEnt").text = dh_saida
     ET.SubElement(ide, "tpNF").text = "1" # Saída
@@ -131,23 +133,26 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(ide, "finNFe").text = "1" # NF-e Normal
     ET.SubElement(ide, "indFinal").text = "1" if str(order.get("Tipo", 1)) in ["1", "5"] else "0"
     ET.SubElement(ide, "indPres").text = "1" # Operação Presencial
+    ET.SubElement(ide, "indIntermed").text = "0" # Operação sem intermediador (NT 2020.006)
     ET.SubElement(ide, "procEmi").text = "0" # Aplicativo do Contribuinte
     ET.SubElement(ide, "verProc").text = "1.0" # Versão do Processo de Emissão
 
     # <emit> (Emitente)
     emit = ET.SubElement(inf_nfe, "emit")
     ET.SubElement(emit, "CNPJ").text = ''.join(filter(str.isdigit, str(company.get("CNPJ", "11054174000153")))).zfill(14)
-    ET.SubElement(emit, "xNome").text = company.get("RazaoSocial", company.get("NomeEmpresa", "SISTEMA VENDAS LTDA"))
-    ET.SubElement(emit, "xFant").text = company.get("Fantasia", company.get("Cabecalho1", "VENDAS"))
+    ET.SubElement(emit, "xNome").text = sanitize_sefaz_string(company.get("RazaoSocial") or company.get("NomeEmpresa"), max_len=60, fallback="SISTEMA VENDAS LTDA")
+    ET.SubElement(emit, "xFant").text = sanitize_sefaz_string(company.get("Fantasia") or company.get("Cabecalho1"), max_len=60, fallback="VENDAS")
 
     ender_emit = ET.SubElement(emit, "enderEmit")
-    ET.SubElement(ender_emit, "xLgr").text = company.get("Logradouro", "RUA COMERCIAL")
-    ET.SubElement(ender_emit, "nro").text = company.get("Nro", "100")
-    ET.SubElement(ender_emit, "xBairro").text = company.get("Bairro", "CENTRO")
+    ET.SubElement(ender_emit, "xLgr").text = sanitize_sefaz_string(company.get("Logradouro"), max_len=60, fallback="RUA COMERCIAL")
+    ET.SubElement(ender_emit, "nro").text = sanitize_sefaz_string(company.get("Nro"), max_len=60, fallback="100")
+    ET.SubElement(ender_emit, "xBairro").text = sanitize_sefaz_string(company.get("Bairro"), max_len=60, fallback="CENTRO")
     ET.SubElement(ender_emit, "cMun").text = str(company.get("CodigoIBGE", "3556008")) or "3556008"
-    ET.SubElement(ender_emit, "xMun").text = company.get("Cidade", "SAO PAULO")
-    ET.SubElement(ender_emit, "UF").text = company.get("UF", "SP")
+    ET.SubElement(ender_emit, "xMun").text = sanitize_sefaz_string(company.get("Cidade"), max_len=60, fallback="SAO PAULO")
+    ET.SubElement(ender_emit, "UF").text = str(company.get("UF", "SP")).upper()[:2]
     ET.SubElement(ender_emit, "CEP").text = ''.join(filter(str.isdigit, str(company.get("CEP", "01000000")))).zfill(8)
+    ET.SubElement(ender_emit, "cPais").text = "1058"
+    ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst", company.get("IE", "123456789110")))))
     ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib", "1")) # Simples Nacional / Normal
@@ -162,11 +167,11 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     else:
         raise ValueError("NF-e (Modelo 55) não pode ser emitida sem os dados do Destinatário (CPF ou CNPJ obrigatório).")
 
-    nome_cliente = (order.get("NomeCliente") or order.get("Nome") or order.get("RazaoSocial") or "").strip()
+    nome_cliente = sanitize_sefaz_string(order.get("NomeCliente") or order.get("Nome") or order.get("RazaoSocial"), max_len=60, fallback="")
     if not nome_cliente:
         raise ValueError("NF-e (Modelo 55) exige o Nome/Razão Social completo do Destinatário.")
     
-    ET.SubElement(dest, "xNome").text = nome_cliente[:60]
+    ET.SubElement(dest, "xNome").text = nome_cliente
     
     ender_dest = ET.SubElement(dest, "enderDest")
     x_lgr = (order.get("Endereco") or order.get("Logradouro") or order.get("xLgr") or "").strip()
@@ -189,13 +194,15 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
 
     c_mun = str(order.get("CodigoIBGE") or order.get("cMun") or "3556008")
 
-    ET.SubElement(ender_dest, "xLgr").text = x_lgr[:60]
-    ET.SubElement(ender_dest, "nro").text = nro[:60]
-    ET.SubElement(ender_dest, "xBairro").text = x_bairro[:60]
+    ET.SubElement(ender_dest, "xLgr").text = sanitize_sefaz_string(x_lgr, max_len=60, fallback="RUA")
+    ET.SubElement(ender_dest, "nro").text = sanitize_sefaz_string(nro, max_len=60, fallback="SN")
+    ET.SubElement(ender_dest, "xBairro").text = sanitize_sefaz_string(x_bairro, max_len=60, fallback="CENTRO")
     ET.SubElement(ender_dest, "cMun").text = c_mun
-    ET.SubElement(ender_dest, "xMun").text = x_mun[:60]
+    ET.SubElement(ender_dest, "xMun").text = sanitize_sefaz_string(x_mun, max_len=60, fallback="CIDADE")
     ET.SubElement(ender_dest, "UF").text = uf_dest
     ET.SubElement(ender_dest, "CEP").text = cep_dest
+    ET.SubElement(ender_dest, "cPais").text = "1058"
+    ET.SubElement(ender_dest, "xPais").text = "BRASIL"
 
     ie_dest = ''.join(filter(str.isdigit, str(order.get("InscEst") or order.get("IE") or "")))
     ie_str_raw = str(order.get("InscEst") or order.get("IE") or "").strip().upper()
@@ -222,17 +229,19 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
         v_desc_item = to_float(item.get("Desconto"))
         total_v_prod += v_prod
 
-        ET.SubElement(prod, "cProd").text = cod_prd
+        u_emb = sanitize_sefaz_string(item.get("Embalagem", "UN"), max_len=6, fallback="UN")
+
+        ET.SubElement(prod, "cProd").text = sanitize_sefaz_string(cod_prd, max_len=60, fallback=str(idx))
         ET.SubElement(prod, "cEAN").text = "SEM GTIN"
-        ET.SubElement(prod, "xProd").text = item.get("Descricao_Produto", f"PRODUTO {cod_prd}")
-        ET.SubElement(prod, "NCM").text = str(item.get("NCM", "62034200")).replace(".", "")[:8]
-        ET.SubElement(prod, "CFOP").text = str(item.get("CFOP", "5102")).replace(".", "")[:4]
-        ET.SubElement(prod, "uCom").text = item.get("Embalagem", "UN")
+        ET.SubElement(prod, "xProd").text = sanitize_sefaz_string(item.get("Descricao_Produto"), max_len=120, fallback=f"PRODUTO {cod_prd}")
+        ET.SubElement(prod, "NCM").text = str(item.get("NCM", "62034200")).replace(".", "")[:8].zfill(8)
+        ET.SubElement(prod, "CFOP").text = str(item.get("CFOP", "5102")).replace(".", "")[:4].zfill(4)
+        ET.SubElement(prod, "uCom").text = u_emb
         ET.SubElement(prod, "qCom").text = f"{q_com:.4f}"
         ET.SubElement(prod, "vUnCom").text = f"{v_un:.4f}"
         ET.SubElement(prod, "vProd").text = f"{v_prod:.2f}"
         ET.SubElement(prod, "cEANTrib").text = "SEM GTIN"
-        ET.SubElement(prod, "uTrib").text = item.get("Embalagem", "UN")
+        ET.SubElement(prod, "uTrib").text = u_emb
         ET.SubElement(prod, "qTrib").text = f"{q_com:.4f}"
         ET.SubElement(prod, "vUnTrib").text = f"{v_un:.4f}"
 
@@ -295,44 +304,46 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
         elif len(doc_transp) == 11:
             ET.SubElement(transporta, "CPF").text = doc_transp
 
-        ET.SubElement(transporta, "xNome").text = str(order.get("NomeTransp"))
+        ET.SubElement(transporta, "xNome").text = sanitize_sefaz_string(order.get("NomeTransp"), max_len=60, fallback="TRANSPORTADORA")
         if order.get("IeTransp"):
-            ET.SubElement(transporta, "IE").text = str(order.get("IeTransp"))
+            ET.SubElement(transporta, "IE").text = ''.join(filter(str.isdigit, str(order.get("IeTransp"))))
         if order.get("EnderecoTransp"):
-            ET.SubElement(transporta, "xEnder").text = str(order.get("EnderecoTransp"))
+            ET.SubElement(transporta, "xEnder").text = sanitize_sefaz_string(order.get("EnderecoTransp"), max_len=60, fallback="ENDERECO")
         if order.get("CidadeTransp"):
-            ET.SubElement(transporta, "xMun").text = str(order.get("CidadeTransp"))
+            ET.SubElement(transporta, "xMun").text = sanitize_sefaz_string(order.get("CidadeTransp"), max_len=60, fallback="CIDADE")
         if order.get("UfTransp"):
-            ET.SubElement(transporta, "UF").text = str(order.get("UfTransp"))
+            ET.SubElement(transporta, "UF").text = str(order.get("UfTransp")).upper()[:2]
 
     if order.get("PlacaVeic"):
         veic = ET.SubElement(transp, "veicTransp")
-        ET.SubElement(veic, "placa").text = str(order.get("PlacaVeic")).upper()
-        ET.SubElement(veic, "UF").text = str(order.get("UfVeic", "SP")).upper()
+        ET.SubElement(veic, "placa").text = sanitize_sefaz_string(order.get("PlacaVeic"), max_len=7, fallback="AAA0000").upper()
+        ET.SubElement(veic, "UF").text = str(order.get("UfVeic", "SP")).upper()[:2]
 
     if order.get("QtdVol") or order.get("EspecieVol") or order.get("PesoBruto"):
         vol = ET.SubElement(transp, "vol")
         if order.get("QtdVol"):
-            ET.SubElement(vol, "qVol").text = str(order.get("QtdVol"))
+            ET.SubElement(vol, "qVol").text = str(int(order.get("QtdVol") or 1))
         if order.get("EspecieVol"):
-            ET.SubElement(vol, "esp").text = str(order.get("EspecieVol"))
+            ET.SubElement(vol, "esp").text = sanitize_sefaz_string(order.get("EspecieVol"), max_len=60, fallback="VOLUMES")
         if order.get("MarcaVol"):
-            ET.SubElement(vol, "marca").text = str(order.get("MarcaVol"))
+            ET.SubElement(vol, "marca").text = sanitize_sefaz_string(order.get("MarcaVol"), max_len=60, fallback="MARCA")
         if order.get("PesoLiquido"):
             ET.SubElement(vol, "pesoL").text = f"{to_float(order.get('PesoLiquido')):.3f}"
         if order.get("PesoBruto"):
             ET.SubElement(vol, "pesoB").text = f"{to_float(order.get('PesoBruto')):.3f}"
 
-    # <cobr> (Cobrança / Pagamento)
+    # <pag> (Cobrança / Pagamento)
     pag = ET.SubElement(inf_nfe, "pag")
     det_pag = ET.SubElement(pag, "detPag")
+    ET.SubElement(det_pag, "indPag").text = "0" # 0=Pagamento à Vista
     ET.SubElement(det_pag, "tPag").text = "01" # Dinheiro / À vista
     ET.SubElement(det_pag, "vPag").text = f"{v_nf:.2f}"
+    ET.SubElement(pag, "vTroco").text = "0.00"
 
     # <infAdic>
     inf_adic = ET.SubElement(inf_nfe, "infAdic")
     obs_custom = order.get("ObsRodape") or order.get("ObsCorpo") or order.get("Obs") or f"PEDIDO DE VENDA #{order.get('CodPed')} - EMITIDO VIA SISTEMA VENDAS SEFAZ NF-E 4.00"
-    ET.SubElement(inf_adic, "infCpl").text = str(obs_custom)
+    ET.SubElement(inf_adic, "infCpl").text = sanitize_sefaz_string(obs_custom, max_len=5000, fallback="PEDIDO DE VENDA - EMITIDO VIA SISTEMA VENDAS SEFAZ NF-E 4.00")
 
     # Gerar XML base da NFe
     rough_string = ET.tostring(nfe, 'utf-8')
