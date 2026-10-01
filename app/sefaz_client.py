@@ -211,33 +211,86 @@ def send_sefaz_soap_request(url, soap_action, xml_body, pfx_path=None, password=
         }
 
 
+import xml.etree.ElementTree as ET
+import re
+
 def parse_sefaz_retorno_autorizacao(resp_xml_str):
     """
     Faz o parse do XML de retorno da SEFAZ (<retEnviNFe> / <protNFe>).
+    Usa ET padrão e lxml (se disponível) com suporte a regex para resiliência máxima.
     """
+    if not resp_xml_str:
+        return {
+            "cStat": "999",
+            "xMotivo": "Resposta da SEFAZ vazia",
+            "autorizada": False,
+            "prot_xml": ""
+        }
+
     try:
-        parser = etree.XMLParser(recover=True)
-        root = etree.fromstring(resp_xml_str.encode('utf-8'), parser=parser)
+        xml_clean = str(resp_xml_str).strip()
+        root = None
 
-        # Buscar protNFe
-        prot = root.find(".//{http://www.portalfiscal.inf.br/nfe}protNFe")
-        if prot is None:
-            prot = root.find(".//protNFe")
+        if etree is not None:
+            try:
+                parser = etree.XMLParser(recover=True)
+                root = etree.fromstring(xml_clean.encode('utf-8'), parser=parser)
+            except Exception:
+                root = None
 
+        if root is None:
+            try:
+                root = ET.fromstring(xml_clean.encode('utf-8'))
+            except Exception:
+                m_block = re.search(r'(<(?:nfeResultMsg|retEnviNFe|protNFe|retConsSitNFe)[^>]*>.*?</(?:nfeResultMsg|retEnviNFe|protNFe|retConsSitNFe)>)', xml_clean, re.DOTALL)
+                if m_block:
+                    root = ET.fromstring(m_block.group(1).encode('utf-8'))
+                else:
+                    # Fallback com regex direta se não conseguir fazer parse completo do XML
+                    m_stat = re.search(r'<(?:\w+:)?cStat>(\d+)</(?:\w+:)?cStat>', xml_clean)
+                    m_motivo = re.search(r'<(?:\w+:)?xMotivo>([^<]+)</(?:\w+:)?xMotivo>', xml_clean)
+                    if m_stat:
+                        return {
+                            "cStat": m_stat.group(1),
+                            "xMotivo": m_motivo.group(1) if m_motivo else "",
+                            "autorizada": False,
+                            "prot_xml": ""
+                        }
+                    raise
+
+        def find_el(parent, tag_name):
+            if parent is None:
+                return None
+            for elem in parent.iter():
+                curr_tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+                if curr_tag == tag_name:
+                    return elem
+            return None
+
+        def get_text(parent, tag_name):
+            el = find_el(parent, tag_name)
+            return el.text.strip() if el is not None and el.text else ""
+
+        # 1. Buscar protNFe
+        prot = find_el(root, "protNFe")
         if prot is not None:
-            inf_prot = prot.find(".//{http://www.portalfiscal.inf.br/nfe}infProt")
-            if inf_prot is None:
-                inf_prot = prot.find(".//infProt")
-
+            inf_prot = find_el(prot, "infProt")
             if inf_prot is not None:
-                c_stat = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}cStat") or inf_prot.findtext(".//cStat") or ""
-                x_motivo = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}xMotivo") or inf_prot.findtext(".//xMotivo") or ""
-                ch_nfe = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}chNFe") or inf_prot.findtext(".//chNFe") or ""
-                n_prot = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}nProt") or inf_prot.findtext(".//nProt") or ""
-                dh_recbto = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}dhRecbto") or inf_prot.findtext(".//dhRecbto") or ""
-                dig_val = inf_prot.findtext(".//{http://www.portalfiscal.inf.br/nfe}digVal") or inf_prot.findtext(".//digVal") or ""
+                c_stat = get_text(inf_prot, "cStat")
+                x_motivo = get_text(inf_prot, "xMotivo")
+                ch_nfe = get_text(inf_prot, "chNFe")
+                n_prot = get_text(inf_prot, "nProt")
+                dh_recbto = get_text(inf_prot, "dhRecbto")
+                dig_val = get_text(inf_prot, "digVal")
 
-                prot_xml_str = etree.tostring(prot, encoding="utf-8").decode('utf-8')
+                m_prot = re.search(r'(<(?:\w+:)?protNFe[^>]*>.*?</(?:\w+:)?protNFe>)', xml_clean, re.DOTALL)
+                if m_prot:
+                    prot_xml_str = m_prot.group(1)
+                else:
+                    if etree is not None and isinstance(prot, etree._Element):
+                        prot_xml_str = etree.tostring(prot, encoding="utf-8").decode('utf-8')
+                    else:
+                        prot_xml_str = ET.tostring(prot, encoding="utf-8").decode('utf-8')
 
                 return {
                     "cStat": c_stat,
@@ -250,19 +303,28 @@ def parse_sefaz_retorno_autorizacao(resp_xml_str):
                     "autorizada": c_stat in ("100", "150")
                 }
 
-        # Buscar retEnviNFe geral (cStat de lote)
-        ret_envi = root.find(".//{http://www.portalfiscal.inf.br/nfe}retEnviNFe")
-        if ret_envi is None:
-            ret_envi = root.find(".//retEnviNFe")
+        # 2. Buscar retEnviNFe
+        ret_envi = find_el(root, "retEnviNFe")
         if ret_envi is not None:
-            c_stat = ret_envi.findtext(".//{http://www.portalfiscal.inf.br/nfe}cStat") or ret_envi.findtext(".//cStat") or ""
-            x_motivo = ret_envi.findtext(".//{http://www.portalfiscal.inf.br/nfe}xMotivo") or ret_envi.findtext(".//xMotivo") or ""
-            n_rec = ret_envi.findtext(".//{http://www.portalfiscal.inf.br/nfe}infRec/nRec") or ret_envi.findtext(".//nRec") or ""
+            c_stat = get_text(ret_envi, "cStat")
+            x_motivo = get_text(ret_envi, "xMotivo")
+            n_rec = get_text(ret_envi, "nRec")
 
             return {
                 "cStat": c_stat,
                 "xMotivo": x_motivo,
                 "nRec": n_rec,
+                "autorizada": False,
+                "prot_xml": ""
+            }
+
+        # 3. Regex fallback
+        m_stat = re.search(r'<(?:\w+:)?cStat>(\d+)</(?:\w+:)?cStat>', xml_clean)
+        m_motivo = re.search(r'<(?:\w+:)?xMotivo>([^<]+)</(?:\w+:)?xMotivo>', xml_clean)
+        if m_stat:
+            return {
+                "cStat": m_stat.group(1),
+                "xMotivo": m_motivo.group(1) if m_motivo else "",
                 "autorizada": False,
                 "prot_xml": ""
             }

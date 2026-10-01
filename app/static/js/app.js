@@ -4846,10 +4846,14 @@ function openDbSyncModal() {
   const srcHost = (document.getElementById('Cfg_Host') && document.getElementById('Cfg_Host').value.trim()) || '192.168.20.90';
   const srcPort = (document.getElementById('Cfg_Port') && document.getElementById('Cfg_Port').value.trim()) || '5432';
   const srcDb = (document.getElementById('Cfg_DbName') && document.getElementById('Cfg_DbName').value.trim()) || 'vendas_db';
+  const srcUser = (document.getElementById('Cfg_User') && document.getElementById('Cfg_User').value.trim()) || 'postgres';
+  const srcPass = (document.getElementById('Cfg_Password') && document.getElementById('Cfg_Password').value) || 'masterkey';
 
   if (document.getElementById('Sync_Src_Host')) document.getElementById('Sync_Src_Host').value = srcHost;
   if (document.getElementById('Sync_Src_Port')) document.getElementById('Sync_Src_Port').value = srcPort;
   if (document.getElementById('Sync_Src_DbName')) document.getElementById('Sync_Src_DbName').value = srcDb;
+  if (document.getElementById('Sync_Src_User')) document.getElementById('Sync_Src_User').value = srcUser;
+  if (document.getElementById('Sync_Src_Pass')) document.getElementById('Sync_Src_Pass').value = srcPass;
 
   if (document.getElementById('Sync_Tgt_Host')) {
     const curHost = document.getElementById('Sync_Tgt_Host').value.trim();
@@ -4867,6 +4871,18 @@ function openDbSyncModal() {
     const curDb = document.getElementById('Sync_Tgt_DbName').value.trim();
     if (!curDb || curDb === 'vendas_prod_db' || curDb === 'vendas_prod') {
       document.getElementById('Sync_Tgt_DbName').value = srcDb.endsWith('_db') ? srcDb.replace('_db', '_prod_db') : `${srcDb}_prod`;
+    }
+  }
+  if (document.getElementById('Sync_Tgt_User')) {
+    const curTgtUser = document.getElementById('Sync_Tgt_User').value.trim();
+    if (!curTgtUser) {
+      document.getElementById('Sync_Tgt_User').value = srcUser;
+    }
+  }
+  if (document.getElementById('Sync_Tgt_Pass')) {
+    const curTgtPass = document.getElementById('Sync_Tgt_Pass').value;
+    if (!curTgtPass) {
+      document.getElementById('Sync_Tgt_Pass').value = srcPass;
     }
   }
 
@@ -4903,6 +4919,8 @@ async function loadSyncTablesList() {
   const host = document.getElementById('Sync_Src_Host') ? document.getElementById('Sync_Src_Host').value.trim() : '';
   const port = document.getElementById('Sync_Src_Port') ? document.getElementById('Sync_Src_Port').value.trim() : '';
   const dbname = document.getElementById('Sync_Src_DbName') ? document.getElementById('Sync_Src_DbName').value.trim() : '';
+  const user = document.getElementById('Sync_Src_User') ? document.getElementById('Sync_Src_User').value.trim() : '';
+  const password = document.getElementById('Sync_Src_Pass') ? document.getElementById('Sync_Src_Pass').value : '';
 
   try {
     container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;"><i class="fa-solid fa-spinner fa-spin"></i> Carregando tabelas do banco de dados...</div>';
@@ -4911,6 +4929,8 @@ async function loadSyncTablesList() {
     if (host) params.append('host', host);
     if (port) params.append('port', port);
     if (dbname) params.append('dbname', dbname);
+    if (user) params.append('user', user);
+    if (password) params.append('password', password);
 
     const res = await fetch(`/api/config/db/tables?${params.toString()}`);
     const data = await res.json();
@@ -4987,12 +5007,14 @@ async function analyzeDbSync() {
   const srcHost = document.getElementById('Sync_Src_Host').value.trim();
   const srcPort = document.getElementById('Sync_Src_Port').value.trim();
   const srcDb = document.getElementById('Sync_Src_DbName').value.trim();
-  const srcUser = document.getElementById('Cfg_User') ? document.getElementById('Cfg_User').value.trim() : 'postgres';
-  const srcPass = document.getElementById('Cfg_Password') ? document.getElementById('Cfg_Password').value.trim() : 'masterkey';
+  const srcUser = (document.getElementById('Sync_Src_User') && document.getElementById('Sync_Src_User').value.trim()) || (document.getElementById('Cfg_User') ? document.getElementById('Cfg_User').value.trim() : 'postgres');
+  const srcPass = (document.getElementById('Sync_Src_Pass') && document.getElementById('Sync_Src_Pass').value) || (document.getElementById('Cfg_Password') ? document.getElementById('Cfg_Password').value : 'masterkey');
 
   const tgtHost = document.getElementById('Sync_Tgt_Host').value.trim();
   const tgtPort = document.getElementById('Sync_Tgt_Port').value.trim();
   const tgtDb = document.getElementById('Sync_Tgt_DbName').value.trim();
+  const tgtUser = (document.getElementById('Sync_Tgt_User') && document.getElementById('Sync_Tgt_User').value.trim()) || srcUser;
+  const tgtPass = (document.getElementById('Sync_Tgt_Pass') && document.getElementById('Sync_Tgt_Pass').value) || srcPass;
 
   const selectedTables = getSelectedSyncTables();
 
@@ -5012,8 +5034,8 @@ async function analyzeDbSync() {
       target_host: tgtHost,
       target_port: tgtPort,
       target_dbname: tgtDb,
-      target_user: srcUser,
-      target_password: srcPass,
+      target_user: tgtUser,
+      target_password: tgtPass,
       tables: selectedTables
     };
 
@@ -5090,12 +5112,14 @@ async function executeDbSync() {
   const srcHost = document.getElementById('Sync_Src_Host').value.trim();
   const srcPort = document.getElementById('Sync_Src_Port').value.trim();
   const srcDb = document.getElementById('Sync_Src_DbName').value.trim();
-  const srcUser = document.getElementById('Cfg_User') ? document.getElementById('Cfg_User').value.trim() : 'postgres';
-  const srcPass = document.getElementById('Cfg_Password') ? document.getElementById('Cfg_Password').value.trim() : 'masterkey';
+  const srcUser = (document.getElementById('Sync_Src_User') && document.getElementById('Sync_Src_User').value.trim()) || (document.getElementById('Cfg_User') ? document.getElementById('Cfg_User').value.trim() : 'postgres');
+  const srcPass = (document.getElementById('Sync_Src_Pass') && document.getElementById('Sync_Src_Pass').value) || (document.getElementById('Cfg_Password') ? document.getElementById('Cfg_Password').value : 'masterkey');
 
   const tgtHost = document.getElementById('Sync_Tgt_Host').value.trim();
   const tgtPort = document.getElementById('Sync_Tgt_Port').value.trim();
   const tgtDb = document.getElementById('Sync_Tgt_DbName').value.trim();
+  const tgtUser = (document.getElementById('Sync_Tgt_User') && document.getElementById('Sync_Tgt_User').value.trim()) || srcUser;
+  const tgtPass = (document.getElementById('Sync_Tgt_Pass') && document.getElementById('Sync_Tgt_Pass').value) || srcPass;
 
   const selectedTables = getSelectedSyncTables();
   const syncData = document.getElementById('Sync_Opt_SyncData') ? document.getElementById('Sync_Opt_SyncData').checked : false;
@@ -5121,8 +5145,8 @@ async function executeDbSync() {
       target_host: tgtHost,
       target_port: tgtPort,
       target_dbname: tgtDb,
-      target_user: srcUser,
-      target_password: srcPass,
+      target_user: tgtUser,
+      target_password: tgtPass,
       tables: selectedTables,
       sync_data: syncData,
       create_target: createTarget
