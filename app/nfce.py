@@ -22,6 +22,44 @@ def sanitize_sefaz_string(val, max_len=120, fallback="PRODUTO"):
         return fallback
     return s[:max_len].strip()
 
+def to_float(val, default=0.0):
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+def clean_ncm(val, fallback="62034200"):
+    if val is None:
+        return fallback
+    digits = ''.join(filter(str.isdigit, str(val)))
+    if len(digits) == 8:
+        return digits
+    elif len(digits) == 2:
+        return digits.ljust(8, '0')
+    return fallback
+
+def clean_cfop(val, fallback="5102"):
+    if val is None:
+        return fallback
+    digits = ''.join(filter(str.isdigit, str(val)))
+    if len(digits) == 4 and digits[0] in ('1', '2', '3', '5', '6', '7'):
+        return digits
+    return fallback
+
+def clean_mod_frete(val, fallback="9"):
+    if val is None:
+        return fallback
+    s = str(val).strip()
+    return s if s in ('0', '1', '2', '3', '4', '9') else fallback
+
+def clean_ibge_mun(val, fallback="3550308"):
+    if val is None:
+        return fallback
+    digits = ''.join(filter(str.isdigit, str(val)))
+    return digits if len(digits) == 7 else fallback
+
 def calc_cdv(key_43):
     multipliers = [2, 3, 4, 5, 6, 7, 8, 9]
     total = 0
@@ -48,6 +86,9 @@ def generate_chave_nfe(uf="35", aamm=None, cnpj="11054174000153", mod="65", seri
     cdv = calc_cdv(key_43)
     full_key = f"{key_43}{cdv}"
     return full_key, cnf_str
+
+def generate_chave_nfce(uf="35", aamm=None, cnpj="11054174000153", mod="65", serie="001", n_nfce=1, tp_emis="1", cnf=None):
+    return generate_chave_nfe(uf=uf, aamm=aamm, cnpj=cnpj, mod=mod, serie=serie, nnf=n_nfce, tp_emis=tp_emis, cnf=cnf)
 
 def generate_protocolo_sefaz(uf="135"):
     now_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
@@ -89,7 +130,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     now = datetime.datetime.now()
     dh_emiss = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
     amb_val = str(ambiente or sale.get("Ambiente") or "2")
-    c_mun_emp = str(company.get("CodigoIBGE") or company.get("CodMun") or "3556008") or "3556008"
+    c_mun_emp = clean_ibge_mun(company.get("CodigoIBGE") or company.get("CodMun"), "3550308")
 
     # Root NFe
     nfe = ET.Element("NFe", xmlns="http://www.portalfiscal.inf.br/nfe")
@@ -132,7 +173,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ender_emit, "cMun").text = c_mun_emp
     ET.SubElement(ender_emit, "xMun").text = sanitize_sefaz_string(company.get("Cidade", "URUPES"), max_len=60, fallback="URUPES")
     ET.SubElement(ender_emit, "UF").text = sanitize_sefaz_string(company.get("UF", "SP"), max_len=2, fallback="SP")
-    ET.SubElement(ender_emit, "CEP").text = ''.join(filter(str.isdigit, str(company.get("CEP", "15850029")))).zfill(8)
+    ET.SubElement(ender_emit, "CEP").text = ''.join(filter(str.isdigit, str(company.get("CEP", "15850029")))).zfill(8)[:8]
     ET.SubElement(ender_emit, "cPais").text = "1058"
     ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
@@ -159,21 +200,23 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
         
         prod = ET.SubElement(det, "prod")
         cod_p = str(item.get("CodPrd", idx))
-        ET.SubElement(prod, "cProd").text = cod_p
+        ET.SubElement(prod, "cProd").text = sanitize_sefaz_string(cod_p, max_len=60, fallback=str(idx))
         ET.SubElement(prod, "cEAN").text = "SEM GTIN"
         
         raw_desc = item.get("Descricao_Produto") or item.get("Descri") or item.get("Descricao") or f"PRODUTO #{cod_p}"
         x_prod = sanitize_sefaz_string(raw_desc, max_len=120, fallback=f"PRODUTO #{cod_p}")
         ET.SubElement(prod, "xProd").text = x_prod
         
-        ET.SubElement(prod, "NCM").text = str(item.get("NCM", "62034200")).replace(".", "")[:8]
-        ET.SubElement(prod, "CFOP").text = str(item.get("CFOP", "5102")).replace(".", "")[:4]
+        ncm_code = clean_ncm(item.get("NCM") or item.get("ncm") or item.get("ClasseFiscal"))
+        cfop_code = clean_cfop(item.get("CFOP") or item.get("cfop") or item.get("CfOpPrd"))
+        ET.SubElement(prod, "NCM").text = ncm_code
+        ET.SubElement(prod, "CFOP").text = cfop_code
         
         u_emb = sanitize_sefaz_string(item.get("Embalagem") or item.get("Unidade"), max_len=6, fallback="UN")
         ET.SubElement(prod, "uCom").text = u_emb
         
-        qtd = float(item.get("Qtd", 1.0))
-        v_un = float(item.get("ValorUnit", 0.0))
+        qtd = to_float(item.get("Qtd"), 1.0)
+        v_un = to_float(item.get("ValorUnit"), 0.0)
         v_prod = qtd * v_un
         total_prod += v_prod
         
@@ -209,7 +252,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
         ET.SubElement(cofins_outr, "vCOFINS").text = "0.00"
 
     # <total>
-    desc_total = float(sale.get("Desconto", 0.0))
+    desc_total = to_float(sale.get("Desconto"), 0.0)
     v_liquido = max(0.0, total_prod - desc_total)
 
     total = ET.SubElement(inf_nfe, "total")
@@ -236,7 +279,7 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     # <transp>
     transp = ET.SubElement(inf_nfe, "transp")
-    ET.SubElement(transp, "modFrete").text = "9" # Sem Frete
+    ET.SubElement(transp, "modFrete").text = clean_mod_frete(sale.get("ModFrete"), fallback="9")
 
     # <pag> (Pagamento)
     cond_pgto_raw = str(sale.get("CondPgto", "DINHEIRO") or "").upper().strip()
