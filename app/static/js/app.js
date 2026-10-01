@@ -4843,22 +4843,31 @@ function openDbSyncModal() {
   if (!modal) return;
 
   // Preencher configurações de origem com os dados atuais do form
-  const srcHost = document.getElementById('Cfg_Host') ? document.getElementById('Cfg_Host').value.trim() : 'localhost';
-  const srcPort = document.getElementById('Cfg_Port') ? document.getElementById('Cfg_Port').value.trim() : '5432';
-  const srcDb = document.getElementById('Cfg_DbName') ? document.getElementById('Cfg_DbName').value.trim() : 'vendas_db';
+  const srcHost = (document.getElementById('Cfg_Host') && document.getElementById('Cfg_Host').value.trim()) || '192.168.20.90';
+  const srcPort = (document.getElementById('Cfg_Port') && document.getElementById('Cfg_Port').value.trim()) || '5432';
+  const srcDb = (document.getElementById('Cfg_DbName') && document.getElementById('Cfg_DbName').value.trim()) || 'vendas_db';
 
   if (document.getElementById('Sync_Src_Host')) document.getElementById('Sync_Src_Host').value = srcHost;
   if (document.getElementById('Sync_Src_Port')) document.getElementById('Sync_Src_Port').value = srcPort;
   if (document.getElementById('Sync_Src_DbName')) document.getElementById('Sync_Src_DbName').value = srcDb;
 
-  if (document.getElementById('Sync_Tgt_Host') && !document.getElementById('Sync_Tgt_Host').value) {
-    document.getElementById('Sync_Tgt_Host').value = srcHost;
+  if (document.getElementById('Sync_Tgt_Host')) {
+    const curHost = document.getElementById('Sync_Tgt_Host').value.trim();
+    if (!curHost || curHost === 'localhost') {
+      document.getElementById('Sync_Tgt_Host').value = srcHost;
+    }
   }
-  if (document.getElementById('Sync_Tgt_Port') && !document.getElementById('Sync_Tgt_Port').value) {
-    document.getElementById('Sync_Tgt_Port').value = srcPort;
+  if (document.getElementById('Sync_Tgt_Port')) {
+    const curPort = document.getElementById('Sync_Tgt_Port').value.trim();
+    if (!curPort) {
+      document.getElementById('Sync_Tgt_Port').value = srcPort;
+    }
   }
-  if (document.getElementById('Sync_Tgt_DbName') && (!document.getElementById('Sync_Tgt_DbName').value || document.getElementById('Sync_Tgt_DbName').value === 'vendas_prod_db')) {
-    document.getElementById('Sync_Tgt_DbName').value = srcDb.endsWith('_db') ? srcDb.replace('_db', '_prod_db') : `${srcDb}_prod`;
+  if (document.getElementById('Sync_Tgt_DbName')) {
+    const curDb = document.getElementById('Sync_Tgt_DbName').value.trim();
+    if (!curDb || curDb === 'vendas_prod_db' || curDb === 'vendas_prod') {
+      document.getElementById('Sync_Tgt_DbName').value = srcDb.endsWith('_db') ? srcDb.replace('_db', '_prod_db') : `${srcDb}_prod`;
+    }
   }
 
   // Resetar resultados anteriores
