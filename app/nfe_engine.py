@@ -1,4 +1,5 @@
 import os
+import re
 import datetime
 import random
 import xml.etree.ElementTree as ET
@@ -128,14 +129,52 @@ def generate_protocolo_sefaz(uf="135"):
     rand_seq = str(random.randint(1000, 9999))
     return f"{uf}{now_str}{rand_seq}"
 
+def format_sefaz_datetime(dt_val=None, hora_val=None):
+    now = datetime.datetime.now()
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
+    if not dt_val:
+        return now_iso
+    
+    s = str(dt_val).strip()
+    if not s or s.lower() == 'none':
+        return now_iso
+    
+    if "T" in s and len(s) >= 19:
+        if len(s) == 19:
+            return f"{s}-03:00"
+        return s
+
+    hora_str = ""
+    if hora_val:
+        h = str(hora_val).strip()
+        if re.match(r'^\d{2}:\d{2}:\d{2}$', h):
+            hora_str = h
+        elif re.match(r'^\d{2}:\d{2}$', h):
+            hora_str = f"{h}:00"
+    
+    if not hora_str:
+        hora_str = now.strftime("%H:%M:%S")
+
+    m_br = re.match(r'^(\d{2})/(\d{2})/(\d{4})', s)
+    if m_br:
+        d, m, y = m_br.groups()
+        return f"{y}-{m}-{d}T{hora_str}-03:00"
+
+    m_iso = re.match(r'^(\d{4})-(\d{2})-(\d{2})', s)
+    if m_iso:
+        y, m, d = m_iso.groups()
+        return f"{y}-{m}-{d}T{hora_str}-03:00"
+
+    return now_iso
+
 def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_proc=True):
     """
     Builds a compliant SEFAZ NF-e 4.00 (Modelo 55 - Nota Fiscal Eletrônica) XML structure
     incorporating all fields from FrmNota (Header, Transport, Volumes, Taxes, Custom Obs)
     """
-    now = datetime.datetime.now()
-    dh_emiss = order.get("Emissao") or now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
-    dh_saida = order.get("Saida") or dh_emiss
+    hora_ped = order.get("Hora")
+    dh_emiss = format_sefaz_datetime(order.get("Emissao") or order.get("DataEmiss"), hora_ped)
+    dh_saida = format_sefaz_datetime(order.get("Saida") or order.get("DtSaida") or order.get("Emissao") or order.get("DataEmiss"), hora_ped)
     c_mun_emp = clean_ibge_mun(company.get("CodigoIBGE") or company.get("CodMun"), "3550308")
 
     from app.nfce import sanitize_sefaz_string
@@ -186,7 +225,10 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst", company.get("IE", "123456789110")))))
-    ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib", "1")) # Simples Nacional / Normal
+    crt_val = str(company.get("RegimeTrib") or company.get("CRT") or "1").strip()
+    if crt_val not in ("1", "2", "3", "4"):
+        crt_val = "1"
+    ET.SubElement(emit, "CRT").text = crt_val
 
     # <dest> (Destinatário)
     dest = ET.SubElement(inf_nfe, "dest")
@@ -286,9 +328,19 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
         # <imposto>
         imposto = ET.SubElement(det, "imposto")
         icms = ET.SubElement(imposto, "ICMS")
-        icms_sn = ET.SubElement(icms, "ICMSSN102")
-        ET.SubElement(icms_sn, "orig").text = "0"
-        ET.SubElement(icms_sn, "CSOSN").text = "102"
+        if crt_val == "3":
+            icms_00 = ET.SubElement(icms, "ICMS00")
+            ET.SubElement(icms_00, "orig").text = "0"
+            ET.SubElement(icms_00, "CST").text = "00"
+            ET.SubElement(icms_00, "modBC").text = "3"
+            ET.SubElement(icms_00, "vBC").text = f"{v_prod:.2f}"
+            aliq = to_float(item.get("AliqIcms") or item.get("aliqicms"), 0.0)
+            ET.SubElement(icms_00, "pICMS").text = f"{aliq:.2f}"
+            ET.SubElement(icms_00, "vICMS").text = f"{(v_prod * aliq / 100.0):.2f}"
+        else:
+            icms_sn = ET.SubElement(icms, "ICMSSN102")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = "102"
 
         pis = ET.SubElement(imposto, "PIS")
         pis_nt = ET.SubElement(pis, "PISNT")
