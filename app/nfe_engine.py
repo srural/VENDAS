@@ -293,6 +293,18 @@ def clean_ibge_mun(val, fallback="3550308"):
     digits = ''.join(filter(str.isdigit, str(val)))
     return digits if len(digits) == 7 else fallback
 
+def clean_crt(val, fallback="1"):
+    if val is None:
+        return fallback
+    s = str(val).strip()
+    if s and s[0] in ("1", "2", "3", "4"):
+        return s[0]
+    if "simples" in s.lower():
+        return "1"
+    if "normal" in s.lower() or "presumido" in s.lower() or "real" in s.lower():
+        return "3"
+    return fallback
+
 def calc_cdv(key_43):
     multipliers = [2, 3, 4, 5, 6, 7, 8, 9]
     total = 0
@@ -421,9 +433,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst", company.get("IE", "123456789110")))))
-    crt_val = str(company.get("RegimeTrib") or company.get("CRT") or "1").strip()
-    if crt_val not in ("1", "2", "3", "4"):
-        crt_val = "1"
+    crt_val = clean_crt(company.get("RegimeTrib") or company.get("CRT"), fallback="1")
     ET.SubElement(emit, "CRT").text = crt_val
 
     # <dest> (Destinatário)

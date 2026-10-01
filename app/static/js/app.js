@@ -3162,15 +3162,15 @@ async function openEmpresaModal(id_empresa = null) {
       document.getElementById('Emp_CEP').value = emp.CEP || '';
       document.getElementById('Emp_Fone').value = emp.Fone || '';
       document.getElementById('Emp_CodigoIBGE').value = emp.CodigoIBGE || '';
-      document.getElementById('Emp_RegimeTrib').value = emp.RegimeTrib || '3';
-      document.getElementById('Emp_CFOP').value = emp.CFOP || '';
-      document.getElementById('Emp_PIS').value = emp.PIS || '01';
-      document.getElementById('Emp_AliqPIS').value = emp.AliqPIS || '0,65';
-      document.getElementById('Emp_COFINS').value = emp.COFINS || '01';
-      document.getElementById('Emp_AliqCOFINS').value = emp.AliqCOFINS || '3';
+      document.getElementById('Emp_RegimeTrib').value = emp.RegimeTrib || '1';
+      document.getElementById('Emp_CFOP').value = emp.CFOP || '5102';
+      document.getElementById('Emp_PIS').value = emp.PIS || '08';
+      document.getElementById('Emp_AliqPIS').value = emp.AliqPIS !== undefined && emp.AliqPIS !== null ? emp.AliqPIS : '0';
+      document.getElementById('Emp_COFINS').value = emp.COFINS || '08';
+      document.getElementById('Emp_AliqCOFINS').value = emp.AliqCOFINS !== undefined && emp.AliqCOFINS !== null ? emp.AliqCOFINS : '0';
       document.getElementById('Emp_SitTrib').value = emp.SitTrib || '';
       document.getElementById('Emp_SitTribFixo').value = emp.SitTribFixo || '';
-      document.getElementById('Emp_Deducao').value = emp.Deducao || '33,33';
+      document.getElementById('Emp_Deducao').value = emp.Deducao || '0';
       document.getElementById('Emp_Ativo').checked = emp.Ativo === 1;
 
       // Logomarca Preview
