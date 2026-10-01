@@ -409,7 +409,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(ide, "cDV").text = chave_nfe[43]
     ET.SubElement(ide, "tpAmb").text = str(order.get("Ambiente", "2")) # 1=Produção / 2=Homologação
     ET.SubElement(ide, "finNFe").text = "1" # NF-e Normal
-    ET.SubElement(ide, "indFinal").text = "1" if str(order.get("Tipo", 1)) in ["1", "5"] else "0"
+    ET.SubElement(ide, "indFinal").text = "1" # Consumidor Final (1=Consumidor Final)
     ET.SubElement(ide, "indPres").text = "1" # Operação Presencial
     ET.SubElement(ide, "indIntermed").text = "0" # Operação sem intermediador (NT 2020.006)
     ET.SubElement(ide, "procEmi").text = "0" # Aplicativo do Contribuinte
@@ -616,7 +616,8 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
         ET.SubElement(veic, "placa").text = sanitize_sefaz_string(order.get("PlacaVeic"), max_len=7, fallback="AAA0000").upper()
         ET.SubElement(veic, "UF").text = str(order.get("UfVeic", "SP")).upper()[:2]
 
-    if order.get("QtdVol") or order.get("EspecieVol") or order.get("PesoBruto"):
+    # Se modFrete for 9 (Sem Ocorrência de Transporte), não gerar a tag <vol>
+    if mod_frete != "9" and (order.get("QtdVol") or order.get("EspecieVol") or order.get("PesoBruto")):
         vol = ET.SubElement(transp, "vol")
         if order.get("QtdVol"):
             ET.SubElement(vol, "qVol").text = str(int(order.get("QtdVol") or 1))
@@ -653,8 +654,12 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     try:
         signed_nfe_str = sign_xml_sefaz(nfe_base_str, id_empresa=id_emp)
     except Exception as e:
-        print(f"[NFE SIGN WARNING] Fallback na assinatura digital: {e}")
-        signed_nfe_str = nfe_base_str
+        print(f"[NFE SIGN WARNING] Falha na assinatura digital ({e}). Tentando fallback certificado...")
+        try:
+            demo_cert = get_configured_or_fallback_certificate(id_empresa=id_emp)
+            signed_nfe_str = sign_xml_sefaz(nfe_base_str, cert_info=demo_cert)
+        except Exception as e2:
+            raise ValueError(f"Não foi possível assinar a NF-e digitalmente: {e2}")
 
     # Extrair DigestValue calculado na assinatura se existir
     digest_val = "SEFAZOFFICIALXMLDIGEST=="

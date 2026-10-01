@@ -88,17 +88,28 @@ def get_configured_or_fallback_certificate(id_empresa=1, pfx_path=None, password
         from app.config_manager import get_pdv_config
         cfg = get_pdv_config(id_empresa)
         cfg_cert = cfg.get("Certificado", {})
-        cfg_path = cfg_cert.get("Caminho", "")
-        cfg_pwd = cfg_cert.get("Senha", "")
-        if cfg_path and os.path.exists(cfg_path):
-            return load_pfx_certificate(cfg_path, cfg_pwd)
+        cfg_path = str(cfg_cert.get("Caminho", "")).strip()
+        cfg_pwd = str(cfg_cert.get("Senha", "")).strip()
+        if cfg_path:
+            norm_path = cfg_path.replace("/", "\\")
+            if norm_path.startswith("\\app\\") and (len(norm_path) > 7 and norm_path[6] == ":"):
+                norm_path = norm_path[5:]
+            elif norm_path.startswith("\\app\\"):
+                norm_path = norm_path.replace("\\app\\", "")
+
+            if os.path.exists(norm_path):
+                return load_pfx_certificate(norm_path, cfg_pwd)
+            if os.path.exists(cfg_path):
+                return load_pfx_certificate(cfg_path, cfg_pwd)
     except Exception as e:
-        pass
+        print(f"[NFE SIGNER] Erro ao carregar certificado configurado: {e}")
 
     # Fallback para certs/demo_a1.pfx
     demo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "certs", "demo_a1.pfx")
     if os.path.exists(demo_path):
         return load_pfx_certificate(demo_path, "123456")
+
+    raise CertificateError("Nenhum certificado digital A1 encontrado (nem o configurado, nem o certificado demo).")
 
 def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id_empresa=1):
     """
@@ -112,6 +123,9 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
 
     if cert_info is None:
         cert_info = get_configured_or_fallback_certificate(id_empresa=id_empresa, pfx_path=pfx_path, password=password)
+
+    if not cert_info or "private_key" not in cert_info:
+        raise CertificateError("Certificado digital inválido para assinatura da NF-e.")
 
     private_key = cert_info["private_key"]
     cert_b64 = cert_info["cert_b64"]
