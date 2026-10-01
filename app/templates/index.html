@@ -126,7 +126,7 @@
         <div class="version-control-info" style="font-size: 0.72rem; color: rgba(255,255,255,0.7); display: flex; flex-direction: column; gap: 0.2rem; border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 0.35rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="display: flex; align-items: center; gap: 0.3rem;"><i class="fa-solid fa-code-branch" style="color: var(--accent-blue);"></i> Sistema:</span>
-            <span id="footer-system-version" class="badge" style="background: rgba(59,130,246,0.2); color: #93c5fd; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600;">v1.2.4</span>
+            <span id="footer-system-version" class="badge" style="background: rgba(59,130,246,0.2); color: #93c5fd; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600;">v1.2.5</span>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="display: flex; align-items: center; gap: 0.3rem;"><i class="fa-solid fa-database" style="color: var(--accent-emerald);"></i> Banco:</span>
@@ -1225,7 +1225,7 @@
                   <div class="form-group col-8">
                     <label style="font-weight: 600; color: var(--text-primary);">Caminho do Arquivo (.pfx / .p12) do Certificado</label>
                     <div style="display: flex; gap: 0.5rem;">
-                      <input type="text" id="Cfg_Main_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx">
+                      <input type="text" id="Cfg_Main_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx">
                       <button type="button" class="btn btn-secondary" onclick="openCertificadoModal()" title="Abrir Central de Upload e Configuração do Certificado">
                         <i class="fa-solid fa-folder-open"></i> Configurar
                       </button>
@@ -1350,7 +1350,7 @@
                   <div class="form-group col-8">
                     <label id="lbl_Cfg_Page_Cert_Caminho">Caminho / Local do Arquivo (.pfx / .p12) no Servidor</label>
                     <div style="display: flex; gap: 6px;">
-                      <input type="text" id="Cfg_Page_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx">
+                      <input type="text" id="Cfg_Page_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="C:\Certificados\empresa.pfx">
                       <button type="button" class="btn btn-secondary" id="btn_Cfg_Page_Cert_Browse" onclick="handleCertBrowse('Cfg_Page')" title="Buscar certificado nas pastas (A1) ou Opções da Internet (A3)" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-folder-open" id="icon_Cfg_Page_Cert_Browse"></i> <span id="txt_Cfg_Page_Cert_Browse">Procurar Pasta...</span>
                       </button>
@@ -3660,7 +3660,7 @@
             <div class="form-group col-12">
               <label id="lbl_Cfg_Modal_Cert_Caminho" style="font-weight: 600;">Caminho Completo do Arquivo (.pfx / .p12) *</label>
               <div style="display: flex; gap: 6px;">
-                <input type="text" id="Cfg_Modal_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="Ex: C:\Certificados\empresa.pfx" value="C:\Certificados\certificado.pfx" required>
+                <input type="text" id="Cfg_Modal_Cert_Caminho" name="Certificado.Caminho" class="form-control" placeholder="Ex: C:\Certificados\empresa.pfx" required>
                 <button type="button" class="btn btn-secondary" id="btn_Cfg_Modal_Cert_Browse" onclick="handleCertBrowse('Cfg_Modal')" title="Buscar certificado nas pastas (A1) ou Opções da Internet (A3)" style="white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                   <i class="fa-solid fa-folder-open" id="icon_Cfg_Modal_Cert_Browse"></i> <span id="txt_Cfg_Modal_Cert_Browse">Procurar Pasta...</span>
                 </button>

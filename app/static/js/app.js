@@ -5431,7 +5431,7 @@ async function loadPdvConfigAll() {
       if (document.getElementById('Cfg_Main_Nfe_Ambiente')) document.getElementById('Cfg_Main_Nfe_Ambiente').value = cfg.Nfe.Ambiente || '2';
 
       if (document.getElementById('Cfg_Card_Nfe_Serie')) document.getElementById('Cfg_Card_Nfe_Serie').value = cfg.Nfe.SerieNfe || '1';
-      if (document.getElementById('Cfg_Card_Nfe_Numero')) document.getElementById('Cfg_Card_Nfe_Numero').value = cfg.CardNfe ? (cfg.Nfe.NroNfe || '1') : (cfg.Nfe.NroNfe || '1');
+      if (document.getElementById('Cfg_Card_Nfe_Numero')) document.getElementById('Cfg_Card_Nfe_Numero').value = cfg.Nfe.NroNfe || '1';
     }
 
     // NFC-e
@@ -5446,14 +5446,24 @@ async function loadPdvConfigAll() {
 
     // Certificado
     if (cfg.Certificado) {
-      if (document.getElementById('Cfg_Page_Cert_Tipo')) document.getElementById('Cfg_Page_Cert_Tipo').value = cfg.Certificado.Tipo || 'A1';
-      if (document.getElementById('Cfg_Page_Cert_Caminho')) document.getElementById('Cfg_Page_Cert_Caminho').value = cfg.Certificado.Caminho || '';
-      if (document.getElementById('Cfg_Page_Cert_Senha')) document.getElementById('Cfg_Page_Cert_Senha').value = cfg.Certificado.Senha || '';
-      if (document.getElementById('Cfg_Page_Cert_Validade')) document.getElementById('Cfg_Page_Cert_Validade').value = cfg.Certificado.Validade || '';
+      const tipo = cfg.Certificado.Tipo || 'A1';
+      const caminho = cfg.Certificado.Caminho || '';
+      const senha = cfg.Certificado.Senha || '';
+      const validade = cfg.Certificado.Validade || '';
 
-      if (document.getElementById('Cfg_Main_Cert_Tipo')) document.getElementById('Cfg_Main_Cert_Tipo').value = cfg.Certificado.Tipo || 'A1';
-      if (document.getElementById('Cfg_Main_Cert_Caminho')) document.getElementById('Cfg_Main_Cert_Caminho').value = cfg.Certificado.Caminho || '';
-      if (document.getElementById('Cfg_Main_Cert_Senha')) document.getElementById('Cfg_Main_Cert_Senha').value = cfg.Certificado.Senha || '';
+      if (document.getElementById('Cfg_Page_Cert_Tipo')) document.getElementById('Cfg_Page_Cert_Tipo').value = tipo;
+      if (document.getElementById('Cfg_Page_Cert_Caminho')) document.getElementById('Cfg_Page_Cert_Caminho').value = caminho;
+      if (document.getElementById('Cfg_Page_Cert_Senha')) document.getElementById('Cfg_Page_Cert_Senha').value = senha;
+      if (document.getElementById('Cfg_Page_Cert_Validade')) document.getElementById('Cfg_Page_Cert_Validade').value = validade;
+
+      if (document.getElementById('Cfg_Main_Cert_Tipo')) document.getElementById('Cfg_Main_Cert_Tipo').value = tipo;
+      if (document.getElementById('Cfg_Main_Cert_Caminho')) document.getElementById('Cfg_Main_Cert_Caminho').value = caminho;
+      if (document.getElementById('Cfg_Main_Cert_Senha')) document.getElementById('Cfg_Main_Cert_Senha').value = senha;
+
+      if (document.getElementById('Cfg_Modal_Cert_Tipo')) document.getElementById('Cfg_Modal_Cert_Tipo').value = tipo;
+      if (document.getElementById('Cfg_Modal_Cert_Caminho')) document.getElementById('Cfg_Modal_Cert_Caminho').value = caminho;
+      if (document.getElementById('Cfg_Modal_Cert_Senha')) document.getElementById('Cfg_Modal_Cert_Senha').value = senha;
+      if (document.getElementById('Cfg_Modal_Cert_Validade')) document.getElementById('Cfg_Modal_Cert_Validade').value = validade;
     }
   } catch (e) {
     console.error('Erro ao carregar configurações do PDV/NFe:', e);
@@ -5467,6 +5477,17 @@ async function saveNfeAndCertMain(e) {
     return el ? el.value : fallback;
   };
 
+  const tipo = getVal('Cfg_Main_Cert_Tipo', 'A1');
+  const caminho = getVal('Cfg_Main_Cert_Caminho', '');
+  const senha = getVal('Cfg_Main_Cert_Senha', '');
+
+  if (document.getElementById('Cfg_Page_Cert_Tipo')) document.getElementById('Cfg_Page_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Page_Cert_Caminho')) document.getElementById('Cfg_Page_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Page_Cert_Senha')) document.getElementById('Cfg_Page_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Modal_Cert_Tipo')) document.getElementById('Cfg_Modal_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Modal_Cert_Caminho')) document.getElementById('Cfg_Modal_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Modal_Cert_Senha')) document.getElementById('Cfg_Modal_Cert_Senha').value = senha;
+
   const payload = {
     Nfe: {
       SerieNfe: getVal('Cfg_Main_Nfe_Serie', '1'),
@@ -5474,9 +5495,9 @@ async function saveNfeAndCertMain(e) {
       Ambiente: getVal('Cfg_Main_Nfe_Ambiente', '2')
     },
     Certificado: {
-      Tipo: getVal('Cfg_Main_Cert_Tipo', 'A1'),
-      Caminho: getVal('Cfg_Main_Cert_Caminho', 'C:\\Certificados\\certificado.pfx'),
-      Senha: getVal('Cfg_Main_Cert_Senha', '')
+      Tipo: tipo,
+      Caminho: caminho,
+      Senha: senha
     }
   };
   await postPdvConfigSave(payload, 'Parâmetros da NF-e (Modelo 55) & Certificado Digital salvos com sucesso!');
@@ -5517,11 +5538,15 @@ function openCertificadoModal() {
   const modal = document.getElementById('certificado-modal');
   if (!modal) return;
 
-  const caminho = document.getElementById('Cfg_Main_Cert_Caminho') ? document.getElementById('Cfg_Main_Cert_Caminho').value : '';
-  const senha = document.getElementById('Cfg_Main_Cert_Senha') ? document.getElementById('Cfg_Main_Cert_Senha').value : '';
+  const caminho = document.getElementById('Cfg_Main_Cert_Caminho')?.value || document.getElementById('Cfg_Page_Cert_Caminho')?.value || '';
+  const senha = document.getElementById('Cfg_Main_Cert_Senha')?.value || document.getElementById('Cfg_Page_Cert_Senha')?.value || '';
+  const tipo = document.getElementById('Cfg_Main_Cert_Tipo')?.value || document.getElementById('Cfg_Page_Cert_Tipo')?.value || 'A1';
+  const validade = document.getElementById('Cfg_Page_Cert_Validade')?.value || '2027-12-31';
 
-  if (document.getElementById('Cfg_Modal_Cert_Caminho') && caminho) document.getElementById('Cfg_Modal_Cert_Caminho').value = caminho;
-  if (document.getElementById('Cfg_Modal_Cert_Senha') && senha) document.getElementById('Cfg_Modal_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Modal_Cert_Caminho')) document.getElementById('Cfg_Modal_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Modal_Cert_Senha')) document.getElementById('Cfg_Modal_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Modal_Cert_Tipo')) document.getElementById('Cfg_Modal_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Modal_Cert_Validade')) document.getElementById('Cfg_Modal_Cert_Validade').value = validade;
 
   modal.classList.add('active');
 }
@@ -5541,6 +5566,11 @@ async function saveCertModal(e) {
   if (document.getElementById('Cfg_Main_Cert_Tipo')) document.getElementById('Cfg_Main_Cert_Tipo').value = tipo;
   if (document.getElementById('Cfg_Main_Cert_Caminho')) document.getElementById('Cfg_Main_Cert_Caminho').value = caminho;
   if (document.getElementById('Cfg_Main_Cert_Senha')) document.getElementById('Cfg_Main_Cert_Senha').value = senha;
+
+  if (document.getElementById('Cfg_Page_Cert_Tipo')) document.getElementById('Cfg_Page_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Page_Cert_Caminho')) document.getElementById('Cfg_Page_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Page_Cert_Senha')) document.getElementById('Cfg_Page_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Page_Cert_Validade')) document.getElementById('Cfg_Page_Cert_Validade').value = validade;
 
   const payload = {
     Certificado: {
@@ -5628,12 +5658,25 @@ async function saveCertConfigPage(e) {
     const el = document.getElementById(id);
     return el ? el.value : fallback;
   };
+  const tipo = getVal('Cfg_Page_Cert_Tipo', 'A1');
+  const caminho = getVal('Cfg_Page_Cert_Caminho', '');
+  const senha = getVal('Cfg_Page_Cert_Senha', '');
+  const validade = getVal('Cfg_Page_Cert_Validade', '');
+
+  if (document.getElementById('Cfg_Main_Cert_Tipo')) document.getElementById('Cfg_Main_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Main_Cert_Caminho')) document.getElementById('Cfg_Main_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Main_Cert_Senha')) document.getElementById('Cfg_Main_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Modal_Cert_Tipo')) document.getElementById('Cfg_Modal_Cert_Tipo').value = tipo;
+  if (document.getElementById('Cfg_Modal_Cert_Caminho')) document.getElementById('Cfg_Modal_Cert_Caminho').value = caminho;
+  if (document.getElementById('Cfg_Modal_Cert_Senha')) document.getElementById('Cfg_Modal_Cert_Senha').value = senha;
+  if (document.getElementById('Cfg_Modal_Cert_Validade')) document.getElementById('Cfg_Modal_Cert_Validade').value = validade;
+
   const payload = {
     Certificado: {
-      Tipo: getVal('Cfg_Page_Cert_Tipo', 'A1'),
-      Caminho: getVal('Cfg_Page_Cert_Caminho', 'C:\\Certificados\\certificado.pfx'),
-      Senha: getVal('Cfg_Page_Cert_Senha', ''),
-      Validade: getVal('Cfg_Page_Cert_Validade', '')
+      Tipo: tipo,
+      Caminho: caminho,
+      Senha: senha,
+      Validade: validade
     }
   };
   await postPdvConfigSave(payload, 'Parâmetros do Certificado Digital salvos com sucesso!');
@@ -5689,10 +5732,11 @@ async function testDigitalCert() {
   }
 }
 
-// Check session and load version control on page load
+// Check session and load version control and PDV/Cert config on page load
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   loadSystemVersionInfo();
+  loadPdvConfigAll();
 });
 
 /* ==================== EMISSÃO DE NF-E MODELO 55 (FRMNOTA.FRM) ==================== */

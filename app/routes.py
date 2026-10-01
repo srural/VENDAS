@@ -1247,6 +1247,8 @@ def sync_db_apply_route():
 
 # --- SYSTEM & DATABASE VERSION CONTROL ENDPOINT ---
 
+SYSTEM_VERSION = "v1.2.5"
+
 @main_bp.route('/api/system/version', methods=['GET'])
 def get_system_version_route():
     try:
@@ -1256,7 +1258,7 @@ def get_system_version_route():
         
         return jsonify({
             "success": True,
-            "system_version": "v1.2.4",
+            "system_version": SYSTEM_VERSION,
             "db_name": db_info.get("dbname", db.PG_DB),
             "db_host": db_info.get("host", db.PG_HOST),
             "db_port": db_info.get("port", db.PG_PORT),
@@ -1269,7 +1271,7 @@ def get_system_version_route():
     except Exception as e:
         return jsonify({
             "success": False,
-            "system_version": "v1.2.4",
+            "system_version": SYSTEM_VERSION,
             "db_name": db.PG_DB,
             "db_host": db.PG_HOST,
             "db_port": db.PG_PORT,
