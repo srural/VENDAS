@@ -602,6 +602,8 @@ def emit_nfce(sale, company, items):
     cert_path = cfg_cert.get("Caminho", "")
     cert_pwd = cfg_cert.get("Senha", "")
 
+    from app.sefaz_logger import log_sefaz_transmission
+
     # Tentativa de transmissão online para SEFAZ NFC-e se certificado estiver configurado
     sefaz_ret = None
     if cert_path and os.path.exists(cert_path):
@@ -611,11 +613,30 @@ def emit_nfce(sale, company, items):
                 envi_xml = build_envi_nfe_batch(xml_content, id_lote=nro_nfce, ind_sinc=1)
                 soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
                 resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
-                if resp.get("success") and resp.get("response_xml"):
+                if resp.get("response_xml"):
                     sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
-                    if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
-                        xml_content = build_nfeproc_authorized(xml_content, sefaz_ret["prot_xml"])
-                        protocolo = sefaz_ret.get("nProt", protocolo)
+
+                log_sefaz_transmission(
+                    tipo_doc="NFCE",
+                    modelo="65",
+                    ambiente=int(amb_cfg),
+                    servico="Autorizacao",
+                    numero_doc=nro_nfce,
+                    chave_nfe=chave,
+                    url=auth_url,
+                    status_http=resp.get("status_code", 0),
+                    c_stat=sefaz_ret.get("cStat") if sefaz_ret else ("100" if resp.get("success") else "999"),
+                    x_motivo=sefaz_ret.get("xMotivo") if sefaz_ret else (resp.get("error") or "Processamento NFC-e"),
+                    n_prot=sefaz_ret.get("nProt", "") if sefaz_ret else "",
+                    tempo_ms=resp.get("elapsed_ms", 0),
+                    erro=resp.get("error") if not resp.get("success") else None,
+                    request_xml=envi_xml,
+                    response_xml=resp.get("response_xml", "")
+                )
+
+                if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
+                    xml_content = build_nfeproc_authorized(xml_content, sefaz_ret["prot_xml"])
+                    protocolo = sefaz_ret.get("nProt", protocolo)
         except Exception as sefaz_err:
             print(f"[SEFAZ TRANSMIT NOTICE] Transmissão online NFC-e: {sefaz_err}")
 

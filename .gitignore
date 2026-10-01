@@ -50,6 +50,7 @@ env/
 # ARQUIVOS TEMPORÁRIOS, LOGS & BASES LOCAIS
 # ==========================================
 *.log
+logs/
 scratch/
 Dados.mdb
 *.mdb

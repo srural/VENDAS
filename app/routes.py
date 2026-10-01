@@ -1245,6 +1245,79 @@ def sync_db_apply_route():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
+# --- SYSTEM & DATABASE VERSION CONTROL ENDPOINT ---
+
+@main_bp.route('/api/system/version', methods=['GET'])
+def get_system_version_route():
+    try:
+        db_info = db.get_db_info()
+        pg_ver = db_info.get("version", "PostgreSQL")
+        pg_short = pg_ver.split(",")[0].strip() if pg_ver else "PostgreSQL"
+        
+        return jsonify({
+            "success": True,
+            "system_version": "v1.2.4",
+            "db_name": db_info.get("dbname", db.PG_DB),
+            "db_host": db_info.get("host", db.PG_HOST),
+            "db_port": db_info.get("port", db.PG_PORT),
+            "db_version": pg_short,
+            "db_full_version": pg_ver,
+            "tables_count": db_info.get("tables_count", 0),
+            "records_summary": db_info.get("records_summary", {}),
+            "status": "online"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "system_version": "v1.2.4",
+            "db_name": db.PG_DB,
+            "db_host": db.PG_HOST,
+            "db_port": db.PG_PORT,
+            "db_version": "Indisponível",
+            "status": "offline",
+            "error": str(e)
+        })
+
+
+# --- SEFAZ TRANSMISSION & RESPONSE LOGS ENDPOINTS ---
+
+@main_bp.route('/api/sefaz/logs', methods=['GET'])
+def get_sefaz_logs_route():
+    try:
+        from app.sefaz_logger import get_sefaz_logs
+        tipo_doc = request.args.get('tipo_doc')
+        modelo = request.args.get('modelo')
+        ambiente = request.args.get('ambiente')
+        c_stat = request.args.get('c_stat')
+        search = request.args.get('search')
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+
+        result = get_sefaz_logs(
+            tipo_doc=tipo_doc,
+            modelo=modelo,
+            ambiente=ambiente,
+            c_stat=c_stat,
+            search=search,
+            limit=limit,
+            offset=offset
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "logs": [], "total": 0}), 500
+
+
+@main_bp.route('/api/sefaz/logs/clear', methods=['POST'])
+def clear_sefaz_logs_route():
+    try:
+        from app.sefaz_logger import clear_sefaz_logs
+        result = clear_sefaz_logs()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+
 
 # --- CNPJ CONSULTA ENDPOINT ---
 

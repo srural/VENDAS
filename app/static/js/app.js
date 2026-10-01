@@ -5689,9 +5689,10 @@ async function testDigitalCert() {
   }
 }
 
-// Check session on page load
+// Check session and load version control on page load
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
+  loadSystemVersionInfo();
 });
 
 /* ==================== EMISSÃO DE NF-E MODELO 55 (FRMNOTA.FRM) ==================== */
@@ -9286,6 +9287,260 @@ function exportarRelatorioEntidadesCSV() {
 
   showToast('Iniciando exportação das entidades para Excel (CSV)...', 'info', 2000);
   window.location.href = `/api/relatorios/entidades/export/csv?${params.toString()}`;
+}
+
+
+// ==========================================
+// SYSTEM & DATABASE VERSION CONTROL
+// ==========================================
+async function loadSystemVersionInfo() {
+  try {
+    const res = await fetch('/api/system/version');
+    const data = await res.json();
+    if (!res.ok) return;
+
+    const sysEl = document.getElementById('footer-system-version');
+    if (sysEl) sysEl.textContent = data.system_version || 'v1.2.4';
+
+    const dbEl = document.getElementById('footer-db-name');
+    if (dbEl) {
+      dbEl.textContent = data.db_name || 'vendas_db';
+      dbEl.title = `${data.db_name} (${data.db_version || 'PostgreSQL'}) - Host: ${data.db_host}:${data.db_port}`;
+    }
+
+    const dotEl = document.getElementById('sidebar-status-dot');
+    const txtEl = document.getElementById('sidebar-status-text');
+    if (txtEl) {
+      txtEl.textContent = data.status === 'online' ? 'Conectado ao Banco' : 'Desconectado';
+    }
+    if (dotEl) {
+      dotEl.style.background = data.status === 'online' ? 'var(--accent-emerald, #10b981)' : 'var(--accent-rose, #ef4444)';
+    }
+  } catch (err) {
+    console.warn('[VERSION CONTROL] Erro ao obter versão do sistema:', err);
+  }
+}
+
+
+// ==========================================
+// HISTÓRICO E LOGS DE RETORNO DA SEFAZ (NF-e & NFC-e)
+// ==========================================
+let currentSefazLogsList = [];
+let selectedSefazLogDetail = null;
+let sefazSearchDebounceTimeout = null;
+
+function openSefazLogsModal() {
+  const modal = document.getElementById('sefaz-logs-modal');
+  if (!modal) return;
+  modal.classList.add('active');
+  loadSefazLogs();
+}
+
+function closeSefazLogsModal() {
+  const modal = document.getElementById('sefaz-logs-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function debounceSefazLogsSearch() {
+  clearTimeout(sefazSearchDebounceTimeout);
+  sefazSearchDebounceTimeout = setTimeout(() => {
+    loadSefazLogs();
+  }, 350);
+}
+
+async function loadSefazLogs() {
+  const tbody = document.getElementById('sefaz-logs-table-body');
+  const counter = document.getElementById('sefaz-logs-counter');
+  if (!tbody) return;
+
+  const tipo = document.getElementById('sefaz-log-filter-tipo')?.value || 'ALL';
+  const ambiente = document.getElementById('sefaz-log-filter-ambiente')?.value || 'ALL';
+  const status = document.getElementById('sefaz-log-filter-status')?.value || 'ALL';
+  const search = document.getElementById('sefaz-log-search-input')?.value || '';
+
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+        <div style="margin-top: 0.5rem;">Carregando logs de comunicação SEFAZ...</div>
+      </td>
+    </tr>
+  `;
+
+  try {
+    const params = new URLSearchParams({ limit: '200', offset: '0' });
+    if (tipo !== 'ALL') params.append('tipo_doc', tipo);
+    if (ambiente !== 'ALL') params.append('ambiente', ambiente);
+    if (status !== 'ALL') params.append('c_stat', status);
+    if (search.trim()) params.append('search', search.trim());
+
+    const res = await fetch(`/api/sefaz/logs?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || 'Erro ao carregar logs da SEFAZ');
+
+    currentSefazLogsList = data.logs || [];
+    if (counter) counter.textContent = `Total de transmissões encontradas: ${data.total || currentSefazLogsList.length}`;
+    renderSefazLogsTable(currentSefazLogsList);
+  } catch (err) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--accent-rose);">
+          <i class="fa-solid fa-triangle-exclamation fa-2x"></i>
+          <div style="margin-top: 0.5rem;">Falha ao carregar logs: ${escapeHtml(err.message)}</div>
+        </td>
+      </tr>
+    `;
+  }
+}
+
+function renderSefazLogsTable(logs) {
+  const tbody = document.getElementById('sefaz-logs-table-body');
+  if (!tbody) return;
+
+  if (!logs || logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem; opacity: 0.5;"><i class="fa-solid fa-inbox"></i></div>
+          <strong style="color: var(--text-primary); font-size: 1rem;">Nenhum log de transmissão encontrado</strong>
+          <div style="font-size: 0.85rem; margin-top: 0.25rem;">Nenhuma comunicação com a SEFAZ foi registrada para os filtros selecionados.</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = logs.map(l => {
+    const isOk = l.sucesso || l.c_stat === '100' || l.c_stat === '150';
+    const badgeColor = isOk ? 'var(--accent-emerald, #10b981)' : 'var(--accent-rose, #ef4444)';
+    const badgeBg = isOk ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+    const tipoBadgeBg = l.modelo === '55' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)';
+    const tipoColor = l.modelo === '55' ? '#3b82f6' : '#a855f7';
+    const ambBadge = l.ambiente === 1 
+      ? '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); font-size: 0.72rem; padding: 0.15rem 0.4rem; border-radius: 4px;">Produção</span>' 
+      : '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); font-size: 0.72rem; padding: 0.15rem 0.4rem; border-radius: 4px;">Homologação</span>';
+
+    return `
+      <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.15s ease;" onmouseover="this.style.background='var(--bg-surface-hover, rgba(255,255,255,0.03))'" onmouseout="this.style.background='transparent'">
+        <td style="padding: 0.65rem 1rem; font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(l.timestamp || '')}</td>
+        <td style="padding: 0.65rem 0.5rem;">
+          <span class="badge" style="background: ${tipoBadgeBg}; color: ${tipoColor}; font-weight: 700; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px;">
+            ${l.tipo_doc === 'NFE' ? 'NF-e (55)' : 'NFC-e (65)'}
+          </span>
+        </td>
+        <td style="padding: 0.65rem 0.5rem;">${ambBadge}</td>
+        <td style="padding: 0.65rem 0.5rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(l.numero_doc || '---')}</td>
+        <td style="padding: 0.65rem 0.5rem;">
+          <span class="badge" style="background: ${badgeBg}; color: ${badgeColor}; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.55rem; border-radius: 4px; border: 1px solid ${badgeColor}; display: inline-flex; align-items: center; gap: 0.3rem;">
+            <i class="fa-solid ${isOk ? 'fa-circle-check' : 'fa-circle-xmark'}"></i>
+            ${escapeHtml(l.c_stat || '999')}
+          </span>
+        </td>
+        <td style="padding: 0.65rem 1rem; color: var(--text-primary); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.x_motivo || '')}">
+          ${escapeHtml(l.x_motivo || 'Sem mensagem')}
+        </td>
+        <td style="padding: 0.65rem 0.5rem; text-align: right; font-family: monospace; font-size: 0.78rem; color: var(--text-muted);">${l.tempo_ms ? `${l.tempo_ms}ms` : '---'}</td>
+        <td style="padding: 0.65rem 1rem; text-align: center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="viewSefazLogDetail('${l.id}')" title="Visualizar Retorno SEFAZ e XMLs" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;">
+            <i class="fa-solid fa-eye"></i> Detalhes / XML
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function viewSefazLogDetail(logId) {
+  const log = currentSefazLogsList.find(x => x.id === logId);
+  if (!log) return;
+
+  selectedSefazLogDetail = log;
+  const modal = document.getElementById('sefaz-log-detail-modal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('sefaz-detail-title');
+  const subtitleEl = document.getElementById('sefaz-detail-subtitle');
+  const summaryBox = document.getElementById('sefaz-detail-summary');
+  const xmlRespPre = document.getElementById('sefaz-detail-xml-resp');
+  const xmlReqPre = document.getElementById('sefaz-detail-xml-req');
+
+  if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-tower-broadcast" style="color: var(--accent-blue);"></i> Retorno SEFAZ - ${log.tipo_doc} #${log.numero_doc || ''}`;
+  if (subtitleEl) subtitleEl.textContent = `Transmissão realizada em ${log.timestamp} • Ambiente de ${log.ambiente_nome}`;
+
+  const isOk = log.sucesso || log.c_stat === '100' || log.c_stat === '150';
+  const badgeColor = isOk ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+
+  if (summaryBox) {
+    summaryBox.innerHTML = `
+      <div><span style="color: var(--text-muted); font-size: 0.75rem;">Status SEFAZ (cStat):</span><br><strong style="color: ${badgeColor}; font-size: 1rem;">[${escapeHtml(log.c_stat || '')}] ${isOk ? 'AUTORIZADA' : 'REJEIÇÃO'}</strong></div>
+      <div><span style="color: var(--text-muted); font-size: 0.75rem;">Protocolo de Autorização:</span><br><strong style="color: var(--text-primary); font-family: monospace;">${escapeHtml(log.n_prot || 'Não gerado')}</strong></div>
+      <div><span style="color: var(--text-muted); font-size: 0.75rem;">Status HTTP / Duração:</span><br><strong style="color: var(--text-primary);">HTTP ${log.status_http || 200} (${log.tempo_ms || 0}ms)</strong></div>
+      <div style="grid-column: 1 / -1;"><span style="color: var(--text-muted); font-size: 0.75rem;">Mensagem / Motivo Oficial SEFAZ:</span><br><div style="background: rgba(0,0,0,0.2); padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 600; color: ${badgeColor};">${escapeHtml(log.x_motivo || log.erro || 'Sem mensagem')}</div></div>
+      ${log.chave_nfe ? `<div style="grid-column: 1 / -1;"><span style="color: var(--text-muted); font-size: 0.75rem;">Chave de Acesso (44 dígitos):</span><br><span style="font-family: monospace; font-size: 0.8rem; word-break: break-all; color: var(--accent-blue);">${escapeHtml(log.chave_nfe)}</span></div>` : ''}
+      ${log.url ? `<div style="grid-column: 1 / -1;"><span style="color: var(--text-muted); font-size: 0.75rem;">WebService URL:</span><br><span style="font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); word-break: break-all;">${escapeHtml(log.url)}</span></div>` : ''}
+    `;
+  }
+
+  if (xmlRespPre) {
+    xmlRespPre.textContent = log.response_xml || '-- Nenhum XML de resposta gravado para esta tentativa --';
+  }
+  if (xmlReqPre) {
+    xmlReqPre.textContent = log.request_xml || '-- Nenhum XML de envio gravado para esta tentativa --';
+  }
+
+  switchSefazDetailTab('resp');
+  modal.classList.add('active');
+}
+
+function closeSefazLogDetailModal() {
+  const modal = document.getElementById('sefaz-log-detail-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function switchSefazDetailTab(tab) {
+  const btnResp = document.getElementById('tab-btn-sefaz-resp');
+  const btnReq = document.getElementById('tab-btn-sefaz-req');
+  const tabResp = document.getElementById('sefaz-detail-tab-resp');
+  const tabReq = document.getElementById('sefaz-detail-tab-req');
+
+  if (tab === 'resp') {
+    if (btnResp) { btnResp.classList.add('active'); btnResp.style.color = 'var(--accent-blue)'; btnResp.style.borderBottom = '2px solid var(--accent-blue)'; }
+    if (btnReq) { btnReq.classList.remove('active'); btnReq.style.color = 'var(--text-secondary)'; btnReq.style.borderBottom = '2px solid transparent'; }
+    if (tabResp) tabResp.style.display = 'block';
+    if (tabReq) tabReq.style.display = 'none';
+  } else {
+    if (btnReq) { btnReq.classList.add('active'); btnReq.style.color = 'var(--accent-blue)'; btnReq.style.borderBottom = '2px solid var(--accent-blue)'; }
+    if (btnResp) { btnResp.classList.remove('active'); btnResp.style.color = 'var(--text-secondary)'; btnResp.style.borderBottom = '2px solid transparent'; }
+    if (tabReq) tabReq.style.display = 'block';
+    if (tabResp) tabResp.style.display = 'none';
+  }
+}
+
+function copySefazDetailXml(type) {
+  if (!selectedSefazLogDetail) return;
+  const content = type === 'resp' ? selectedSefazLogDetail.response_xml : selectedSefazLogDetail.request_xml;
+  if (!content) {
+    showToast('Nenhum conteúdo XML para copiar.', 'warning');
+    return;
+  }
+  navigator.clipboard.writeText(content).then(() => {
+    showToast(type === 'resp' ? 'XML de Resposta SEFAZ copiado para a área de transferência!' : 'XML de Envio copiado!', 'success');
+  }).catch(() => {
+    showToast('Falha ao copiar para a área de transferência.', 'error');
+  });
+}
+
+async function clearAllSefazLogs() {
+  if (!confirm('Deseja realmente limpar todo o histórico de logs de comunicação com a SEFAZ?')) return;
+  try {
+    const res = await fetch('/api/sefaz/logs/clear', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || 'Falha ao limpar logs');
+    showToast('Logs da SEFAZ limpos com sucesso!', 'success');
+    loadSefazLogs();
+  } catch (err) {
+    showToast(`Erro ao limpar logs: ${err.message}`, 'error');
+  }
 }
 
 

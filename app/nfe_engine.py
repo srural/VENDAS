@@ -478,6 +478,8 @@ def emit_nfe_55(order_data, company_data, items_data):
     protocolo = generate_protocolo_sefaz(uf="135")
     xml_content = ""
 
+    from app.sefaz_logger import log_sefaz_transmission
+
     if amb_cfg == 1:
         # PRODUÇÃO OFICIAL: Exige certificado A1 e transmissão online real com autorização da SEFAZ
         if not cert_path or not os.path.exists(cert_path):
@@ -488,11 +490,31 @@ def emit_nfe_55(order_data, company_data, items_data):
         soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
         resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=15)
 
+        sefaz_ret = parse_sefaz_retorno_autorizacao(resp.get("response_xml", "")) if resp.get("response_xml") else None
+
+        # Registrar Log da Transmissão SEFAZ
+        log_sefaz_transmission(
+            tipo_doc="NFE",
+            modelo="55",
+            ambiente=1,
+            servico="Autorizacao",
+            numero_doc=nro_nfe,
+            chave_nfe=chave_nfe,
+            url=auth_url,
+            status_http=resp.get("status_code", 0),
+            c_stat=sefaz_ret.get("cStat") if sefaz_ret else "999",
+            x_motivo=sefaz_ret.get("xMotivo") if sefaz_ret else (resp.get("error") or "Erro de comunicação"),
+            n_prot=sefaz_ret.get("nProt", "") if sefaz_ret else "",
+            tempo_ms=resp.get("elapsed_ms", 0),
+            erro=resp.get("error") if not resp.get("success") else None,
+            request_xml=envi_xml,
+            response_xml=resp.get("response_xml", "")
+        )
+
         if not resp.get("success") or not resp.get("response_xml"):
             err_det = resp.get("error") or f"HTTP {resp.get('status_code')}"
             raise ValueError(f"Falha de comunicação com WebService SEFAZ {uf_empresa} (Produção): {err_det}")
 
-        sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
         if not sefaz_ret or not sefaz_ret.get("autorizada"):
             stat = sefaz_ret.get("cStat", "Rejeição") if sefaz_ret else "Erro"
             motivo = sefaz_ret.get("xMotivo", "Não autorizada") if sefaz_ret else "Retorno inválido"
@@ -509,11 +531,30 @@ def emit_nfe_55(order_data, company_data, items_data):
                     envi_xml = build_envi_nfe_batch(signed_nfe_str, id_lote=nro_nfe, ind_sinc=1)
                     soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
                     resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
-                    if resp.get("success") and resp.get("response_xml"):
+                    if resp.get("response_xml"):
                         sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
-                        if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
-                            xml_content = build_nfeproc_authorized(signed_nfe_str, sefaz_ret["prot_xml"])
-                            protocolo = sefaz_ret.get("nProt", protocolo)
+
+                    log_sefaz_transmission(
+                        tipo_doc="NFE",
+                        modelo="55",
+                        ambiente=2,
+                        servico="Autorizacao",
+                        numero_doc=nro_nfe,
+                        chave_nfe=chave_nfe,
+                        url=auth_url,
+                        status_http=resp.get("status_code", 0),
+                        c_stat=sefaz_ret.get("cStat") if sefaz_ret else ("100" if resp.get("success") else "999"),
+                        x_motivo=sefaz_ret.get("xMotivo") if sefaz_ret else (resp.get("error") or "Homologação"),
+                        n_prot=sefaz_ret.get("nProt", "") if sefaz_ret else "",
+                        tempo_ms=resp.get("elapsed_ms", 0),
+                        erro=resp.get("error") if not resp.get("success") else None,
+                        request_xml=envi_xml,
+                        response_xml=resp.get("response_xml", "")
+                    )
+
+                    if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
+                        xml_content = build_nfeproc_authorized(signed_nfe_str, sefaz_ret["prot_xml"])
+                        protocolo = sefaz_ret.get("nProt", protocolo)
             except Exception as sefaz_err:
                 print(f"[SEFAZ HOMOLOG NOTICE] Transmissão: {sefaz_err}")
 
