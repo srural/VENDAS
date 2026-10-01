@@ -169,14 +169,7 @@ def send_sefaz_soap_request(url, soap_action, xml_body, pfx_path=None, password=
     """
     Executa a requisição HTTP POST SOAP 1.2 com mTLS para o WebService SEFAZ.
     """
-    soap_envelope = f"""<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="{soap_action}">
-      {xml_body}
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>"""
+    soap_envelope = f'<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="{soap_action}">{xml_body}</nfeDadosMsg></soap12:Body></soap12:Envelope>'
 
     headers = {
         "Content-Type": "application/soap+xml; charset=utf-8",
@@ -299,11 +292,7 @@ def build_envi_nfe_batch(signed_nfe_xml_str, id_lote=1, ind_sinc=1):
     if clean_nfe.startswith("<?xml"):
         clean_nfe = clean_nfe.split("?>", 1)[-1].strip()
 
-    envi_xml = f"""<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-  <idLote>{id_lote}</idLote>
-  <indSinc>{ind_sinc}</indSinc>
-  {clean_nfe}
-</enviNFe>"""
+    envi_xml = f'<enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><idLote>{id_lote}</idLote><indSinc>{ind_sinc}</indSinc>{clean_nfe}</enviNFe>'
     return envi_xml
 
 

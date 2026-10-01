@@ -98,7 +98,7 @@ def generate_protocolo_sefaz(uf="135"):
     rand_seq = str(random.randint(1000, 9999))
     return f"{uf}{now_str}{rand_seq}"
 
-def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
+def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_proc=True):
     """
     Builds a compliant SEFAZ NF-e 4.00 (Modelo 55 - Nota Fiscal Eletrônica) XML structure
     incorporating all fields from FrmNota (Header, Transport, Volumes, Taxes, Custom Obs)
@@ -359,8 +359,23 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
     except Exception:
         pass
 
+    if not envelope_proc:
+        return signed_nfe_str
+
+    # Extrair DigestValue calculado na assinatura se existir
+    digest_val = "SEFAZOFFICIALXMLDIGEST=="
+    try:
+        from lxml import etree
+        root_signed = etree.fromstring(signed_nfe_str.encode('utf-8'))
+        ref_dig = root_signed.find(".//{http://www.w3.org/2000/09/xmldsig#}DigestValue")
+        if ref_dig is not None and ref_dig.text:
+            digest_val = ref_dig.text.strip()
+    except Exception:
+        pass
+
     # Limpar declaração XML interna da NFe para envelopar no nfeProc
     clean_signed_nfe = signed_nfe_str.split("?>", 1)[-1].strip() if signed_nfe_str.startswith("<?xml") else signed_nfe_str.strip()
+    prot_final = protocolo or generate_protocolo_sefaz(uf="135")
 
     # Envelop in nfeProc Oficial SEFAZ
     proc_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -372,7 +387,7 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo):
       <verAplic>4.00</verAplic>
       <chNFe>{chave_nfe}</chNFe>
       <dhRecbto>{dh_emiss}</dhRecbto>
-      <nProt>{protocolo}</nProt>
+      <nProt>{prot_final}</nProt>
       <digVal>{digest_val}</digVal>
       <cStat>100</cStat>
       <xMotivo>Autorizado o uso da NF-e</xMotivo>
@@ -431,39 +446,75 @@ def emit_nfe_55(order_data, company_data, items_data):
         serie=serie_nfe,
         nnf=nro_nfe
     )
-    protocolo = generate_protocolo_sefaz(uf="135")
-    xml_content = build_nfe_55_xml(order_data, company_data, items_data, chave_nfe, protocolo)
 
-    # Validar a assinatura digital criptográfica do XML gerado
-    sig_valid, sig_msg = verify_xml_signature(xml_content)
+    # 1. Gerar XML da NF-e assinado digitalmente com A1
+    signed_nfe_str = build_nfe_55_xml(order_data, company_data, items_data, chave_nfe, envelope_proc=False)
+
+    # 2. Validar a assinatura digital criptográfica
+    sig_valid, sig_msg = verify_xml_signature(signed_nfe_str)
 
     cfg_cert = cfg.get("Certificado", {})
-    cert_path = cfg_cert.get("Caminho", "")
-    cert_pwd = cfg_cert.get("Senha", "")
+    cert_path = str(cfg_cert.get("Caminho", "")).strip()
+    cert_pwd = str(cfg_cert.get("Senha", "")).strip()
 
-    # Tentativa de transmissão online para SEFAZ se certificado e ambiente estiverem configurados
+    # Normalizar caminho do certificado caso venha com prefixo /app/
+    if cert_path.startswith("/app/") and (len(cert_path) > 7 and cert_path[6] == ":"):
+        cert_path = cert_path[5:]
+    elif cert_path.startswith("/app/"):
+        cert_path = cert_path.replace("/app/", "")
+
     sefaz_ret = None
-    if cert_path and os.path.exists(cert_path):
-        try:
-            auth_url = get_sefaz_endpoint("Autorizacao", uf=uf_empresa, modelo="55", ambiente=amb_cfg)
-            if auth_url:
-                envi_xml = build_envi_nfe_batch(xml_content, id_lote=nro_nfe, ind_sinc=1)
-                soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
-                resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
-                if resp.get("success") and resp.get("response_xml"):
-                    sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
-                    if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
-                        xml_content = build_nfeproc_authorized(xml_content, sefaz_ret["prot_xml"])
-                        protocolo = sefaz_ret.get("nProt", protocolo)
-        except Exception as sefaz_err:
-            print(f"[SEFAZ TRANSMIT NOTICE] Transmissão online: {sefaz_err}")
+    protocolo = generate_protocolo_sefaz(uf="135")
+    xml_content = ""
+
+    if amb_cfg == 1:
+        # PRODUÇÃO OFICIAL: Exige certificado A1 e transmissão online real com autorização da SEFAZ
+        if not cert_path or not os.path.exists(cert_path):
+            raise ValueError(f"Certificado Digital A1 não encontrado no caminho: '{cert_path}'. Em Produção Oficial, o certificado é obrigatório para autorização na SEFAZ.")
+
+        auth_url = get_sefaz_endpoint("Autorizacao", uf=uf_empresa, modelo="55", ambiente=1)
+        envi_xml = build_envi_nfe_batch(signed_nfe_str, id_lote=nro_nfe, ind_sinc=1)
+        soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
+        resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=15)
+
+        if not resp.get("success") or not resp.get("response_xml"):
+            err_det = resp.get("error") or f"HTTP {resp.get('status_code')}"
+            raise ValueError(f"Falha de comunicação com WebService SEFAZ {uf_empresa} (Produção): {err_det}")
+
+        sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
+        if not sefaz_ret or not sefaz_ret.get("autorizada"):
+            stat = sefaz_ret.get("cStat", "Rejeição") if sefaz_ret else "Erro"
+            motivo = sefaz_ret.get("xMotivo", "Não autorizada") if sefaz_ret else "Retorno inválido"
+            raise ValueError(f"SEFAZ Rejeitou a NF-e em Produção: [{stat}] {motivo}")
+
+        protocolo = sefaz_ret.get("nProt", protocolo)
+        xml_content = build_nfeproc_authorized(signed_nfe_str, sefaz_ret.get("prot_xml"))
+    else:
+        # HOMOLOGAÇÃO: Tenta transmitir online se certificado existir, ou gera nfeProc de simulação
+        if cert_path and os.path.exists(cert_path):
+            try:
+                auth_url = get_sefaz_endpoint("Autorizacao", uf=uf_empresa, modelo="55", ambiente=2)
+                if auth_url:
+                    envi_xml = build_envi_nfe_batch(signed_nfe_str, id_lote=nro_nfe, ind_sinc=1)
+                    soap_action = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
+                    resp = send_sefaz_soap_request(auth_url, soap_action, envi_xml, pfx_path=cert_path, password=cert_pwd, timeout=8)
+                    if resp.get("success") and resp.get("response_xml"):
+                        sefaz_ret = parse_sefaz_retorno_autorizacao(resp["response_xml"])
+                        if sefaz_ret and sefaz_ret.get("autorizada") and sefaz_ret.get("prot_xml"):
+                            xml_content = build_nfeproc_authorized(signed_nfe_str, sefaz_ret["prot_xml"])
+                            protocolo = sefaz_ret.get("nProt", protocolo)
+            except Exception as sefaz_err:
+                print(f"[SEFAZ HOMOLOG NOTICE] Transmissão: {sefaz_err}")
+
+        if not xml_content:
+            xml_content = build_nfe_55_xml(order_data, company_data, items_data, chave_nfe, protocolo=protocolo, envelope_proc=True)
 
     filepath = save_xml_to_disk(xml_content, chave_nfe, modelo="55", cnpj=cnpj)
 
     return {
         "chave_nfe": chave_nfe,
         "protocolo": protocolo,
-        "status": "100",
+        "status": "100" if (not sefaz_ret or sefaz_ret.get("autorizada", True)) else sefaz_ret.get("cStat", "100"),
         "mensagem": "Autorizado o uso da NF-e (Modelo 55)" if (not sefaz_ret or sefaz_ret.get("autorizada", True)) else sefaz_ret.get("xMotivo", "Processado"),
         "xml": xml_content,
         "filepath": filepath,
