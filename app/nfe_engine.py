@@ -60,12 +60,208 @@ def validate_xml_with_sefaz_schema(xml_content):
         return False, [f"Falha ao processar Schema XSD da SEFAZ: {str(e)}"]
 
 def to_float(val, default=0.0):
-    if val is None:
+    if val is None or val == "":
         return default
     try:
+        if isinstance(val, str):
+            val = val.replace(".", "").replace(",", ".").strip() if "," in val else val.strip()
         return float(val)
     except (ValueError, TypeError):
         return default
+
+def build_icms_node(imposto_elem, v_prod, crt_val, prod_sit, aliq_icms):
+    icms = ET.SubElement(imposto_elem, "ICMS")
+    sit = str(prod_sit or "").strip()
+    
+    if crt_val in ("1", "2"):
+        # Simples Nacional (CSOSN)
+        if sit in ("101", "102", "103", "201", "202", "203", "300", "400", "500", "900"):
+            csosn = sit
+        elif sit in ("00", "20", "90"):
+            csosn = "102"
+        elif sit in ("60", "10", "30", "70"):
+            csosn = "500"
+        elif sit in ("40", "41", "50"):
+            csosn = "102"
+        else:
+            csosn = "102"
+            
+        if csosn == "101":
+            icms_sn = ET.SubElement(icms, "ICMSSN101")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = "101"
+            ET.SubElement(icms_sn, "pCredSN").text = "0.00"
+            ET.SubElement(icms_sn, "vCredICMSSN").text = "0.00"
+            return 0.0, 0.0
+        elif csosn in ("102", "103", "300", "400"):
+            icms_sn = ET.SubElement(icms, "ICMSSN102")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = csosn
+            return 0.0, 0.0
+        elif csosn == "500":
+            icms_sn = ET.SubElement(icms, "ICMSSN500")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = "500"
+            ET.SubElement(icms_sn, "vBCSTRet").text = "0.00"
+            ET.SubElement(icms_sn, "pST").text = "0.00"
+            ET.SubElement(icms_sn, "vICMSSubstituto").text = "0.00"
+            ET.SubElement(icms_sn, "vICMSSTRet").text = "0.00"
+            return 0.0, 0.0
+        elif csosn == "900":
+            icms_sn = ET.SubElement(icms, "ICMSSN900")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = "900"
+            ET.SubElement(icms_sn, "modBC").text = "3"
+            ET.SubElement(icms_sn, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(icms_sn, "pICMS").text = f"{aliq_icms:.2f}"
+            v_icms = v_prod * (aliq_icms / 100.0)
+            ET.SubElement(icms_sn, "vICMS").text = f"{v_icms:.2f}"
+            ET.SubElement(icms_sn, "pCredSN").text = "0.00"
+            ET.SubElement(icms_sn, "vCredICMSSN").text = "0.00"
+            return v_prod, v_icms
+        else:
+            icms_sn = ET.SubElement(icms, "ICMSSN102")
+            ET.SubElement(icms_sn, "orig").text = "0"
+            ET.SubElement(icms_sn, "CSOSN").text = "102"
+            return 0.0, 0.0
+    else:
+        # Regime Normal (CRT = 3 - CST)
+        if sit in ("102", "101", "103", "300", "900"):
+            cst = "00"
+        elif sit in ("500", "201", "202"):
+            cst = "60"
+        elif sit == "400":
+            cst = "40"
+        elif sit in ("00", "10", "20", "30", "40", "41", "50", "51", "60", "70", "90"):
+            cst = sit
+        else:
+            cst = "00"
+            
+        if cst == "00":
+            icms_elem = ET.SubElement(icms, "ICMS00")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = "00"
+            ET.SubElement(icms_elem, "modBC").text = "3"
+            ET.SubElement(icms_elem, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(icms_elem, "pICMS").text = f"{aliq_icms:.2f}"
+            v_icms = v_prod * (aliq_icms / 100.0)
+            ET.SubElement(icms_elem, "vICMS").text = f"{v_icms:.2f}"
+            return v_prod, v_icms
+        elif cst == "20":
+            icms_elem = ET.SubElement(icms, "ICMS20")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = "20"
+            ET.SubElement(icms_elem, "modBC").text = "3"
+            ET.SubElement(icms_elem, "pRedBC").text = "0.00"
+            ET.SubElement(icms_elem, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(icms_elem, "pICMS").text = f"{aliq_icms:.2f}"
+            v_icms = v_prod * (aliq_icms / 100.0)
+            ET.SubElement(icms_elem, "vICMS").text = f"{v_icms:.2f}"
+            return v_prod, v_icms
+        elif cst in ("40", "41", "50"):
+            icms_elem = ET.SubElement(icms, "ICMS40")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = cst
+            return 0.0, 0.0
+        elif cst == "60":
+            icms_elem = ET.SubElement(icms, "ICMS60")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = "60"
+            ET.SubElement(icms_elem, "vBCSTRet").text = "0.00"
+            ET.SubElement(icms_elem, "pST").text = "0.00"
+            ET.SubElement(icms_elem, "vICMSSubstituto").text = "0.00"
+            ET.SubElement(icms_elem, "vICMSSTRet").text = "0.00"
+            return 0.0, 0.0
+        elif cst == "90":
+            icms_elem = ET.SubElement(icms, "ICMS90")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = "90"
+            ET.SubElement(icms_elem, "modBC").text = "3"
+            ET.SubElement(icms_elem, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(icms_elem, "pICMS").text = f"{aliq_icms:.2f}"
+            v_icms = v_prod * (aliq_icms / 100.0)
+            ET.SubElement(icms_elem, "vICMS").text = f"{v_icms:.2f}"
+            return v_prod, v_icms
+        else:
+            icms_elem = ET.SubElement(icms, "ICMS00")
+            ET.SubElement(icms_elem, "orig").text = "0"
+            ET.SubElement(icms_elem, "CST").text = "00"
+            ET.SubElement(icms_elem, "modBC").text = "3"
+            ET.SubElement(icms_elem, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(icms_elem, "pICMS").text = f"{aliq_icms:.2f}"
+            v_icms = v_prod * (aliq_icms / 100.0)
+            ET.SubElement(icms_elem, "vICMS").text = f"{v_icms:.2f}"
+            return v_prod, v_icms
+
+def build_pis_node(imposto_elem, v_prod, cst_pis, aliq_pis):
+    cst = str(cst_pis or "08").strip().zfill(2)
+    pis_elem = ET.SubElement(imposto_elem, "PIS")
+    
+    if cst in ("01", "02"):
+        pis_aliq = ET.SubElement(pis_elem, "PISAliq")
+        ET.SubElement(pis_aliq, "CST").text = cst
+        v_pis = v_prod * (aliq_pis / 100.0)
+        ET.SubElement(pis_aliq, "vBC").text = f"{v_prod:.2f}"
+        ET.SubElement(pis_aliq, "pPIS").text = f"{aliq_pis:.2f}"
+        ET.SubElement(pis_aliq, "vPIS").text = f"{v_pis:.2f}"
+        return v_pis
+    elif cst in ("04", "05", "06", "07", "08", "09"):
+        pis_nt = ET.SubElement(pis_elem, "PISNT")
+        ET.SubElement(pis_nt, "CST").text = cst
+        return 0.0
+    elif cst in ("49", "50", "51", "52", "53", "54", "55", "56", "60", "61", "62", "63", "64", "65", "66", "67", "70", "71", "72", "73", "74", "75", "98", "99"):
+        pis_outr = ET.SubElement(pis_elem, "PISOutr")
+        ET.SubElement(pis_outr, "CST").text = cst
+        if aliq_pis > 0:
+            v_pis = v_prod * (aliq_pis / 100.0)
+            ET.SubElement(pis_outr, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(pis_outr, "pPIS").text = f"{aliq_pis:.2f}"
+            ET.SubElement(pis_outr, "vPIS").text = f"{v_pis:.2f}"
+            return v_pis
+        else:
+            ET.SubElement(pis_outr, "vBC").text = "0.00"
+            ET.SubElement(pis_outr, "pPIS").text = "0.00"
+            ET.SubElement(pis_outr, "vPIS").text = "0.00"
+            return 0.0
+    else:
+        pis_nt = ET.SubElement(pis_elem, "PISNT")
+        ET.SubElement(pis_nt, "CST").text = "08"
+        return 0.0
+
+def build_cofins_node(imposto_elem, v_prod, cst_cofins, aliq_cofins):
+    cst = str(cst_cofins or "08").strip().zfill(2)
+    cofins_elem = ET.SubElement(imposto_elem, "COFINS")
+    
+    if cst in ("01", "02"):
+        cofins_aliq = ET.SubElement(cofins_elem, "COFINSAliq")
+        ET.SubElement(cofins_aliq, "CST").text = cst
+        v_cofins = v_prod * (aliq_cofins / 100.0)
+        ET.SubElement(cofins_aliq, "vBC").text = f"{v_prod:.2f}"
+        ET.SubElement(cofins_aliq, "pCOFINS").text = f"{aliq_cofins:.2f}"
+        ET.SubElement(cofins_aliq, "vCOFINS").text = f"{v_cofins:.2f}"
+        return v_cofins
+    elif cst in ("04", "05", "06", "07", "08", "09"):
+        cofins_nt = ET.SubElement(cofins_elem, "COFINSNT")
+        ET.SubElement(cofins_nt, "CST").text = cst
+        return 0.0
+    elif cst in ("49", "50", "51", "52", "53", "54", "55", "56", "60", "61", "62", "63", "64", "65", "66", "67", "70", "71", "72", "73", "74", "75", "98", "99"):
+        cofins_outr = ET.SubElement(cofins_elem, "COFINSOutr")
+        ET.SubElement(cofins_outr, "CST").text = cst
+        if aliq_cofins > 0:
+            v_cofins = v_prod * (aliq_cofins / 100.0)
+            ET.SubElement(cofins_outr, "vBC").text = f"{v_prod:.2f}"
+            ET.SubElement(cofins_outr, "pCOFINS").text = f"{aliq_cofins:.2f}"
+            ET.SubElement(cofins_outr, "vCOFINS").text = f"{v_cofins:.2f}"
+            return v_cofins
+        else:
+            ET.SubElement(cofins_outr, "vBC").text = "0.00"
+            ET.SubElement(cofins_outr, "pCOFINS").text = "0.00"
+            ET.SubElement(cofins_outr, "vCOFINS").text = "0.00"
+            return 0.0
+    else:
+        cofins_nt = ET.SubElement(cofins_elem, "COFINSNT")
+        ET.SubElement(cofins_nt, "CST").text = "08"
+        return 0.0
 
 def clean_ncm(val, fallback="62034200"):
     if val is None:
@@ -287,9 +483,19 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     else:
         ET.SubElement(dest, "indIEDest").text = "9" # Não Contribuinte
 
+    # Extrair parâmetros tributários da Empresa (PIS / COFINS / Regime)
+    cst_pis_emp = str(company.get("PIS") or company.get("Pis") or "08").strip()
+    aliq_pis_emp = to_float(company.get("AliqPIS") or company.get("aliqPis") or 0.0)
+    cst_cofins_emp = str(company.get("COFINS") or company.get("Cofins") or "08").strip()
+    aliq_cofins_emp = to_float(company.get("AliqCOFINS") or company.get("aliqCofins") or 0.0)
+
     # <det> (Itens da Nota)
     total_v_prod = 0.0
     total_v_desc = to_float(order.get("Desconto"))
+    total_v_bc_icms = 0.0
+    total_v_icms = 0.0
+    total_v_pis = 0.0
+    total_v_cofins = 0.0
 
     for idx, item in enumerate(items, start=1):
         det = ET.SubElement(inf_nfe, "det", nItem=str(idx))
@@ -327,28 +533,21 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
 
         # <imposto>
         imposto = ET.SubElement(det, "imposto")
-        icms = ET.SubElement(imposto, "ICMS")
-        if crt_val == "3":
-            icms_00 = ET.SubElement(icms, "ICMS00")
-            ET.SubElement(icms_00, "orig").text = "0"
-            ET.SubElement(icms_00, "CST").text = "00"
-            ET.SubElement(icms_00, "modBC").text = "3"
-            ET.SubElement(icms_00, "vBC").text = f"{v_prod:.2f}"
-            aliq = to_float(item.get("AliqIcms") or item.get("aliqicms"), 0.0)
-            ET.SubElement(icms_00, "pICMS").text = f"{aliq:.2f}"
-            ET.SubElement(icms_00, "vICMS").text = f"{(v_prod * aliq / 100.0):.2f}"
-        else:
-            icms_sn = ET.SubElement(icms, "ICMSSN102")
-            ET.SubElement(icms_sn, "orig").text = "0"
-            ET.SubElement(icms_sn, "CSOSN").text = "102"
+        
+        # ICMS (CST / CSOSN conforme tabela Produto e Regime Tributário da Empresa)
+        prod_sit = item.get("CST") or item.get("SitTrib") or item.get("csosn") or item.get("cst")
+        aliq_icms_item = to_float(item.get("AliqIcms") or item.get("aliqicms") or item.get("Icm"), 0.0)
+        v_bc_item, v_icms_item = build_icms_node(imposto, v_prod, crt_val, prod_sit, aliq_icms_item)
+        total_v_bc_icms += v_bc_item
+        total_v_icms += v_icms_item
 
-        pis = ET.SubElement(imposto, "PIS")
-        pis_nt = ET.SubElement(pis, "PISNT")
-        ET.SubElement(pis_nt, "CST").text = "07"
+        # PIS (CST e Alíquota definidos nos Parâmetros Fiscais da Empresa)
+        v_pis_item = build_pis_node(imposto, v_prod, cst_pis_emp, aliq_pis_emp)
+        total_v_pis += v_pis_item
 
-        cofins = ET.SubElement(imposto, "COFINS")
-        cofins_nt = ET.SubElement(cofins, "COFINSNT")
-        ET.SubElement(cofins_nt, "CST").text = "07"
+        # COFINS (CST e Alíquota definidos nos Parâmetros Fiscais da Empresa)
+        v_cofins_item = build_cofins_node(imposto, v_prod, cst_cofins_emp, aliq_cofins_emp)
+        total_v_cofins += v_cofins_item
 
     # <total>
     total = ET.SubElement(inf_nfe, "total")
@@ -356,8 +555,11 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     v_frete = to_float(order.get("ValorFrete"))
     v_nf = total_v_prod - total_v_desc + v_frete
 
-    ET.SubElement(icms_tot, "vBC").text = f"{to_float(order.get('BaseIcms')):.2f}"
-    ET.SubElement(icms_tot, "vICMS").text = f"{to_float(order.get('ValorIcms')):.2f}"
+    base_icms_final = total_v_bc_icms if total_v_bc_icms > 0 else to_float(order.get("BaseIcms"))
+    val_icms_final = total_v_icms if total_v_icms > 0 else to_float(order.get("ValorIcms"))
+
+    ET.SubElement(icms_tot, "vBC").text = f"{base_icms_final:.2f}"
+    ET.SubElement(icms_tot, "vICMS").text = f"{val_icms_final:.2f}"
     ET.SubElement(icms_tot, "vICMSDeson").text = "0.00"
     ET.SubElement(icms_tot, "vFCP").text = "0.00"
     ET.SubElement(icms_tot, "vBCST").text = f"{to_float(order.get('BaseSt')):.2f}"
@@ -371,8 +573,8 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(icms_tot, "vII").text = "0.00"
     ET.SubElement(icms_tot, "vIPI").text = f"{to_float(order.get('ValorIpi')):.2f}"
     ET.SubElement(icms_tot, "vIPIDevol").text = "0.00"
-    ET.SubElement(icms_tot, "vPIS").text = "0.00"
-    ET.SubElement(icms_tot, "vCOFINS").text = "0.00"
+    ET.SubElement(icms_tot, "vPIS").text = f"{total_v_pis:.2f}"
+    ET.SubElement(icms_tot, "vCOFINS").text = f"{total_v_cofins:.2f}"
     ET.SubElement(icms_tot, "vOutro").text = "0.00"
     ET.SubElement(icms_tot, "vNF").text = f"{v_nf:.2f}"
 

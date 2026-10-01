@@ -23,9 +23,11 @@ def sanitize_sefaz_string(val, max_len=120, fallback="PRODUTO"):
     return s[:max_len].strip()
 
 def to_float(val, default=0.0):
-    if val is None:
+    if val is None or val == "":
         return default
     try:
+        if isinstance(val, str):
+            val = val.replace(".", "").replace(",", ".").strip() if "," in val else val.strip()
         return float(val)
     except (ValueError, TypeError):
         return default
@@ -178,7 +180,10 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
     ET.SubElement(emit, "IE").text = ''.join(filter(str.isdigit, str(company.get("InscEst") or company.get("IE", "707021792115"))))
-    ET.SubElement(emit, "CRT").text = str(company.get("RegimeTrib") or company.get("CRT") or "1")
+    crt_val = str(company.get("RegimeTrib") or company.get("CRT") or "1").strip()
+    if crt_val not in ("1", "2", "3", "4"):
+        crt_val = "1"
+    ET.SubElement(emit, "CRT").text = crt_val
 
     # <dest> (Consumidor - Opcional na NFC-e se não identificado)
     doc_cliente = ''.join(filter(str.isdigit, str(sale.get("CPF", "") or sale.get("CGC", "") or sale.get("CpfCnpj", "") or "")))
@@ -193,8 +198,21 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
             ET.SubElement(dest, "xNome").text = sanitize_sefaz_string(nome_cliente, max_len=60, fallback="CONSUMIDOR")
         ET.SubElement(dest, "indIEDest").text = "9" # Não Contribuinte
 
+    # Extrair parâmetros tributários da Empresa (PIS / COFINS)
+    from app.nfe_engine import build_icms_node, build_pis_node, build_cofins_node
+
+    cst_pis_emp = str(company.get("PIS") or company.get("Pis") or "08").strip()
+    aliq_pis_emp = to_float(company.get("AliqPIS") or company.get("aliqPis") or 0.0)
+    cst_cofins_emp = str(company.get("COFINS") or company.get("Cofins") or "08").strip()
+    aliq_cofins_emp = to_float(company.get("AliqCOFINS") or company.get("aliqCofins") or 0.0)
+
     # <det> (Itens da venda)
     total_prod = 0.0
+    total_v_bc_icms = 0.0
+    total_v_icms = 0.0
+    total_v_pis = 0.0
+    total_v_cofins = 0.0
+
     for idx, item in enumerate(items, start=1):
         det = ET.SubElement(inf_nfe, "det", nItem=str(idx))
         
@@ -232,24 +250,20 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
         # <imposto>
         imposto = ET.SubElement(det, "imposto")
         
-        icms = ET.SubElement(imposto, "ICMS")
-        icms_sn102 = ET.SubElement(icms, "ICMSSN102")
-        ET.SubElement(icms_sn102, "orig").text = "0"
-        ET.SubElement(icms_sn102, "CSOSN").text = "102" # Imune / Isento / Sem crédito
+        # ICMS (CST / CSOSN conforme tabela Produto e Regime Tributário da Empresa)
+        prod_sit = item.get("CST") or item.get("SitTrib") or item.get("csosn") or item.get("cst")
+        aliq_icms_item = to_float(item.get("AliqIcms") or item.get("aliqicms") or item.get("Icm"), 0.0)
+        v_bc_item, v_icms_item = build_icms_node(imposto, v_prod, crt_val, prod_sit, aliq_icms_item)
+        total_v_bc_icms += v_bc_item
+        total_v_icms += v_icms_item
 
-        pis = ET.SubElement(imposto, "PIS")
-        pis_outr = ET.SubElement(pis, "PISOutr")
-        ET.SubElement(pis_outr, "CST").text = "49"
-        ET.SubElement(pis_outr, "vBC").text = "0.00"
-        ET.SubElement(pis_outr, "pPIS").text = "0.00"
-        ET.SubElement(pis_outr, "vPIS").text = "0.00"
+        # PIS (CST e Alíquota definidos nos Parâmetros Fiscais da Empresa)
+        v_pis_item = build_pis_node(imposto, v_prod, cst_pis_emp, aliq_pis_emp)
+        total_v_pis += v_pis_item
 
-        cofins = ET.SubElement(imposto, "COFINS")
-        cofins_outr = ET.SubElement(cofins, "COFINSOutr")
-        ET.SubElement(cofins_outr, "CST").text = "49"
-        ET.SubElement(cofins_outr, "vBC").text = "0.00"
-        ET.SubElement(cofins_outr, "pCOFINS").text = "0.00"
-        ET.SubElement(cofins_outr, "vCOFINS").text = "0.00"
+        # COFINS (CST e Alíquota definidos nos Parâmetros Fiscais da Empresa)
+        v_cofins_item = build_cofins_node(imposto, v_prod, cst_cofins_emp, aliq_cofins_emp)
+        total_v_cofins += v_cofins_item
 
     # <total>
     desc_total = to_float(sale.get("Desconto"), 0.0)
@@ -257,8 +271,8 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
 
     total = ET.SubElement(inf_nfe, "total")
     icms_tot = ET.SubElement(total, "ICMSTot")
-    ET.SubElement(icms_tot, "vBC").text = "0.00"
-    ET.SubElement(icms_tot, "vICMS").text = "0.00"
+    ET.SubElement(icms_tot, "vBC").text = f"{total_v_bc_icms:.2f}"
+    ET.SubElement(icms_tot, "vICMS").text = f"{total_v_icms:.2f}"
     ET.SubElement(icms_tot, "vICMSDeson").text = "0.00"
     ET.SubElement(icms_tot, "vFCP").text = "0.00"
     ET.SubElement(icms_tot, "vBCST").text = "0.00"
@@ -272,8 +286,8 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(icms_tot, "vII").text = "0.00"
     ET.SubElement(icms_tot, "vIPI").text = "0.00"
     ET.SubElement(icms_tot, "vIPIDevol").text = "0.00"
-    ET.SubElement(icms_tot, "vPIS").text = "0.00"
-    ET.SubElement(icms_tot, "vCOFINS").text = "0.00"
+    ET.SubElement(icms_tot, "vPIS").text = f"{total_v_pis:.2f}"
+    ET.SubElement(icms_tot, "vCOFINS").text = f"{total_v_cofins:.2f}"
     ET.SubElement(icms_tot, "vOutro").text = "0.00"
     ET.SubElement(icms_tot, "vNF").text = f"{v_liquido:.2f}"
 
