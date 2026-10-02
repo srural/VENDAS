@@ -625,7 +625,7 @@ def validate_nfce_structure(sale_data, company_data, items_data, config_data=Non
 
 def emit_nfce(sale, company, items):
     from app.xml_utils import save_xml_to_disk
-    from app.config_manager import get_and_increment_nfce_number, get_pdv_config
+    from app.config_manager import get_current_nfce_number, increment_nfce_number, get_pdv_config
     from app.nfe_signer import verify_xml_signature
     from app.sefaz_client import get_sefaz_endpoint, send_sefaz_soap_request, build_envi_nfe_batch, parse_sefaz_retorno_autorizacao, build_nfeproc_authorized
     import os
@@ -638,7 +638,7 @@ def emit_nfce(sale, company, items):
         err_msg = "; ".join(val_report.get("errors", ["Dados inválidos para emissão de NFC-e"]))
         raise ValueError(f"Impedimento para emissão de NFC-e 65: {err_msg}")
 
-    serie_nfce, nro_nfce, c_id_token, csc = get_and_increment_nfce_number(id_emp)
+    serie_nfce, nro_nfce, c_id_token, csc = get_current_nfce_number(id_emp)
 
     cnpj_emit = company.get("CNPJ", "23103347000165")
     uf_empresa = company.get("UF", "SP")
@@ -695,6 +695,11 @@ def emit_nfce(sale, company, items):
         except Exception as sefaz_err:
             print(f"[SEFAZ TRANSMIT NOTICE] Transmissão online NFC-e: {sefaz_err}")
 
+    # INCREMENTA O NÚMERO SEQUENCIAL SOMENTE SE NÃO HOUVE REJEIÇÃO EM PRODUÇÃO
+    if amb_cfg == "1" and sefaz_ret and not sefaz_ret.get("autorizada"):
+        raise ValueError(f"SEFAZ Rejeitou a NFC-e em Produção: [{sefaz_ret.get('cStat')}] {sefaz_ret.get('xMotivo')}")
+
+    increment_nfce_number(id_emp, current_num=nro_nfce)
     filepath = save_xml_to_disk(xml_content, chave, modelo="65", cnpj=cnpj_emit)
 
     return {

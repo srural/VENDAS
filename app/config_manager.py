@@ -169,10 +169,9 @@ def save_pdv_config(data):
     return get_pdv_config(id_empresa=id_emp)
 
 
-def get_and_increment_nfe_number(id_empresa=1):
+def get_current_nfe_number(id_empresa=1):
     """
-    Obtém a SerieNfe e NroNfe atuais da tabela CfgPdv para a NF-e Modelo 55,
-    retorna a série e o número atual para uso na nota, e incrementa o NroNfe em +1 na CfgPdv.
+    Obtém a SerieNfe e NroNfe atuais da tabela CfgPdv para a NF-e Modelo 55 SEM incrementar.
     """
     cfg = get_pdv_config(id_empresa)
     nfe_sec = cfg.get("Nfe", {})
@@ -185,7 +184,16 @@ def get_and_increment_nfe_number(id_empresa=1):
     except (ValueError, TypeError):
         nro_atual = 1
 
-    nro_proximo = nro_atual + 1
+    return serie, nro_atual
+
+
+def increment_nfe_number(id_empresa=1, current_num=None):
+    """
+    Incrementa o NroNfe na tabela CfgPdv SOMENTE após a validação e autorização com 100% de sucesso.
+    """
+    serie, nro_atual = get_current_nfe_number(id_empresa)
+    base_num = current_num if (current_num is not None and isinstance(current_num, int)) else nro_atual
+    nro_proximo = base_num + 1
     
     save_pdv_config({
         "id_empresa": id_empresa,
@@ -194,14 +202,21 @@ def get_and_increment_nfe_number(id_empresa=1):
             "NroNfe": str(nro_proximo)
         }
     })
-    
+    return nro_proximo
+
+
+def get_and_increment_nfe_number(id_empresa=1):
+    """
+    Função legada para obter e incrementar simultaneamente.
+    """
+    serie, nro_atual = get_current_nfe_number(id_empresa)
+    increment_nfe_number(id_empresa, current_num=nro_atual)
     return serie, nro_atual
 
 
-def get_and_increment_nfce_number(id_empresa=1):
+def get_current_nfce_number(id_empresa=1):
     """
-    Obtém SerieNfce, NroNfce, CodigoID (cIdToken) e CodigoSeg (CSC) da tabela CfgPdv para a NFC-e Modelo 65,
-    retorna os dados atuais para a nota e QR Code v2.00, e incrementa o NroNfce em +1 na CfgPdv.
+    Obtém SerieNfce, NroNfce, CodigoID e CodigoSeg da tabela CfgPdv para NFC-e Modelo 65 SEM incrementar.
     """
     cfg = get_pdv_config(id_empresa)
     nfce_sec = cfg.get("Nfce", {})
@@ -216,7 +231,16 @@ def get_and_increment_nfce_number(id_empresa=1):
     except (ValueError, TypeError):
         nro_atual = 1
 
-    nro_proximo = nro_atual + 1
+    return serie, nro_atual, codigo_id, codigo_seg
+
+
+def increment_nfce_number(id_empresa=1, current_num=None):
+    """
+    Incrementa o NroNfce na tabela CfgPdv SOMENTE após a validação e autorização com 100% de sucesso.
+    """
+    serie, nro_atual, codigo_id, codigo_seg = get_current_nfce_number(id_empresa)
+    base_num = current_num if (current_num is not None and isinstance(current_num, int)) else nro_atual
+    nro_proximo = base_num + 1
     
     save_pdv_config({
         "id_empresa": id_empresa,
@@ -227,6 +251,15 @@ def get_and_increment_nfce_number(id_empresa=1):
             "CodigoSeg": codigo_seg
         }
     })
-    
+    return nro_proximo
+
+
+def get_and_increment_nfce_number(id_empresa=1):
+    """
+    Função legada para obter e incrementar NFC-e simultaneamente.
+    """
+    serie, nro_atual, codigo_id, codigo_seg = get_current_nfce_number(id_empresa)
+    increment_nfce_number(id_empresa, current_num=nro_atual)
     return serie, nro_atual, codigo_id, codigo_seg
+
 
