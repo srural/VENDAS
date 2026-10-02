@@ -198,6 +198,7 @@ onReady(() => {
   loadGroupOptions();
   loadActiveEmpresasSelector();
   setupPdvKeyboardNavigation();
+  loadPdvConfigAll();
 
   // Search input debounce listeners
   setupDebounce('input-search-ent', (val) => {
@@ -5534,9 +5535,11 @@ async function testDigitalCertMain() {
   }
 }
 
-function openCertificadoModal() {
+async function openCertificadoModal() {
   const modal = document.getElementById('certificado-modal');
   if (!modal) return;
+
+  await loadPdvConfigAll();
 
   const caminho = document.getElementById('Cfg_Main_Cert_Caminho')?.value || document.getElementById('Cfg_Page_Cert_Caminho')?.value || '';
   const senha = document.getElementById('Cfg_Main_Cert_Senha')?.value || document.getElementById('Cfg_Page_Cert_Senha')?.value || '';
@@ -6415,6 +6418,8 @@ async function onGlobalCertFileSelected(input) {
         onCertTipoChange(p);
       }
     });
+
+    await loadPdvConfigAll();
 
     showToast(result.message || `Certificado salvo em '${savePath}' com sucesso!`, 'success');
   } catch (err) {

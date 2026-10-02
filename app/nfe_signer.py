@@ -130,10 +130,8 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
     private_key = cert_info["private_key"]
     cert_b64 = cert_info["cert_b64"]
 
-
-    # Parse XML com lxml
+    parser = etree.XMLParser(remove_blank_text=True)
     if isinstance(xml_content, str):
-        parser = etree.XMLParser(remove_blank_text=False)
         root = etree.fromstring(xml_content.encode('utf-8'), parser=parser)
     else:
         root = xml_content
@@ -157,13 +155,13 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
             inf_node = root
             ref_uri = f"#{root.attrib['Id']}"
         else:
-            raise SignatureError("Nó raiz ou filho com atributo 'Id' (ex: infNFe, infEvento) não encontrado para assinatura.")
+            raise SignatureError("Nó com atributo 'Id' (ex: infNFe, infEvento) não encontrado para assinatura.")
 
     # Remover assinaturas antigas se existirem
     for old_sig in root.findall(f".//{{{XMLDSIG_NS}}}Signature"):
-        parent = old_sig.getparent()
-        if parent is not None:
-            parent.remove(old_sig)
+        old_parent = old_sig.getparent()
+        if old_parent is not None:
+            old_parent.remove(old_sig)
 
     # 1. Canonicalizar o nó <infNFe> / <infEvento> e calcular DigestValue (SHA-1)
     c14n_inf_bytes = etree.tostring(inf_node, method="c14n", exclusive=False, with_comments=False)
@@ -171,60 +169,36 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
     digest.update(c14n_inf_bytes)
     digest_val = base64.b64encode(digest.finalize()).decode('ascii')
 
-    # 2. Construir <SignedInfo>
-    nsmap = {None: XMLDSIG_NS}
-    signed_info = etree.Element(f"{{{XMLDSIG_NS}}}SignedInfo", nsmap=nsmap)
+    # 2. Construir <SignedInfo> canônico padrão SEFAZ MOC (sem poluição de namespaces internos)
+    signed_info_xml = f'<SignedInfo xmlns="{XMLDSIG_NS}"><CanonicalizationMethod Algorithm="{C14N_ALGO}"></CanonicalizationMethod><SignatureMethod Algorithm="{RSA_SHA1_ALGO}"></SignatureMethod><Reference URI="{ref_uri}"><Transforms><Transform Algorithm="{ENVELOPED_SIG}"></Transform><Transform Algorithm="{C14N_ALGO}"></Transform></Transforms><DigestMethod Algorithm="{SHA1_ALGO}"></DigestMethod><DigestValue>{digest_val}</DigestValue></Reference></SignedInfo>'
 
-    can_method = etree.SubElement(signed_info, f"{{{XMLDSIG_NS}}}CanonicalizationMethod")
-    can_method.set("Algorithm", C14N_ALGO)
+    si_elem = etree.fromstring(signed_info_xml.encode('utf-8'), parser=parser)
+    c14n_signed_info = etree.tostring(si_elem, method="c14n", exclusive=False, with_comments=False)
 
-    sig_method = etree.SubElement(signed_info, f"{{{XMLDSIG_NS}}}SignatureMethod")
-    sig_method.set("Algorithm", RSA_SHA1_ALGO)
-
-    reference = etree.SubElement(signed_info, f"{{{XMLDSIG_NS}}}Reference")
-    reference.set("URI", ref_uri)
-
-    transforms = etree.SubElement(reference, f"{{{XMLDSIG_NS}}}Transforms")
-    t1 = etree.SubElement(transforms, f"{{{XMLDSIG_NS}}}Transform")
-    t1.set("Algorithm", ENVELOPED_SIG)
-    t2 = etree.SubElement(transforms, f"{{{XMLDSIG_NS}}}Transform")
-    t2.set("Algorithm", C14N_ALGO)
-
-    digest_method = etree.SubElement(reference, f"{{{XMLDSIG_NS}}}DigestMethod")
-    digest_method.set("Algorithm", SHA1_ALGO)
-
-    digest_value_el = etree.SubElement(reference, f"{{{XMLDSIG_NS}}}DigestValue")
-    digest_value_el.text = digest_val
-
-    # 3. Construir o nó <Signature> e anexar na árvore ANTES de canonicalizar SignedInfo
-    signature_node = etree.Element(f"{{{XMLDSIG_NS}}}Signature", nsmap=nsmap)
-    signature_node.append(signed_info)
-
-    sig_val_el = etree.SubElement(signature_node, f"{{{XMLDSIG_NS}}}SignatureValue")
-    key_info = etree.SubElement(signature_node, f"{{{XMLDSIG_NS}}}KeyInfo")
-    x509_data = etree.SubElement(key_info, f"{{{XMLDSIG_NS}}}X509Data")
-    x509_cert = etree.SubElement(x509_data, f"{{{XMLDSIG_NS}}}X509Certificate")
-    x509_cert.text = cert_b64
-
-    parent_of_inf = inf_node.getparent()
-    if parent_of_inf is not None:
-        parent_of_inf.append(signature_node)
-    else:
-        root.append(signature_node)
-
-    # 4. Canonicalizar <SignedInfo> exatamente na posição final e assinar com RSA (PKCS#1 v1.5 + SHA-1)
-    c14n_signed_info = etree.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
-
+    # 3. Assinar <SignedInfo> canonicalizado com RSA (PKCS#1 v1.5 + SHA-1)
     signature_bytes = private_key.sign(
         c14n_signed_info,
         padding.PKCS1v15(),
         hashes.SHA1()
     )
     signature_val = base64.b64encode(signature_bytes).decode('ascii')
-    sig_val_el.text = signature_val
 
-    signed_xml_bytes = etree.tostring(root, encoding="utf-8", xml_declaration=True)
-    return signed_xml_bytes.decode('utf-8')
+    # 4. Construir o nó <Signature> completo
+    sig_full_xml = f'<Signature xmlns="{XMLDSIG_NS}">{signed_info_xml}<SignatureValue>{signature_val}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_b64}</X509Certificate></X509Data></KeyInfo></Signature>'
+
+    clean_base_xml = etree.tostring(root, encoding="utf-8").decode('utf-8')
+    if clean_base_xml.endswith("</NFe>"):
+        signed_xml_bytes = clean_base_xml[:-6] + sig_full_xml + "</NFe>"
+    elif clean_base_xml.endswith("</evento>"):
+        signed_xml_bytes = clean_base_xml[:-9] + sig_full_xml + "</evento>"
+    elif clean_base_xml.endswith("</inutNFe>"):
+        signed_xml_bytes = clean_base_xml[:-10] + sig_full_xml + "</inutNFe>"
+    else:
+        sig_elem = etree.fromstring(sig_full_xml.encode('utf-8'), parser=parser)
+        root.append(sig_elem)
+        signed_xml_bytes = etree.tostring(root, encoding="utf-8").decode('utf-8')
+
+    return signed_xml_bytes
 
 
 def verify_xml_signature(signed_xml_content):
@@ -255,10 +229,12 @@ def verify_xml_signature(signed_xml_content):
         cert = x509.load_der_x509_certificate(cert_der)
         pub_key = cert.public_key()
 
-        # Verificar SignatureValue sobre SignedInfo
-        sig_bytes = base64.b64decode(sig_val_node.text.strip())
-        c14n_si = etree.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
+        # Canonicalizar SignedInfo como elemento isolado para validação
+        parser_clean = etree.XMLParser(remove_blank_text=True)
+        si_isolated = etree.fromstring(etree.tostring(signed_info), parser=parser_clean)
+        c14n_si = etree.tostring(si_isolated, method="c14n", exclusive=False, with_comments=False)
 
+        sig_bytes = base64.b64decode(sig_val_node.text.strip())
         pub_key.verify(
             sig_bytes,
             c14n_si,

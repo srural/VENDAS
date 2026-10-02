@@ -1513,11 +1513,20 @@ def upload_certificado():
 
         file.save(save_path)
 
+        # Salvar e persistir imediatamente o caminho do certificado no banco de dados CfgPdv
+        from app.config_manager import save_pdv_config
+        save_pdv_config({
+            "Certificado": {
+                "Tipo": "A1",
+                "Caminho": save_path
+            }
+        })
+
         return jsonify({
             "success": True,
             "filename": filename,
             "caminho": save_path,
-            "message": f"Certificado '{filename}' salvo em '{save_path}' com sucesso!"
+            "message": f"Certificado '{filename}' salvo em '{save_path}' e gravado nas configurações com sucesso!"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
