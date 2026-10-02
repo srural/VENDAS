@@ -163,8 +163,12 @@ def sign_xml_sefaz(xml_content, pfx_path=None, password=None, cert_info=None, id
         if old_parent is not None:
             old_parent.remove(old_sig)
 
-    # 1. Canonicalizar o nó <infNFe> / <infEvento> e calcular DigestValue (SHA-1)
-    c14n_inf_bytes = etree.tostring(inf_node, method="c14n", exclusive=False, with_comments=False)
+    # 1. Canonicalizar o nó <infNFe> / <infEvento> de forma isolada e calcular DigestValue (SHA-1)
+    # NOTA CRÍTICA: Ao isolar o elemento infNFe como raiz, o libxml2 preserva os namespaces
+    # sem injetar xmlns="" nos nós filhos, produzindo bytes 100% idênticos ao Apache Santuario / Java da SEFAZ.
+    inf_xml_raw = etree.tostring(inf_node)
+    inf_isolated = etree.fromstring(inf_xml_raw, parser=parser)
+    c14n_inf_bytes = etree.tostring(inf_isolated, method="c14n", exclusive=False, with_comments=False)
     digest = hashes.Hash(hashes.SHA1())
     digest.update(c14n_inf_bytes)
     digest_val = base64.b64encode(digest.finalize()).decode('ascii')
@@ -251,7 +255,9 @@ def verify_xml_signature(signed_xml_content):
         if inf_node is None:
             return False, f"Nó referenciado '{ref_uri}' não encontrado no documento."
 
-        c14n_inf = etree.tostring(inf_node, method="c14n", exclusive=False, with_comments=False)
+        inf_xml_raw = etree.tostring(inf_node)
+        inf_isolated = etree.fromstring(inf_xml_raw, parser=parser_clean)
+        c14n_inf = etree.tostring(inf_isolated, method="c14n", exclusive=False, with_comments=False)
         d = hashes.Hash(hashes.SHA1())
         d.update(c14n_inf)
         actual_digest = base64.b64encode(d.finalize()).decode('ascii')
