@@ -2172,7 +2172,8 @@
 
               <div class="form-group col-3">
                 <label>RG / Inscrição Estadual</label>
-                <input type="text" id="RG" name="RG" class="form-control" placeholder="RG ou IE">
+                <input type="text" id="RG" name="RG" class="form-control" placeholder="RG ou IE" oninput="if(document.getElementById('InscrEst')) document.getElementById('InscrEst').value = this.value">
+                <input type="hidden" id="InscrEst" name="InscrEst">
               </div>
 
               <div class="form-group col-3">

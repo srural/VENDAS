@@ -664,6 +664,12 @@ function openEntityModal(data = null) {
         else field.value = data[key] !== null ? data[key] : '';
       }
     });
+    if (form.elements['RG'] && !form.elements['RG'].value && (data.InscrEst || data.InscEst)) {
+      form.elements['RG'].value = data.InscrEst || data.InscEst || '';
+    }
+    if (form.elements['InscrEst']) {
+      form.elements['InscrEst'].value = form.elements['RG'] ? form.elements['RG'].value : (data.InscrEst || data.InscEst || '');
+    }
   } else {
     document.getElementById('modal-title-ent').innerHTML = `<i class="fa-solid fa-user-plus"></i> Nova Entidade`;
     document.getElementById('CodEntidade').value = '';
@@ -5778,7 +5784,7 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     setElVal('FrmNota_NomeCliente', ped.NomeCliente || ped.Nome || '');
     const docCli = (ped.CPF || ped.CGC || '').trim();
     setElVal('FrmNota_CpfCnpj', docCli);
-    setElVal('FrmNota_InscEst', ped.InscEst || ped.IE || '');
+    setElVal('FrmNota_InscEst', ped.InscEst || ped.InscrEst || ped.RG || ped.IE || '');
     setElVal('FrmNota_Endereco', ped.Endereco || ped.Logradouro || '');
     setElVal('FrmNota_Nro', ped.Nro || '');
     setElVal('FrmNota_Bairro', ped.Bairro || '');
@@ -6265,7 +6271,10 @@ async function consultarCNPJ(inputId) {
       setElVal('Nome', data.razao_social);
       setElVal('Fantasia', data.nome_fantasia || data.razao_social);
       setElVal('FisicaJuridica', '2');
-      if (data.inscricao_estadual) setElVal('RG', data.inscricao_estadual);
+      if (data.inscricao_estadual) {
+        setElVal('RG', data.inscricao_estadual);
+        if (document.getElementById('InscrEst')) setElVal('InscrEst', data.inscricao_estadual);
+      }
       setElVal('Endereco', data.logradouro);
       setElVal('Nro', data.numero || 'SN');
       setElVal('Complemento', data.complemento || '');

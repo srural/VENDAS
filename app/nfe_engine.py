@@ -483,8 +483,9 @@ def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_
     ET.SubElement(ender_dest, "cPais").text = "1058"
     ET.SubElement(ender_dest, "xPais").text = "BRASIL"
 
-    ie_dest = ''.join(filter(str.isdigit, str(order.get("InscEst") or order.get("IE") or "")))
-    ie_str_raw = str(order.get("InscEst") or order.get("IE") or "").strip().upper()
+    ie_dest_raw = str(order.get("InscEst") or order.get("InscrEst") or order.get("RG") or order.get("IE") or "").strip()
+    ie_dest = ''.join(filter(str.isdigit, ie_dest_raw))
+    ie_str_raw = ie_dest_raw.upper()
     if ie_dest and ie_str_raw != "ISENTO":
         ET.SubElement(dest, "indIEDest").text = "1"
         ET.SubElement(dest, "IE").text = ie_dest
@@ -1128,6 +1129,32 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
             "detalhe": f"{nome_dest}",
             "status": "OK"
         })
+
+    # Validação da Inscrição Estadual (IE) do Destinatário
+    ie_dest_raw = str(order_data.get("InscEst") or order_data.get("InscrEst") or order_data.get("RG") or order_data.get("IE") or "").strip()
+    ie_dest_digits = ''.join(filter(str.isdigit, ie_dest_raw))
+    if len(doc_dest) == 14:
+        if ie_dest_digits:
+            checks.append({
+                "categoria": "Destinatário",
+                "campo": "Inscrição Estadual (IE)",
+                "detalhe": f"IE: {ie_dest_digits} (Contribuinte ICMS)",
+                "status": "OK"
+            })
+        elif ie_dest_raw.upper() == "ISENTO":
+            checks.append({
+                "categoria": "Destinatário",
+                "campo": "Inscrição Estadual (IE)",
+                "detalhe": "ISENTO (Não Contribuinte Isento)",
+                "status": "OK"
+            })
+        else:
+            checks.append({
+                "categoria": "Destinatário",
+                "campo": "Inscrição Estadual (IE)",
+                "detalhe": "IE não informada para Pessoa Jurídica. Se for contribuinte, informe no cadastro para evitar Rejeição 232.",
+                "status": "WARN"
+            })
 
     # Validação do Endereço Completo do Destinatário (xLgr, xBairro, xMun, UF, CEP)
     x_lgr = (order_data.get("Endereco") or order_data.get("Logradouro") or order_data.get("xLgr") or "").strip()

@@ -33,6 +33,18 @@ def ensure_database_schema():
                 cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "Ambiente" INT DEFAULT 2;')
                 cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "NroNfe" TEXT;')
                 cursor.execute('ALTER TABLE "PED" ADD COLUMN IF NOT EXISTS "SerieNfe" TEXT;')
+                cursor.execute('''
+                    UPDATE "ENT" 
+                    SET "InscrEst" = "RG" 
+                    WHERE ("InscrEst" IS NULL OR TRIM("InscrEst") = '') 
+                      AND "RG" IS NOT NULL AND TRIM("RG") != '';
+                ''')
+                cursor.execute('''
+                    UPDATE "ENT" 
+                    SET "RG" = "InscrEst" 
+                    WHERE ("RG" IS NULL OR TRIM("RG") = '') 
+                      AND "InscrEst" IS NOT NULL AND TRIM("InscrEst") != '';
+                ''')
                 conn.commit()
                 _schema_checked = True
         finally:
@@ -321,7 +333,10 @@ def get_entity_by_id(cod_entidade):
         with conn.cursor() as cursor:
             cursor.execute('SELECT * FROM "ENT" WHERE "CodEntidade" = %s', (cod_entidade,))
             row = cursor.fetchone()
-            return _convert_row(row)
+            d = _convert_row(row)
+            if d:
+                d['InscEst'] = d.get('InscrEst') or d.get('RG') or ''
+            return d
     finally:
         conn.close()
 
@@ -340,6 +355,12 @@ def create_entity(data):
     clean_data = sanitize_data_for_table(data, ENT_COL_TYPES)
     if 'CodEntidade' not in clean_data or not clean_data['CodEntidade']:
         clean_data['CodEntidade'] = get_next_id()
+
+    # Sincronizar RG e InscrEst (Inscrição Estadual)
+    if clean_data.get('RG') and not clean_data.get('InscrEst'):
+        clean_data['InscrEst'] = clean_data['RG']
+    elif clean_data.get('InscrEst') and not clean_data.get('RG'):
+        clean_data['RG'] = clean_data['InscrEst']
 
     fields = []
     placeholders = []
@@ -364,6 +385,12 @@ def create_entity(data):
 
 def update_entity(cod_entidade, data):
     clean_data = sanitize_data_for_table(data, ENT_COL_TYPES)
+
+    # Sincronizar RG e InscrEst (Inscrição Estadual)
+    if clean_data.get('RG') and not clean_data.get('InscrEst'):
+        clean_data['InscrEst'] = clean_data['RG']
+    elif clean_data.get('InscrEst') and not clean_data.get('RG'):
+        clean_data['RG'] = clean_data['InscrEst']
     assignments = []
     values = []
 
@@ -1161,7 +1188,9 @@ def get_pdv_sale_by_id(cod_ped):
         with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT PED.*, ENT."Nome" as "NomeCliente", ENT."CPF", ENT."CGC",
-                       ENT."Endereco", ENT."Nro", ENT."Bairro", ENT."Cidade", ENT."Uf", ENT."Cep", ENT."Fone", ENT."InscrEst" as "InscEst"
+                       ENT."Endereco", ENT."Nro", ENT."Bairro", ENT."Cidade", ENT."Uf", ENT."Cep", ENT."Fone",
+                       COALESCE(NULLIF(TRIM(ENT."InscrEst"), ''), NULLIF(TRIM(ENT."RG"), '')) as "InscEst",
+                       ENT."RG", ENT."InscrEst"
                 FROM "PED" PED
                 LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
                 WHERE PED."CodPed" = %s
@@ -1274,7 +1303,9 @@ def get_order_by_id(cod_ped):
     try:
         with conn.cursor() as cursor:
             cursor.execute('''
-                SELECT PED.*, ENT."Nome" as "NomeCliente", ENT."CPF", ENT."CGC", ENT."Endereco", ENT."Nro", ENT."Bairro", ENT."Cidade", ENT."Uf", ENT."Cep", ENT."Fone", ENT."Fax", ENT."InscrEst" as "InscEst"
+                SELECT PED.*, ENT."Nome" as "NomeCliente", ENT."CPF", ENT."CGC", ENT."Endereco", ENT."Nro", ENT."Bairro", ENT."Cidade", ENT."Uf", ENT."Cep", ENT."Fone", ENT."Fax",
+                       COALESCE(NULLIF(TRIM(ENT."InscrEst"), ''), NULLIF(TRIM(ENT."RG"), '')) as "InscEst",
+                       ENT."RG", ENT."InscrEst"
                 FROM "PED" PED
                 LEFT JOIN "ENT" ENT ON PED."Entidade" = ENT."CodEntidade"
                 WHERE PED."CodPed" = %s
@@ -1479,8 +1510,9 @@ def update_nfe_order_details(cod_ped, data):
             doc_cli = str(data.get("CpfCnpj") or data.get("CPF") or data.get("CGC") or "").strip()
             clean_doc = ''.join(filter(str.isdigit, doc_cli))
             nome_cli = data.get("NomeCliente")
+            ie_cli = (data.get("InscEst") or data.get("InscrEst") or data.get("RG") or "").strip() or None
             
-            if cod_entidade and (nome_cli or clean_doc or data.get("Endereco")):
+            if cod_entidade and (nome_cli or clean_doc or data.get("Endereco") or ie_cli):
                 cpf_val = clean_doc if len(clean_doc) == 11 else None
                 cgc_val = clean_doc if len(clean_doc) == 14 else None
                 cursor.execute('''
@@ -1489,6 +1521,7 @@ def update_nfe_order_details(cod_ped, data):
                         "CPF" = COALESCE(%s, "CPF"),
                         "CGC" = COALESCE(%s, "CGC"),
                         "InscrEst" = COALESCE(%s, "InscrEst"),
+                        "RG" = COALESCE(%s, "RG"),
                         "Endereco" = COALESCE(%s, "Endereco"),
                         "Nro" = COALESCE(%s, "Nro"),
                         "Bairro" = COALESCE(%s, "Bairro"),
@@ -1500,7 +1533,8 @@ def update_nfe_order_details(cod_ped, data):
                     nome_cli,
                     cpf_val,
                     cgc_val,
-                    data.get("InscEst"),
+                    ie_cli,
+                    ie_cli,
                     data.get("Endereco"),
                     data.get("Nro"),
                     data.get("Bairro"),

@@ -207,7 +207,7 @@ def render_danfe_html(order, company, items, nfe_res):
     dest_mun = order.get('Cidade') or ''
     dest_uf = order.get('Uf') or order.get('UF') or ''
     dest_fone = order.get('Fone') or ''
-    dest_ie = order.get('InscEst') or order.get('InscrEst') or order.get('IE') or ''
+    dest_ie = order.get('InscEst') or order.get('InscrEst') or order.get('RG') or order.get('IE') or ''
 
     # Emitente
     emit_nome = company.get('RazaoSocial') or company.get('NomeEmpresa') or 'SIDIVAL CARLOS CIOCA ME'
