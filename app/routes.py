@@ -2012,15 +2012,107 @@ def export_relatorio_entidades_csv_route():
         return jsonify({"error": str(e)}), 500
 
 
+# --- ETIQUETAS DE GÔNDOLA 9x3 ZEBRA ENDPOINTS ---
 
+from app import zebra_etiquetas as ze
 
+@main_bp.route('/api/etiquetas/config', methods=['GET'])
+def get_etiquetas_config():
+    try:
+        header_name = ze.get_empresa_header_name()
+        installed_printers = ze.get_installed_printers()
+        return jsonify({
+            "header_name": header_name,
+            "installed_printers": installed_printers,
+            "default_dpi": 203,
+            "dimensions": {
+                "width_mm": 90,
+                "height_mm": 30
+            },
+            "modelos": [
+                {"id": "padrao", "nome": "Padrão Gôndola Varejo (Preço Gigante)"},
+                {"id": "promocional", "nome": "Oferta Especial (De / Por)"},
+                {"id": "por_unidade", "nome": "Preço por Unidade de Medida (Kg/Lt)"}
+            ]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@main_bp.route('/api/etiquetas/gerar-zpl', methods=['POST'])
+def gerar_etiquetas_zpl():
+    try:
+        data = request.json or {}
+        items = data.get('items', [])
+        options = data.get('options', {})
 
+        if not items:
+            return jsonify({"error": "Nenhum produto fornecido para geração de etiquetas"}), 400
 
+        zpl_content = ze.generate_batch_labels_zpl(items, options)
+        total_etiquetas = sum(int(it.get('copies', 1)) for it in items)
 
+        return jsonify({
+            "success": True,
+            "total_items": len(items),
+            "total_etiquetas": total_etiquetas,
+            "zpl": zpl_content
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@main_bp.route('/api/etiquetas/imprimir-rede', methods=['POST'])
+def imprimir_etiquetas_rede():
+    try:
+        data = request.json or {}
+        ip = data.get('ip')
+        port = int(data.get('port', 9100))
+        items = data.get('items', [])
+        options = data.get('options', {})
+        zpl_custom = data.get('zpl')
 
+        if not ip:
+            return jsonify({"error": "Endereço IP da impressora Zebra é obrigatório"}), 400
 
+        if zpl_custom:
+            zpl_content = zpl_custom
+        else:
+            if not items:
+                return jsonify({"error": "Nenhum produto fornecido para impressão"}), 400
+            zpl_content = ze.generate_batch_labels_zpl(items, options)
 
+        sucesso, msg = ze.send_zpl_to_network_printer(ip, zpl_content, port=port)
+        if not sucesso:
+            return jsonify({"error": msg}), 502
 
+        total_etiquetas = sum(int(it.get('copies', 1)) for it in items) if items else 1
+        return jsonify({"message": msg, "total_etiquetas": total_etiquetas})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@main_bp.route('/api/etiquetas/imprimir-windows', methods=['POST'])
+def imprimir_etiquetas_windows():
+    try:
+        data = request.json or {}
+        printer_name = data.get('printer_name')
+        items = data.get('items', [])
+        options = data.get('options', {})
+        zpl_custom = data.get('zpl')
+
+        if not printer_name:
+            return jsonify({"error": "Nome da impressora do Windows é obrigatório"}), 400
+
+        if zpl_custom:
+            zpl_content = zpl_custom
+        else:
+            if not items:
+                return jsonify({"error": "Nenhum produto fornecido para impressão"}), 400
+            zpl_content = ze.generate_batch_labels_zpl(items, options)
+
+        sucesso, msg = ze.send_zpl_to_windows_printer(printer_name, zpl_content)
+        if not sucesso:
+            return jsonify({"error": msg}), 502
+
+        total_etiquetas = sum(int(it.get('copies', 1)) for it in items) if items else 1
+        return jsonify({"message": msg, "total_etiquetas": total_etiquetas})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

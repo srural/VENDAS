@@ -353,6 +353,8 @@ function switchModule(moduleName) {
     titleEl.innerHTML = `<i class="fa-solid fa-users-viewfinder"></i> <span>Relatório de Vendas de Produtos por Cliente</span>`;
   } else if (moduleName === 'rel-entidades') {
     titleEl.innerHTML = `<i class="fa-solid fa-address-book"></i> <span>Relatório de Dados Cadastrais de Entidades</span>`;
+  } else if (moduleName === 'etiquetas') {
+    titleEl.innerHTML = `<i class="fa-solid fa-barcode"></i> <span>Emissor de Etiquetas de Gôndola 9x3 (Zebra ZPL)</span>`;
   }
 
   document.querySelectorAll('.module-btn').forEach(btn => {
@@ -361,6 +363,9 @@ function switchModule(moduleName) {
       show = true;
     }
     if (moduleName === 'rel-entidades' && (btn.id === 'btn-print-rel-entidades' || btn.id === 'btn-export-rel-entidades')) {
+      show = true;
+    }
+    if (moduleName === 'etiquetas' && (btn.id === 'btn-header-etiquetas-novo' || btn.id === 'btn-header-etiquetas-imprimir')) {
       show = true;
     }
     btn.style.display = show ? 'inline-flex' : 'none';
@@ -384,6 +389,8 @@ function switchModule(moduleName) {
   } else if (moduleName === 'rel-entidades') {
     carregarFiltrosUfCidadesEntidades();
     fetchRelatorioEntidades(1);
+  } else if (moduleName === 'etiquetas') {
+    initEtiquetasModule();
   } else if (moduleName === 'cfop') fetchCfops();
   else if (moduleName === 'formas-pgto') fetchFormasPgto();
   else if (moduleName === 'natureza-op') fetchNaturezasOperacao();
@@ -900,6 +907,9 @@ function renderProductsTable(products) {
         <td>${ativoBadge}</td>
         <td style="text-align: center;">
           <div style="display: flex; justify-content: center; gap: 0.35rem;">
+            <button class="btn btn-warning btn-sm" onclick="adicionarProdutoAEtiquetasDirect(${p.CodPrd})" title="Emitir Etiqueta de Gôndola (Zebra 9x3)">
+              <i class="fa-solid fa-barcode"></i>
+            </button>
             <button class="btn btn-secondary btn-sm" onclick="editProduct(${p.CodPrd})" title="Editar">
               <i class="fa-solid fa-pen"></i>
             </button>
@@ -9601,10 +9611,1095 @@ async function clearAllSefazLogs() {
   }
 }
 
+/* ==========================================================================
+   MÓDULO: EMISSOR DE ETIQUETAS DE GÔNDOLA 9x3 (ZEBRA ZPL II)
+   ========================================================================== */
 
+let etiquetasQueue = [];
+let etiquetasConfig = null;
+let selectedPreviewIndex = 0;
+let etqPrintMethod = 'rede';
+let etqSearchDebounceTimer = null;
 
+// Inicialização do Módulo de Etiquetas
+async function initEtiquetasModule() {
+  try {
+    // 1. Carrega configuração da impressora e empresa
+    if (!etiquetasConfig) {
+      const res = await fetch('/api/etiquetas/config');
+      if (res.ok) {
+        etiquetasConfig = await res.json();
+        const headerInput = document.getElementById('etq-opt-header');
+        if (headerInput && !headerInput.value) {
+          headerInput.value = etiquetasConfig.header_name || 'SUPERMERCADO';
+        }
 
+        // Popula impressoras do Windows
+        const winSelect = document.getElementById('etq-select-windows-printer');
+        if (winSelect && etiquetasConfig.installed_printers) {
+          winSelect.innerHTML = etiquetasConfig.installed_printers.length > 0
+            ? etiquetasConfig.installed_printers.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')
+            : '<option value="">Nenhuma impressora encontrada no Windows</option>';
+        }
+      }
+    }
 
+    // 2. Popula Grupos no Select
+    const grpSelect = document.getElementById('etq-select-grupo');
+    if (grpSelect && (!grpSelect.options || grpSelect.options.length <= 1)) {
+      if (!groupsList || groupsList.length === 0) {
+        const grpRes = await fetch('/api/grupos?limit=100');
+        if (grpRes.ok) {
+          const gData = await grpRes.json();
+          groupsList = gData.items || [];
+        }
+      }
+      grpSelect.innerHTML = '<option value="">Selecione um grupo...</option>' + 
+        groupsList.map(g => `<option value="${g.CodGru}">${escapeHtml(g.Descricao_Grupo || 'Grupo #' + g.CodGru)}</option>`).join('');
+    }
 
+    // 3. Define data de emissão padrão para hoje
+    const dateInput = document.getElementById('etq-opt-date');
+    if (dateInput && !dateInput.value) {
+      dateInput.value = new Date().toISOString().split('T')[0];
+    }
 
+    // 4. Carrega IP salvo ou padrão
+    const ipInput = document.getElementById('etq-ip-input');
+    if (ipInput && !ipInput.value) {
+      ipInput.value = localStorage.getItem('zebra_printer_ip') || '192.168.1.200';
+    }
 
+    // 5. Restaura fila salva no LocalStorage
+    if (etiquetasQueue.length === 0) {
+      const saved = localStorage.getItem('etiquetas_gondola_queue');
+      if (saved) {
+        try {
+          etiquetasQueue = JSON.parse(saved);
+        } catch (e) {
+          etiquetasQueue = [];
+        }
+      }
+    }
+
+    // 6. Configura ouvinte do campo de busca com debounce
+    setupEtiquetasSearchInput();
+
+    // 7. Renderiza fila e prévia
+    renderEtiquetasQueue();
+
+  } catch (err) {
+    console.error('Erro ao inicializar módulo de etiquetas:', err);
+    showToast(`Erro ao carregar dados de etiquetas: ${err.message}`, 'error');
+  }
+}
+
+// Configuração do input de pesquisa com autocompletar e teclado
+function setupEtiquetasSearchInput() {
+  const input = document.getElementById('etq-search-input');
+  const resultsBox = document.getElementById('etq-autocomplete-list');
+  const spinner = document.getElementById('etq-search-spinner');
+  if (!input || input.dataset.listenerSetup === 'true') return;
+  input.dataset.listenerSetup = 'true';
+
+  input.addEventListener('input', () => {
+    clearTimeout(etqSearchDebounceTimer);
+    const term = input.value.trim();
+    if (term.length < 2) {
+      if (resultsBox) resultsBox.style.display = 'none';
+      if (spinner) spinner.style.display = 'none';
+      return;
+    }
+
+    if (spinner) spinner.style.display = 'inline-block';
+    etqSearchDebounceTimer = setTimeout(async () => {
+      await searchProductsForEtiquetas(term);
+      if (spinner) spinner.style.display = 'none';
+    }, 280);
+  });
+
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const term = input.value.trim();
+      if (!term) return;
+
+      // Se há um item selecionado no autocomplete, adiciona ele
+      const selected = resultsBox?.querySelector('.etq-auto-item.selected');
+      if (selected && selected.dataset.productJson) {
+        try {
+          const prod = JSON.parse(selected.dataset.productJson);
+          addProdutoToEtiquetasQueue(prod, 1);
+          input.value = '';
+          if (resultsBox) resultsBox.style.display = 'none';
+          return;
+        } catch (err) {}
+      }
+
+      // Senão busca diretamente pelo código de barras ou código
+      try {
+        if (spinner) spinner.style.display = 'inline-block';
+        const res = await fetch(`/api/produtos?q=${encodeURIComponent(term)}&limit=5`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            // Adiciona o primeiro resultado que casou
+            addProdutoToEtiquetasQueue(data.items[0], 1);
+            input.value = '';
+            if (resultsBox) resultsBox.style.display = 'none';
+          } else {
+            showToast(`Nenhum produto encontrado com "${term}".`, 'warning');
+          }
+        }
+      } catch (err) {
+        showToast('Erro ao buscar produto: ' + err.message, 'error');
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+      }
+    } else if (e.key === 'Escape') {
+      if (resultsBox) resultsBox.style.display = 'none';
+    }
+  });
+
+  // Fecha autocomplete ao clicar fora
+  document.addEventListener('click', (e) => {
+    if (resultsBox && !input.contains(e.target) && !resultsBox.contains(e.target)) {
+      resultsBox.style.display = 'none';
+    }
+    const batchMenu = document.getElementById('menu-batch-copies');
+    const batchBtn = document.getElementById('btn-batch-copies');
+    if (batchMenu && batchBtn && !batchMenu.contains(e.target) && !batchBtn.contains(e.target)) {
+      batchMenu.style.display = 'none';
+    }
+  });
+}
+
+// Pesquisa produtos e exibe no dropdown
+async function searchProductsForEtiquetas(term) {
+  const resultsBox = document.getElementById('etq-autocomplete-list');
+  if (!resultsBox) return;
+
+  try {
+    const res = await fetch(`/api/produtos?q=${encodeURIComponent(term)}&limit=8`);
+    if (!res.ok) throw new Error('Falha na busca');
+    const data = await res.json();
+    const prods = data.items || [];
+
+    if (prods.length === 0) {
+      resultsBox.innerHTML = `
+        <div style="padding: 0.75rem 1rem; color: var(--text-muted); font-size: 0.82rem; text-align: center;">
+          Nenhum produto encontrado para "<strong>${escapeHtml(term)}</strong>".
+        </div>
+      `;
+      resultsBox.style.display = 'block';
+      return;
+    }
+
+    resultsBox.innerHTML = prods.map((p, idx) => {
+      const codBarStr = p.CodBar ? `Barras: ${p.CodBar}` : 'Sem Barras';
+      const vendaStr = p.Venda !== null && p.Venda !== undefined ? `R$ ${Number(p.Venda).toFixed(2).replace('.', ',')}` : 'R$ 0,00';
+      const jsonStr = escapeHtml(JSON.stringify(p));
+
+      return `
+        <div class="etq-auto-item ${idx === 0 ? 'selected' : ''}" data-product-json="${jsonStr}" onclick="onSelectAutocompleteProduct(this)">
+          <div class="etq-auto-main">
+            <span class="etq-auto-name">#${p.CodPrd} - ${escapeHtml(p.Descricao_Produto || '')}</span>
+            <div class="etq-auto-meta">
+              <span>${escapeHtml(codBarStr)}</span>
+              <span>•</span>
+              <span>UN: ${escapeHtml(p.Embalagem || 'UN')}</span>
+              ${p.Marca ? `<span>•</span><span>${escapeHtml(p.Marca)}</span>` : ''}
+            </div>
+          </div>
+          <div class="etq-auto-price">${vendaStr}</div>
+        </div>
+      `;
+    }).join('');
+
+    resultsBox.style.display = 'block';
+  } catch (err) {
+    console.error('Erro na pesquisa de etiquetas:', err);
+  }
+}
+
+function onSelectAutocompleteProduct(el) {
+  try {
+    const jsonStr = el.dataset.productJson;
+    if (jsonStr) {
+      const prod = JSON.parse(jsonStr);
+      addProdutoToEtiquetasQueue(prod, 1);
+      const input = document.getElementById('etq-search-input');
+      if (input) input.value = '';
+      const box = document.getElementById('etq-autocomplete-list');
+      if (box) box.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('Erro ao selecionar produto:', e);
+  }
+}
+
+// Adiciona produto à fila de etiquetas
+function addProdutoToEtiquetasQueue(prod, copies = 1) {
+  if (!prod) return;
+
+  const cod = prod.CodPrd || prod.Codigo;
+  const existingIdx = etiquetasQueue.findIndex(it => (it.CodPrd && it.CodPrd === cod) || (it.Descricao_Produto === prod.Descricao_Produto && it.CodBar === prod.CodBar));
+
+  if (existingIdx !== -1) {
+    etiquetasQueue[existingIdx].copies = (parseInt(etiquetasQueue[existingIdx].copies, 10) || 1) + copies;
+    selectedPreviewIndex = existingIdx;
+    showToast(`Adicionada mais +${copies} etiqueta de "${prod.Descricao_Produto}".`, 'info', 2000);
+  } else {
+    const newItem = {
+      CodPrd: cod,
+      Descricao_Produto: prod.Descricao_Produto || 'PRODUTO SEM DESCRICAO',
+      Venda: parseFloat(prod.Venda || 0.0),
+      PrecoEtiqueta: parseFloat(prod.Venda || 0.0),
+      Venda_Promocao: parseFloat(prod.Venda_Promocao || 0.0),
+      Promocao: Boolean(prod.Promocao || (prod.Venda_Promocao > 0 && prod.Venda_Promocao < prod.Venda)),
+      CodBar: prod.CodBar || '',
+      Embalagem: prod.Embalagem || 'UN',
+      Marca: prod.Marca || '',
+      Local: prod.Local || '',
+      PesoLiquido: parseFloat(prod.PesoLiquido || 0.0),
+      Foto: prod.Foto || '',
+      copies: copies,
+      isManual: false
+    };
+    etiquetasQueue.push(newItem);
+    selectedPreviewIndex = etiquetasQueue.length - 1;
+    showToast(`"${prod.Descricao_Produto}" adicionado à fila de etiquetas.`, 'success', 2200);
+  }
+
+  renderEtiquetasQueue();
+}
+
+// Adiciona produto diretamente a partir de outras telas (ex: Cadastro de Produtos)
+async function adicionarProdutoAEtiquetasDirect(codPrd) {
+  try {
+    const res = await fetch(`/api/produtos/${codPrd}`);
+    if (!res.ok) throw new Error('Produto não encontrado');
+    const prod = await res.json();
+    addProdutoToEtiquetasQueue(prod, 1);
+    switchModule('etiquetas');
+  } catch (err) {
+    showToast(`Erro ao carregar produto #${codPrd}: ${err.message}`, 'error');
+  }
+}
+
+// Adiciona todos os produtos de um grupo
+async function adicionarGrupoInteiro() {
+  const sel = document.getElementById('etq-select-grupo');
+  if (!sel || !sel.value) {
+    showToast('Por favor, selecione um grupo na lista.', 'warning');
+    return;
+  }
+  const codGru = sel.value;
+  const grpNome = sel.options[sel.selectedIndex]?.text || `Grupo #${codGru}`;
+
+  try {
+    showToast(`Carregando produtos do ${grpNome}...`, 'info', 1800);
+    const res = await fetch(`/api/produtos?grupo=${codGru}&limit=500&ativo=1`);
+    if (!res.ok) throw new Error('Falha ao obter produtos do grupo');
+    const data = await res.json();
+    const items = data.items || [];
+
+    if (items.length === 0) {
+      showToast(`Nenhum produto ativo encontrado no ${grpNome}.`, 'warning');
+      return;
+    }
+
+    let adicionados = 0;
+    items.forEach(p => {
+      addProdutoToEtiquetasQueue(p, 1);
+      adicionados++;
+    });
+
+    showToast(`Adicionados ${adicionados} produtos do ${grpNome} à fila de impressão!`, 'success');
+  } catch (err) {
+    showToast(`Erro ao carregar grupo: ${err.message}`, 'error');
+  }
+}
+
+// Adiciona todos os produtos que estão em promoção
+async function adicionarProdutosPromocao() {
+  try {
+    showToast('Buscando produtos em promoção...', 'info', 1500);
+    const res = await fetch('/api/produtos?limit=250&ativo=1');
+    if (!res.ok) throw new Error('Falha na busca');
+    const data = await res.json();
+    const promos = (data.items || []).filter(p => p.Promocao || (p.Venda_Promocao > 0 && p.Venda_Promocao < p.Venda));
+
+    if (promos.length === 0) {
+      showToast('Nenhum produto cadastrado com promoção ativa no momento.', 'info');
+      return;
+    }
+
+    promos.forEach(p => addProdutoToEtiquetasQueue(p, 1));
+    showToast(`${promos.length} produto(s) em promoção adicionados à fila!`, 'success');
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+  }
+}
+
+// Renderiza a tabela da fila de etiquetas
+function renderEtiquetasQueue() {
+  const tbody = document.getElementById('etq-table-body');
+  const summaryEl = document.getElementById('etq-queue-summary-text');
+  const badgeItens = document.getElementById('etq-badge-itens-count');
+  const badgeTotal = document.getElementById('etq-badge-total-count');
+
+  const totalItems = etiquetasQueue.length;
+  const totalEtiquetas = etiquetasQueue.reduce((acc, it) => acc + (parseInt(it.copies, 10) || 1), 0);
+
+  if (badgeItens) badgeItens.textContent = totalItems;
+  if (badgeTotal) badgeTotal.textContent = totalEtiquetas;
+  if (summaryEl) summaryEl.textContent = `${totalItems} produto(s) (${totalEtiquetas} etiquetas no total)`;
+
+  // Salva no LocalStorage
+  try {
+    localStorage.setItem('etiquetas_gondola_queue', JSON.stringify(etiquetasQueue));
+  } catch (e) {}
+
+  if (!tbody) return;
+
+  if (totalItems === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+          <i class="fa-solid fa-barcode fa-3x" style="opacity: 0.3; margin-bottom: 0.75rem;"></i>
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">A fila de etiquetas está vazia</div>
+          <div style="font-size: 0.82rem; margin-top: 0.25rem;">
+            Digite o nome ou código de barras no campo acima, selecione um grupo ou clique em <strong>+ Item Avulso</strong>.
+          </div>
+        </td>
+      </tr>
+    `;
+    updateEtiquetaPreview();
+    return;
+  }
+
+  tbody.innerHTML = etiquetasQueue.map((it, idx) => {
+    const isSelected = idx === selectedPreviewIndex;
+    const isPromo = it.Promocao || (it.Venda_Promocao > 0 && it.Venda_Promocao < it.Venda);
+    const precoCadStr = `R$ ${(it.Venda || 0).toFixed(2).replace('.', ',')}`;
+    const precoEtqVal = it.PrecoEtiqueta !== undefined ? Number(it.PrecoEtiqueta).toFixed(2) : Number(it.Venda || 0).toFixed(2);
+    const codBarBadge = it.CodBar 
+      ? `<code style="font-size: 0.78rem;">${escapeHtml(it.CodBar)}</code>`
+      : `<span class="badge badge-inactive" style="font-size: 0.65rem;">Sem EAN</span>`;
+
+    return `
+      <tr style="${isSelected ? 'background: rgba(37,99,235,0.06); outline: 1px solid rgba(37,99,235,0.3);' : ''}">
+        <td style="text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+          ${idx + 1}
+        </td>
+        <td>
+          <div style="font-weight: 700; font-size: 0.85rem;">#${escapeHtml(String(it.CodPrd || '-'))}</div>
+          <div>${codBarBadge}</div>
+        </td>
+        <td>
+          <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-primary); cursor: pointer;" onclick="selecionarItemPrevia(${idx})" title="Clique para ver a prévia desta etiqueta">
+            ${escapeHtml(it.Descricao_Produto || '')}
+            ${isPromo ? `<span class="badge badge-warning" style="font-size: 0.65rem; margin-left: 0.3rem;"><i class="fa-solid fa-fire"></i> OFERTA</span>` : ''}
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">
+            UN: <strong>${escapeHtml(it.Embalagem || 'UN')}</strong>
+            ${it.Marca ? ` • ${escapeHtml(it.Marca)}` : ''}
+            ${it.Local ? ` • Loc: ${escapeHtml(it.Local)}` : ''}
+          </div>
+        </td>
+        <td style="text-align: right; font-family: monospace; font-size: 0.85rem; color: var(--text-muted);">
+          ${precoCadStr}
+        </td>
+        <td style="text-align: right;">
+          <input type="number" step="0.01" class="etq-price-input" value="${precoEtqVal}" onchange="updateItemPreco(${idx}, this.value)" title="Ajuste o valor que será impresso na etiqueta se necessário">
+        </td>
+        <td style="text-align: center;">
+          <div class="etq-copies-control">
+            <button type="button" class="etq-copies-btn" onclick="updateItemCopies(${idx}, ${(it.copies || 1) - 1})" title="Diminuir cópia">-</button>
+            <input type="number" min="1" max="999" class="etq-copies-input" value="${it.copies || 1}" onchange="updateItemCopies(${idx}, this.value)">
+            <button type="button" class="etq-copies-btn" onclick="updateItemCopies(${idx}, ${(it.copies || 1) + 1})" title="Aumentar cópia">+</button>
+          </div>
+        </td>
+        <td style="text-align: center;">
+          <div style="display: flex; justify-content: center; gap: 0.3rem;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="selecionarItemPrevia(${idx})" title="Visualizar Prévia" style="${isSelected ? 'background: var(--accent-blue); color: white;' : ''}">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removerItemFilaEtiquetas(${idx})" title="Remover da Fila">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  updateEtiquetaPreview();
+}
+
+function selecionarItemPrevia(index) {
+  selectedPreviewIndex = index;
+  renderEtiquetasQueue();
+}
+
+function updateItemCopies(index, val) {
+  let copies = parseInt(val, 10);
+  if (isNaN(copies) || copies < 1) copies = 1;
+  if (etiquetasQueue[index]) {
+    etiquetasQueue[index].copies = copies;
+    renderEtiquetasQueue();
+  }
+}
+
+function updateItemPreco(index, val) {
+  let p = parseFloat(val);
+  if (isNaN(p) || p < 0) p = 0;
+  if (etiquetasQueue[index]) {
+    etiquetasQueue[index].PrecoEtiqueta = p;
+    renderEtiquetasQueue();
+  }
+}
+
+function removerItemFilaEtiquetas(index) {
+  if (etiquetasQueue[index]) {
+    etiquetasQueue.splice(index, 1);
+    if (selectedPreviewIndex >= etiquetasQueue.length) {
+      selectedPreviewIndex = Math.max(0, etiquetasQueue.length - 1);
+    }
+    renderEtiquetasQueue();
+  }
+}
+
+function limparFilaEtiquetas() {
+  if (etiquetasQueue.length === 0) return;
+  if (confirm('Deseja remover todos os produtos da fila de etiquetas?')) {
+    etiquetasQueue = [];
+    selectedPreviewIndex = 0;
+    renderEtiquetasQueue();
+    showToast('Fila de etiquetas esvaziada.', 'info');
+  }
+}
+
+function toggleEtqBatchCopiesMenu() {
+  const menu = document.getElementById('menu-batch-copies');
+  if (menu) {
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function setAllCopies(num) {
+  etiquetasQueue.forEach(it => it.copies = num);
+  const menu = document.getElementById('menu-batch-copies');
+  if (menu) menu.style.display = 'none';
+  renderEtiquetasQueue();
+  showToast(`Todas as etiquetas ajustadas para ${num} cópia(s).`, 'success');
+}
+
+function incrementAllCopies(delta) {
+  etiquetasQueue.forEach(it => it.copies = Math.max(1, (it.copies || 1) + delta));
+  const menu = document.getElementById('menu-batch-copies');
+  if (menu) menu.style.display = 'none';
+  renderEtiquetasQueue();
+  showToast(`+${delta} cópia adicionada em todos os itens da fila.`, 'success');
+}
+
+// Atualização da Pré-visualização Fiel em SVG 90x30 mm
+function updateEtiquetaPreview() {
+  const mockup = document.getElementById('etq-label-mockup');
+  const badgeModel = document.getElementById('etq-preview-model-badge');
+  if (!mockup) return;
+
+  const currentItem = etiquetasQueue[selectedPreviewIndex] || {
+    CodPrd: 1042,
+    Descricao_Produto: 'EXEMPLO: LEITE CONDENSADO MOCOCA 395G',
+    Venda: 7.99,
+    PrecoEtiqueta: 7.99,
+    Venda_Promocao: 5.99,
+    Promocao: false,
+    CodBar: '7891000100103',
+    Embalagem: 'UN',
+    Marca: 'MOCOCA',
+    PesoLiquido: 0.395,
+    Local: 'A-02'
+  };
+
+  // Opções atuais
+  const modelo = document.getElementById('etq-opt-modelo')?.value || 'padrao';
+  const headerText = (document.getElementById('etq-opt-header')?.value || etiquetasConfig?.header_name || 'SUPERMERCADO').toUpperCase();
+  const showHeader = document.getElementById('etq-opt-show-header')?.checked ?? true;
+  const showDate = document.getElementById('etq-opt-show-date')?.checked ?? true;
+  const showCod = document.getElementById('etq-opt-show-cod')?.checked ?? true;
+  const showUnitPrice = document.getElementById('etq-opt-show-unit-price')?.checked ?? true;
+
+  if (badgeModel) {
+    if (modelo === 'promocional') badgeModel.textContent = 'Oferta Especial';
+    else if (modelo === 'por_unidade') badgeModel.textContent = 'Preço por Medida';
+    else badgeModel.textContent = 'Padrão Gôndola';
+  }
+
+  const rawDate = document.getElementById('etq-opt-date')?.value;
+  let dateFormatted = new Date().toLocaleDateString('pt-BR');
+  if (rawDate) {
+    const parts = rawDate.split('-');
+    if (parts.length === 3) dateFormatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+
+  // Preços
+  const precoNormal = parseFloat(currentItem.PrecoEtiqueta !== undefined ? currentItem.PrecoEtiqueta : currentItem.Venda) || 0.0;
+  const precoPromo = parseFloat(currentItem.Venda_Promocao || 0.0);
+  const isPromo = Boolean(modelo === 'promocional' || currentItem.Promocao || (precoPromo > 0 && precoPromo < precoNormal));
+
+  const precoPrincipal = isPromo && precoPromo > 0 ? precoPromo : precoNormal;
+  const precoStr = precoPrincipal.toFixed(2).replace('.', ',');
+  const parts = precoStr.split(',');
+  const inteiros = parts[0];
+  const centavos = parts[1];
+
+  // Informações de código e rodapé
+  const codPrd = currentItem.CodPrd || currentItem.Codigo || '';
+  const codBar = currentItem.CodBar || String(codPrd);
+  const emb = (currentItem.Embalagem || 'UN').toUpperCase();
+  const marca = (currentItem.Marca || '').toUpperCase();
+  const local = (currentItem.Local || '').toUpperCase();
+
+  let infoLinha = [];
+  if (showCod && codPrd) infoLinha.push(`CÓD: ${codPrd}`);
+  if (emb) infoLinha.push(`UN: ${emb}`);
+  if (marca) infoLinha.push(marca.slice(0, 10));
+  if (local) infoLinha.push(`LOC: ${local.slice(0, 8)}`);
+
+  // Cálculo de Preço por Unidade (Kg/Lt)
+  let textoUnitario = `À VISTA / ${emb}`;
+  if (showUnitPrice) {
+    const peso = parseFloat(currentItem.PesoLiquido || 0.0);
+    if (peso > 0 && ['KG', 'G', 'GR'].includes(emb)) {
+      const kg = (emb === 'G' || emb === 'GR' || peso > 50) ? (peso / 1000.0) : peso;
+      if (kg > 0) textoUnitario = `PREÇO P/ KG: R$ ${(precoPrincipal / kg).toFixed(2).replace('.', ',')}`;
+    } else if (peso > 0 && ['L', 'LT', 'ML'].includes(emb)) {
+      const lt = (emb === 'ML' || peso > 50) ? (peso / 1000.0) : peso;
+      if (lt > 0) textoUnitario = `PREÇO P/ LT: R$ ${(precoPrincipal / lt).toFixed(2).replace('.', ',')}`;
+    }
+  }
+
+  // Renderiza Código de Barras SVG
+  const barcodeSvgLines = generateBarcodeSvgLines(codBar, 20, 52, 160, 22);
+
+  // Monta o SVG em proporção exata 90x30 mm (viewBox: 0 0 900 300)
+  mockup.innerHTML = `
+    <svg viewBox="0 0 900 300" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; font-family: 'Inter', -apple-system, Arial, sans-serif; user-select: none;">
+      <!-- Margem e Fundo -->
+      <rect x="0" y="0" width="900" height="300" fill="#ffffff" />
+
+      <!-- Topo: Nome do Supermercado & Data -->
+      ${showHeader ? `<text x="25" y="32" font-size="24" font-weight="700" fill="#111827" letter-spacing="0.5">${escapeHtml(headerText.slice(0, 32))}</text>` : ''}
+      ${showDate ? `<text x="875" y="32" font-size="20" font-weight="600" fill="#4b5563" text-anchor="end">EMIS: ${dateFormatted}</text>` : ''}
+
+      <!-- Linha divisória fina -->
+      <line x1="25" y1="46" x2="875" y2="46" stroke="#9ca3af" stroke-width="2" />
+
+      <!-- Descrição do Produto (destaque) -->
+      <text x="25" y="80" font-size="32" font-weight="800" fill="#000000" letter-spacing="-0.3">
+        ${escapeHtml(currentItem.Descricao_Produto.slice(0, 42))}
+      </text>
+
+      <!-- Linha de Referência (Código, Unidade, Marca, Local) -->
+      <text x="25" y="112" font-size="20" font-weight="600" fill="#374151">
+        ${escapeHtml(infoLinha.join('  |  '))}
+      </text>
+
+      <!-- Código de Barras (Inferior Esquerdo) -->
+      <g transform="translate(10, 20)">
+        ${barcodeSvgLines}
+        <!-- Dígitos legíveis abaixo das barras -->
+        <text x="180" y="148" font-size="20" font-family="monospace" font-weight="700" fill="#111827" text-anchor="middle" letter-spacing="3">
+          ${escapeHtml(codBar)}
+        </text>
+      </g>
+
+      <!-- Caixa do Preço (Inferior Direito) -->
+      ${isPromo ? `
+        <!-- Modo OFERTA ESPECIAL -->
+        <rect x="495" y="105" width="380" height="175" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="4" />
+        <rect x="495" y="105" width="380" height="38" rx="4" fill="#dc2626" />
+        <text x="685" y="132" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">★ OFERTA ESPECIAL ★</text>
+        
+        <text x="515" y="168" font-size="22" font-weight="600" fill="#6b7280">DE: R$ ${(precoNormal || 0).toFixed(2).replace('.', ',')}</text>
+        <line x1="510" y1="162" x2="670" y2="162" stroke="#dc2626" stroke-width="3" />
+
+        <text x="515" y="222" font-size="30" font-weight="800" fill="#dc2626">POR R$</text>
+        <text x="635" y="235" font-size="82" font-weight="900" fill="#dc2626" letter-spacing="-2">${inteiros}</text>
+        <text x="635" y="180" font-size="38" font-weight="800" fill="#dc2626">,${centavos}</text>
+
+        <text x="685" y="268" font-size="18" font-weight="700" fill="#374151" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
+      ` : `
+        <!-- Modo PADRÃO GÔNDOLA -->
+        <rect x="525" y="108" width="350" height="172" rx="6" fill="#f9fafb" stroke="#111827" stroke-width="3" />
+        
+        <!-- Símbolo R$ -->
+        <text x="542" y="152" font-size="32" font-weight="800" fill="#111827">R$</text>
+        
+        <!-- Preço Gigante -->
+        <text x="595" y="210" font-size="106" font-weight="900" fill="#000000" letter-spacing="-3">${inteiros}</text>
+        <text x="${595 + (inteiros.length * 56)}" y="150" font-size="46" font-weight="900" fill="#000000">,${centavos}</text>
+
+        <!-- Rodapé do Preço: Preço por Kg / Unidade -->
+        <rect x="527" y="244" width="346" height="34" fill="#f3f4f6" />
+        <text x="700" y="268" font-size="20" font-weight="700" fill="#1f2937" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
+      `}
+    </svg>
+  `;
+}
+
+// Gerador de barras vetoriais SVG para simulação fiel do código de barras
+function generateBarcodeSvgLines(code, startX, startY, width, height) {
+  const clean = String(code || '1042').replace(/[^0-9A-Za-z]/g, '');
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) - hash) + clean.charCodeAt(i);
+    hash |= 0;
+  }
+
+  // Gera sequência pseudo-real de barras
+  const bits = [];
+  // Guard pattern
+  bits.push(1, 0, 1);
+  for (let i = 0; i < 40; i++) {
+    const bit = ((hash >> (i % 31)) & 1) ^ (i % 3 === 0 ? 1 : 0);
+    bits.push(bit);
+  }
+  // Guard pattern center & end
+  bits.push(0, 1, 0, 1, 0, 1);
+  for (let i = 0; i < 40; i++) {
+    const bit = ((hash >> (i % 29)) & 1) ^ (i % 2 === 0 ? 1 : 0);
+    bits.push(bit);
+  }
+  bits.push(1, 0, 1);
+
+  const barWidth = width / bits.length;
+  let svg = `<g transform="translate(${startX}, ${startY})">`;
+  let curX = 0;
+
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === 1) {
+      svg += `<rect x="${curX.toFixed(1)}" y="0" width="${(barWidth * 1.1).toFixed(1)}" height="${height * 2.8}" fill="#000000" />`;
+    }
+    curX += barWidth;
+  }
+  svg += '</g>';
+  return svg;
+}
+
+function onEtiquetaOptionChange() {
+  updateEtiquetaPreview();
+}
+
+// Alterna o método de impressão (Rede, Windows, Navegador)
+function switchPrintMethod(method) {
+  etqPrintMethod = method;
+  document.querySelectorAll('.etq-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `tab-btn-${method}`);
+  });
+  document.querySelectorAll('.print-method-pane').forEach(pane => {
+    pane.style.display = (pane.id === `print-method-pane-${method}`) ? 'block' : 'none';
+  });
+}
+
+// Coleta as opções atuais configuradas na tela
+function getEtiquetasOptionsPayload() {
+  const dpi = parseInt(document.querySelector('input[name="etq_dpi"]:checked')?.value || '203', 10);
+  const modelo = document.getElementById('etq-opt-modelo')?.value || 'padrao';
+  const headerText = document.getElementById('etq-opt-header')?.value || '';
+  const rawDate = document.getElementById('etq-opt-date')?.value;
+  let customDate = '';
+  if (rawDate) {
+    const p = rawDate.split('-');
+    if (p.length === 3) customDate = `${p[2]}/${p[1]}/${p[0]}`;
+  }
+
+  return {
+    dpi: dpi,
+    modelo: modelo,
+    header_text: headerText,
+    custom_date: customDate,
+    show_header: document.getElementById('etq-opt-show-header')?.checked ?? true,
+    show_date: document.getElementById('etq-opt-show-date')?.checked ?? true,
+    show_cod: document.getElementById('etq-opt-show-cod')?.checked ?? true,
+    show_unit_price: document.getElementById('etq-opt-show-unit-price')?.checked ?? true
+  };
+}
+
+// Execução da Impressão na Zebra
+async function executarImpressaoZebra() {
+  if (etiquetasQueue.length === 0) {
+    showToast('A fila de etiquetas está vazia. Adicione produtos antes de imprimir.', 'warning');
+    return;
+  }
+
+  const printBtn = document.getElementById('btn-print-zebra-primary');
+  const originalText = printBtn ? printBtn.innerHTML : '';
+  if (printBtn) {
+    printBtn.disabled = true;
+    printBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+  }
+
+  try {
+    const options = getEtiquetasOptionsPayload();
+
+    if (etqPrintMethod === 'rede') {
+      const ip = document.getElementById('etq-ip-input')?.value?.trim();
+      const port = parseInt(document.getElementById('etq-port-input')?.value?.trim() || '9100', 10);
+
+      if (!ip) {
+        showToast('Por favor, informe o IP da impressora Zebra.', 'warning');
+        if (printBtn) { printBtn.disabled = false; printBtn.innerHTML = originalText; }
+        return;
+      }
+      localStorage.setItem('zebra_printer_ip', ip);
+
+      showToast(`Enviando ${etiquetasQueue.length} produto(s) para a Zebra em ${ip}:${port}...`, 'info', 2500);
+
+      const res = await fetch('/api/etiquetas/imprimir-rede', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip: ip,
+          port: port,
+          items: etiquetasQueue,
+          options: options
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao comunicar com a impressora.');
+
+      showToast(`Sucesso! ${data.total_etiquetas || ''} etiqueta(s) impressa(s) na Zebra (${ip})!`, 'success', 5000);
+
+    } else if (etqPrintMethod === 'windows') {
+      const printer = document.getElementById('etq-select-windows-printer')?.value;
+      if (!printer) {
+        showToast('Selecione uma impressora do Windows.', 'warning');
+        if (printBtn) { printBtn.disabled = false; printBtn.innerHTML = originalText; }
+        return;
+      }
+
+      showToast(`Enviando para o spooler do Windows (${printer})...`, 'info', 2500);
+
+      const res = await fetch('/api/etiquetas/imprimir-windows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printer_name: printer,
+          items: etiquetasQueue,
+          options: options
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao enviar para o spooler.');
+
+      showToast(`Etiquetas enviadas com sucesso para "${printer}"!`, 'success', 5000);
+
+    } else {
+      // Método Navegador
+      imprimirEtiquetasNavegador();
+    }
+
+  } catch (err) {
+    showToast(`Erro na impressão: ${err.message}`, 'error', 6000);
+  } finally {
+    if (printBtn) {
+      printBtn.disabled = false;
+      printBtn.innerHTML = originalText;
+    }
+  }
+}
+
+// Impressão Térmica Direta pelo Navegador (Ctrl+P @page 90mm x 30mm)
+function imprimirEtiquetasNavegador() {
+  if (etiquetasQueue.length === 0) {
+    showToast('A fila de etiquetas está vazia.', 'warning');
+    return;
+  }
+
+  const printContainer = document.getElementById('etiqueta-printable-container');
+  if (!printContainer) return;
+
+  const options = getEtiquetasOptionsPayload();
+  const headerText = (options.header_text || etiquetasConfig?.header_name || 'SUPERMERCADO').toUpperCase();
+  const dateStr = options.custom_date || new Date().toLocaleDateString('pt-BR');
+
+  let html = '';
+  etiquetasQueue.forEach(it => {
+    const copies = parseInt(it.copies, 10) || 1;
+    const precoNormal = parseFloat(it.PrecoEtiqueta !== undefined ? it.PrecoEtiqueta : it.Venda) || 0.0;
+    const precoPromo = parseFloat(it.Venda_Promocao || 0.0);
+    const isPromo = Boolean(options.modelo === 'promocional' || it.Promocao || (precoPromo > 0 && precoPromo < precoNormal));
+    const precoFinal = isPromo && precoPromo > 0 ? precoPromo : precoNormal;
+    const parts = precoFinal.toFixed(2).replace('.', ',').split(',');
+    const inteiros = parts[0];
+    const centavos = parts[1];
+    const codBar = it.CodBar || it.CodPrd || '';
+    const emb = (it.Embalagem || 'UN').toUpperCase();
+
+    // Cria as cópias necessárias
+    for (let c = 0; c < copies; c++) {
+      html += `
+        <div class="etiqueta-thermal-label" style="width: 90mm; height: 30mm; box-sizing: border-box; padding: 2mm 3mm; position: relative; font-family: Arial, sans-serif; background: #fff; color: #000; overflow: hidden; page-break-after: always;">
+          <!-- Topo -->
+          <div style="display: flex; justify-content: space-between; font-size: 7pt; font-weight: bold; border-bottom: 0.8pt solid #000; padding-bottom: 1mm;">
+            <span>${escapeHtml(headerText.slice(0, 32))}</span>
+            <span>EMIS: ${dateStr}</span>
+          </div>
+          <!-- Descrição -->
+          <div style="font-size: 9.5pt; font-weight: 900; line-height: 1.1; margin-top: 1.5mm; height: 7mm; overflow: hidden;">
+            ${escapeHtml((it.Descricao_Produto || '').slice(0, 40))}
+          </div>
+          <!-- Informações de Apoio -->
+          <div style="font-size: 6.5pt; color: #333; margin-top: 0.5mm;">
+            CÓD: <strong>${it.CodPrd || '-'}</strong> | UN: <strong>${emb}</strong> ${it.Marca ? '| ' + escapeHtml(it.Marca) : ''}
+          </div>
+          <!-- Barras e Preço lado a lado -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 1mm;">
+            <div style="font-family: monospace; font-size: 7pt; font-weight: bold;">
+              <div style="font-size: 5pt; letter-spacing: 2px; font-family: 'Courier New', monospace; font-weight: bold;">|||||||||||||||||||||||||</div>
+              <div>${escapeHtml(codBar)}</div>
+            </div>
+            <!-- Preço -->
+            <div style="text-align: right; border: 1pt solid #000; padding: 0.5mm 2mm; border-radius: 2pt;">
+              <span style="font-size: 7.5pt; font-weight: bold; vertical-align: top;">R$</span>
+              <span style="font-size: 19pt; font-weight: 900; line-height: 1;">${inteiros}</span>
+              <span style="font-size: 10pt; font-weight: 900; vertical-align: top;">,${centavos}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  });
+
+  printContainer.innerHTML = html;
+  setTimeout(() => {
+    window.print();
+  }, 100);
+}
+
+// Download do arquivo .ZPL puro
+async function baixarArquivoZpl() {
+  if (etiquetasQueue.length === 0) {
+    showToast('A fila de etiquetas está vazia.', 'warning');
+    return;
+  }
+
+  try {
+    const options = getEtiquetasOptionsPayload();
+    const res = await fetch('/api/etiquetas/gerar-zpl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: etiquetasQueue,
+        options: options
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao gerar ZPL.');
+
+    const blob = new Blob([data.zpl], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `etiquetas_gondola_9x3_${new Date().toISOString().slice(0, 10)}.zpl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Arquivo .ZPL baixado com sucesso!', 'success');
+  } catch (err) {
+    showToast(`Erro ao baixar ZPL: ${err.message}`, 'error');
+  }
+}
+
+// Visualizador de Código ZPL
+async function visualizarCodigoZpl() {
+  if (etiquetasQueue.length === 0) {
+    showToast('A fila de etiquetas está vazia.', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('modal-etiqueta-zpl');
+  const txtArea = document.getElementById('modal-zpl-code-area');
+  if (!modal || !txtArea) return;
+
+  txtArea.value = 'Gerando comandos ZPL II...';
+  modal.classList.add('active');
+
+  try {
+    const options = getEtiquetasOptionsPayload();
+    const res = await fetch('/api/etiquetas/gerar-zpl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: etiquetasQueue,
+        options: options
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Falha ao gerar ZPL.');
+    txtArea.value = data.zpl;
+  } catch (err) {
+    txtArea.value = `Erro ao gerar código ZPL: ${err.message}`;
+  }
+}
+
+function fecharModalZpl() {
+  const modal = document.getElementById('modal-etiqueta-zpl');
+  if (modal) modal.classList.remove('active');
+}
+
+function copiarZplParaTransferencia() {
+  const txtArea = document.getElementById('modal-zpl-code-area');
+  if (!txtArea || !txtArea.value) return;
+
+  navigator.clipboard.writeText(txtArea.value).then(() => {
+    showToast('Código ZPL copiado para a área de transferência!', 'success');
+  }).catch(() => {
+    txtArea.select();
+    document.execCommand('copy');
+    showToast('Código ZPL copiado!', 'success');
+  });
+}
+
+// Teste de renderização via motor oficial Labelary
+async function testarPreviewLabelary() {
+  const btn = document.getElementById('btn-testar-labelary');
+  const mockup = document.getElementById('etq-label-mockup');
+  if (!mockup) return;
+
+  const origBtnText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Renderizando...';
+  }
+
+  try {
+    const currentItem = etiquetasQueue[selectedPreviewIndex] || {
+      CodPrd: 1042,
+      Descricao_Produto: 'EXEMPLO: LEITE CONDENSADO MOCOCA 395G',
+      Venda: 7.99,
+      PrecoEtiqueta: 7.99,
+      CodBar: '7891000100103',
+      Embalagem: 'UN',
+      Marca: 'MOCOCA'
+    };
+
+    const options = getEtiquetasOptionsPayload();
+    const res = await fetch('/api/etiquetas/gerar-zpl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [currentItem],
+        options: options
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.zpl) throw new Error('Não foi possível obter ZPL');
+
+    const dpmm = options.dpi === 300 ? '12dpmm' : '8dpmm';
+    // Labelary API oficial
+    const labelaryUrl = `http://api.labelary.com/v1/printers/${dpmm}/labels/90x30/0/`;
+    
+    const labRes = await fetch(labelaryUrl, {
+      method: 'POST',
+      headers: { 'Accept': 'image/png' },
+      body: data.zpl
+    });
+
+    if (!labRes.ok) throw new Error('Motor Labelary indisponível');
+    const blob = await labRes.blob();
+    const imgUrl = URL.createObjectURL(blob);
+
+    mockup.innerHTML = `
+      <div style="position: relative; width: 100%; height: 100%;">
+        <img src="${imgUrl}" alt="Labelary ZPL Render" style="width: 100%; height: 100%; object-fit: contain; background: #fff;" />
+        <button type="button" onclick="updateEtiquetaPreview()" style="position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); color: #fff; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+          Voltar ao SVG
+        </button>
+      </div>
+    `;
+    showToast('Etiqueta renderizada com sucesso pelo motor Zebra Labelary!', 'success');
+  } catch (err) {
+    showToast(`Aviso: Prévia oficial externa inacessível (${err.message}). Mantendo prévia vetorial nativa.`, 'warning');
+    updateEtiquetaPreview();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origBtnText;
+    }
+  }
+}
+
+// Modal de Item Avulso / Manual
+function abrirModalProdutoManualEtiqueta() {
+  const modal = document.getElementById('modal-etiqueta-manual');
+  if (!modal) return;
+  document.getElementById('manual-desc').value = '';
+  document.getElementById('manual-cod').value = '';
+  document.getElementById('manual-emb').value = 'UN';
+  document.getElementById('manual-codbar').value = '';
+  document.getElementById('manual-preco').value = '';
+  document.getElementById('manual-preco-promo').value = '';
+  document.getElementById('manual-copies').value = '1';
+  modal.classList.add('active');
+  setTimeout(() => {
+    document.getElementById('manual-desc')?.focus();
+  }, 100);
+}
+
+function fecharModalProdutoManualEtiqueta() {
+  const modal = document.getElementById('modal-etiqueta-manual');
+  if (modal) modal.classList.remove('active');
+}
+
+function confirmarAdicionarItemManual() {
+  const desc = document.getElementById('manual-desc')?.value?.trim();
+  const preco = parseFloat(document.getElementById('manual-preco')?.value);
+
+  if (!desc) {
+    showToast('A descrição do produto é obrigatória.', 'warning');
+    return;
+  }
+  if (isNaN(preco) || preco < 0) {
+    showToast('Informe um preço de venda válido.', 'warning');
+    return;
+  }
+
+  const cod = document.getElementById('manual-cod')?.value?.trim() || Math.floor(1000 + Math.random() * 9000);
+  const emb = document.getElementById('manual-emb')?.value?.trim() || 'UN';
+  const codBar = document.getElementById('manual-codbar')?.value?.trim() || '';
+  const precoPromo = parseFloat(document.getElementById('manual-preco-promo')?.value) || 0;
+  const copies = parseInt(document.getElementById('manual-copies')?.value, 10) || 1;
+
+  const manualItem = {
+    CodPrd: cod,
+    Descricao_Produto: desc.toUpperCase(),
+    Venda: preco,
+    PrecoEtiqueta: preco,
+    Venda_Promocao: precoPromo,
+    Promocao: precoPromo > 0 && precoPromo < preco,
+    CodBar: codBar,
+    Embalagem: emb.toUpperCase(),
+    Marca: '',
+    Local: '',
+    copies: copies,
+    isManual: true
+  };
+
+  etiquetasQueue.push(manualItem);
+  selectedPreviewIndex = etiquetasQueue.length - 1;
+  fecharModalProdutoManualEtiqueta();
+  renderEtiquetasQueue();
+  showToast(`Item manual "${desc}" adicionado à fila!`, 'success');
+}

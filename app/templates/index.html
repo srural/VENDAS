@@ -88,6 +88,10 @@
           <i class="fa-solid fa-boxes-stacked"></i>
           <span>Produtos</span>
         </button>
+        <button class="nav-item" id="nav-etiquetas" onclick="switchModule('etiquetas')" title="Emissor de Etiquetas de Gôndola (Zebra 9x3)">
+          <i class="fa-solid fa-barcode"></i>
+          <span>Etiquetas Gôndola 9x3</span>
+        </button>
         <button class="nav-item" id="nav-grupos" onclick="switchModule('grupos')" title="Grupos de Produtos">
           <i class="fa-solid fa-layer-group"></i>
           <span>Grupos de Produtos</span>
@@ -200,6 +204,12 @@
           </button>
           <button class="btn btn-primary btn-sm module-btn" id="btn-new-empresa" onclick="openEmpresaModal()" style="display: none;">
             <i class="fa-solid fa-plus"></i> Nova Empresa
+          </button>
+          <button class="btn btn-warning btn-sm module-btn" id="btn-header-etiquetas-novo" onclick="abrirModalProdutoManualEtiqueta()" style="display: none;" title="Adicionar produto avulso à fila">
+            <i class="fa-solid fa-plus"></i> Item Avulso
+          </button>
+          <button class="btn btn-emerald btn-sm module-btn" id="btn-header-etiquetas-imprimir" onclick="executarImpressaoZebra()" style="display: none;" title="Imprimir etiquetas na Zebra">
+            <i class="fa-solid fa-bolt"></i> Imprimir Zebra
           </button>
           <button class="btn btn-secondary btn-sm module-btn" id="btn-print-rel-vendas-produto" onclick="imprimirRelatorioVendasProduto()" style="display: none;" title="Imprimir Relatório Formatado / Salvar PDF">
             <i class="fa-solid fa-print"></i> Imprimir Relatório
@@ -741,6 +751,10 @@
                 <option value="all">Todos os Estoques</option>
                 <option value="1">Estoque Baixo / Mínimo</option>
               </select>
+
+              <button type="button" class="btn btn-warning" onclick="switchModule('etiquetas')" title="Abrir Emissor de Etiquetas de Gôndola 9x3">
+                <i class="fa-solid fa-barcode"></i> Etiquetas Gôndola 9x3
+              </button>
             </div>
           </div>
 
@@ -787,6 +801,295 @@
                 <button class="btn btn-secondary btn-sm" id="btn-next-prd" onclick="changeProductPage(1)">
                   Próximo <i class="fa-solid fa-chevron-right"></i>
                 </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== MODULE: ETIQUETAS DE GÔNDOLA 9X3 (ZEBRA) ==================== -->
+        <section class="module-view" id="view-etiquetas">
+          <!-- Top Header Info & Badges -->
+          <div class="etq-header-banner">
+            <div class="etq-header-left">
+              <div class="etq-title-wrap">
+                <div class="etq-icon-box">
+                  <i class="fa-solid fa-barcode"></i>
+                </div>
+                <div>
+                  <h2 class="etq-title">Emissor de Etiquetas de Gôndola 9x3 (Supermercado / Zebra)</h2>
+                  <p class="etq-subtitle">Etiquetas padrão prateleira 90mm x 30mm com código de barras, código interno, descrição e preço em destaque para impressoras Zebra ZPL II (203/300 DPI).</p>
+                </div>
+              </div>
+            </div>
+            <div class="etq-header-badges">
+              <div class="etq-badge etq-badge-dim" title="Dimensões oficiais da etiqueta de gôndola">
+                <i class="fa-solid fa-ruler-combined"></i>
+                <span>90 x 30 mm (9x3 cm)</span>
+              </div>
+              <div class="etq-badge etq-badge-items">
+                <i class="fa-solid fa-boxes-stacked"></i>
+                <span>Itens: <strong id="etq-badge-itens-count">0</strong></span>
+              </div>
+              <div class="etq-badge etq-badge-total">
+                <i class="fa-solid fa-tags"></i>
+                <span>Total Etiquetas: <strong id="etq-badge-total-count">0</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Bar -->
+          <div class="etq-action-bar">
+            <div class="etq-action-left">
+              <button type="button" class="btn btn-warning" onclick="abrirModalProdutoManualEtiqueta()" title="Adicionar produto manual/avulso que não está no banco">
+                <i class="fa-solid fa-plus"></i> + Item Avulso / Manual
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="limparFilaEtiquetas()" title="Remover todos os itens da fila de impressão">
+                <i class="fa-solid fa-trash-can"></i> Limpar Fila
+              </button>
+              <div class="dropdown-wrap" style="position: relative; display: inline-block;">
+                <button type="button" class="btn btn-secondary" onclick="toggleEtqBatchCopiesMenu()" id="btn-batch-copies">
+                  <i class="fa-solid fa-copy"></i> Ajustar Cópias <i class="fa-solid fa-chevron-down" style="font-size: 0.75rem;"></i>
+                </button>
+                <div class="dropdown-menu-floating" id="menu-batch-copies" style="display: none; position: absolute; top: 100%; left: 0; z-index: 100; min-width: 170px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); padding: 0.35rem; margin-top: 4px;">
+                  <button type="button" class="dropdown-item-btn" onclick="setAllCopies(1)">1 cópia em todos</button>
+                  <button type="button" class="dropdown-item-btn" onclick="setAllCopies(2)">2 cópias em todos</button>
+                  <button type="button" class="dropdown-item-btn" onclick="setAllCopies(3)">3 cópias em todos</button>
+                  <button type="button" class="dropdown-item-btn" onclick="setAllCopies(5)">5 cópias em todos</button>
+                  <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
+                  <button type="button" class="dropdown-item-btn" onclick="incrementAllCopies(1)">+1 cópia em todos</button>
+                </div>
+              </div>
+            </div>
+            <div class="etq-action-right">
+              <button type="button" class="btn btn-info" onclick="visualizarCodigoZpl()" title="Ver e copiar os comandos ZPL gerados">
+                <i class="fa-solid fa-code"></i> Ver Código ZPL
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="baixarArquivoZpl()" title="Download do arquivo .zpl para Zebra Setup Utilities">
+                <i class="fa-solid fa-download"></i> Baixar .ZPL
+              </button>
+              <button type="button" class="btn btn-secondary" onclick="imprimirEtiquetasNavegador()" title="Imprimir usando a janela do navegador em impressora térmica (Ctrl+P / 90x30)">
+                <i class="fa-solid fa-print"></i> Imprimir (Navegador)
+              </button>
+              <button type="button" class="btn btn-emerald btn-lg" onclick="executarImpressaoZebra()" id="btn-print-zebra-primary" title="Enviar diretamente para a impressora Zebra">
+                <i class="fa-solid fa-bolt"></i> Imprimir na Zebra
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Two-Column Layout -->
+          <div class="etq-grid-layout">
+            <!-- Left Column: Fila de Produtos & Pesquisa -->
+            <div class="etq-col-queue">
+              <!-- Search & Group Selection Card -->
+              <div class="etq-card">
+                <div class="etq-search-box" style="position: relative;">
+                  <div class="search-input-wrapper etq-search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="etq-search-input" class="search-input" placeholder="Buscar por nome, código, barras ou marca... (Pressione Enter para adicionar)" autocomplete="off">
+                    <span id="etq-search-spinner" style="display: none; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--accent-blue);">
+                      <i class="fa-solid fa-spinner fa-spin"></i>
+                    </span>
+                  </div>
+                  <!-- Floating search results dropdown -->
+                  <div class="etq-autocomplete-results" id="etq-autocomplete-list" style="display: none;"></div>
+                </div>
+
+                <div class="etq-filter-row">
+                  <div class="etq-filter-group" style="flex: 1; display: flex; align-items: center; gap: 0.5rem;">
+                    <label for="etq-select-grupo" class="etq-label-mini" style="white-space: nowrap; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Por Grupo:</label>
+                    <select id="etq-select-grupo" class="filter-select" style="flex: 1;">
+                      <option value="">Selecione um grupo...</option>
+                    </select>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarGrupoInteiro()" title="Carregar todos os produtos ativos do grupo selecionado">
+                    <i class="fa-solid fa-layer-group"></i> + Adicionar Grupo Inteiro
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarProdutosPromocao()" title="Carregar produtos em promoção">
+                    <i class="fa-solid fa-fire" style="color: var(--accent-amber);"></i> + Produtos em Oferta
+                  </button>
+                </div>
+              </div>
+
+              <!-- Table Card with Queue -->
+              <div class="etq-card etq-table-card">
+                <div class="etq-card-header">
+                  <div class="etq-card-title">
+                    <i class="fa-solid fa-list-check"></i> Fila de Etiquetas para Impressão
+                  </div>
+                  <div class="etq-card-sub" id="etq-queue-summary-text">0 produto(s) na fila</div>
+                </div>
+
+                <div class="table-responsive etq-table-responsive">
+                  <table class="data-table etq-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 40px; text-align: center;">Item</th>
+                        <th style="width: 100px;">Cód. / Barras</th>
+                        <th>Descrição do Produto</th>
+                        <th style="width: 95px; text-align: right;">Preço Cad.</th>
+                        <th style="width: 120px; text-align: right;">Preço Etq. (R$)</th>
+                        <th style="width: 110px; text-align: center;">Qtd. Etq.</th>
+                        <th style="width: 75px; text-align: center;">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="etq-table-body">
+                      <!-- Rendered by JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Live 90x30 Preview & Settings -->
+            <div class="etq-col-sidebar">
+              <!-- Live 90x30 mm Label Preview Card -->
+              <div class="etq-card etq-preview-card">
+                <div class="etq-card-header">
+                  <div class="etq-card-title">
+                    <i class="fa-solid fa-eye"></i> Prévia da Etiqueta (90 x 30 mm)
+                  </div>
+                  <span class="badge badge-warning" id="etq-preview-model-badge">Padrão Gôndola</span>
+                </div>
+
+                <!-- Label Frame (Scaled 90x30 mm ratio) -->
+                <div class="etq-preview-viewport">
+                  <div class="etq-label-sheet-mockup" id="etq-label-mockup">
+                    <!-- SVG rendered live by JS -->
+                  </div>
+                </div>
+
+                <div class="etq-preview-actions">
+                  <span class="etq-preview-caption">Prévia gráfica idêntica ao código ZPL físico</span>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="testarPreviewLabelary()" id="btn-testar-labelary" title="Gerar prévia exata usando o motor oficial da Zebra (Labelary)">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> Render Oficial (Labelary)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Label Model & Content Options Card -->
+              <div class="etq-card">
+                <div class="etq-card-header">
+                  <div class="etq-card-title">
+                    <i class="fa-solid fa-sliders"></i> Layout & Campos da Etiqueta
+                  </div>
+                </div>
+
+                <div class="etq-form-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="etq-opt-modelo" style="font-size: 0.82rem; font-weight: 600;">Modelo de Layout:</label>
+                    <select id="etq-opt-modelo" class="form-control" onchange="onEtiquetaOptionChange()">
+                      <option value="padrao">Padrão Gôndola Varejo (Preço Gigante)</option>
+                      <option value="promocional">Oferta Especial (De / Por)</option>
+                      <option value="por_unidade">Preço por Unidade de Medida (Kg/Lt)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="etq-opt-header" style="font-size: 0.82rem; font-weight: 600;">Nome Supermercado (Cabeçalho):</label>
+                    <input type="text" id="etq-opt-header" class="form-control" maxlength="32" placeholder="Nome do Supermercado..." oninput="onEtiquetaOptionChange()">
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="etq-opt-date" style="font-size: 0.82rem; font-weight: 600;">Data de Emissão:</label>
+                    <input type="date" id="etq-opt-date" class="form-control" onchange="onEtiquetaOptionChange()">
+                  </div>
+
+                  <div class="etq-checkbox-grid">
+                    <label class="etq-checkbox-item">
+                      <input type="checkbox" id="etq-opt-show-header" checked onchange="onEtiquetaOptionChange()">
+                      <span>Exibir Nome Supermercado</span>
+                    </label>
+                    <label class="etq-checkbox-item">
+                      <input type="checkbox" id="etq-opt-show-date" checked onchange="onEtiquetaOptionChange()">
+                      <span>Exibir Data de Emissão</span>
+                    </label>
+                    <label class="etq-checkbox-item">
+                      <input type="checkbox" id="etq-opt-show-cod" checked onchange="onEtiquetaOptionChange()">
+                      <span>Exibir Código & Unidade</span>
+                    </label>
+                    <label class="etq-checkbox-item">
+                      <input type="checkbox" id="etq-opt-show-unit-price" checked onchange="onEtiquetaOptionChange()">
+                      <span>Exibir Preço p/ Kg / Litro</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Printer & Communication Card -->
+              <div class="etq-card">
+                <div class="etq-card-header">
+                  <div class="etq-card-title">
+                    <i class="fa-solid fa-print"></i> Comunicação com a Impressora Zebra
+                  </div>
+                </div>
+
+                <div class="etq-form-body">
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" style="font-size: 0.82rem; font-weight: 600;">Resolução da Zebra:</label>
+                    <div class="etq-radio-group">
+                      <label class="etq-radio-label">
+                        <input type="radio" name="etq_dpi" value="203" checked onchange="onEtiquetaOptionChange()">
+                        <span>203 DPI (8 dots/mm - GC420t, ZD220, ZD230, GK420t)</span>
+                      </label>
+                      <label class="etq-radio-label">
+                        <input type="radio" name="etq_dpi" value="300" onchange="onEtiquetaOptionChange()">
+                        <span>300 DPI (12 dots/mm - Alta Definição)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" style="font-size: 0.82rem; font-weight: 600;">Método de Disparo / Envio:</label>
+                    <div class="etq-tab-buttons">
+                      <button type="button" class="etq-tab-btn active" id="tab-btn-rede" onclick="switchPrintMethod('rede')">
+                        <i class="fa-solid fa-network-wired"></i> Rede TCP/IP
+                      </button>
+                      <button type="button" class="etq-tab-btn" id="tab-btn-windows" onclick="switchPrintMethod('windows')">
+                        <i class="fa-brands fa-windows"></i> Windows Spooler
+                      </button>
+                      <button type="button" class="etq-tab-btn" id="tab-btn-navegador" onclick="switchPrintMethod('navegador')">
+                        <i class="fa-solid fa-browser"></i> Navegador
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Tab 1: Rede TCP/IP -->
+                  <div id="print-method-pane-rede" class="print-method-pane active">
+                    <div class="form-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
+                      <div class="form-group" style="flex: 2; margin-bottom: 0;">
+                        <label class="form-label" for="etq-ip-input" style="font-size: 0.78rem;">IP da Zebra na Rede:</label>
+                        <input type="text" id="etq-ip-input" class="form-control" placeholder="Ex: 192.168.1.200">
+                      </div>
+                      <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label class="form-label" for="etq-port-input" style="font-size: 0.78rem;">Porta:</label>
+                        <input type="number" id="etq-port-input" class="form-control" value="9100">
+                      </div>
+                    </div>
+                    <div class="form-text-mini" style="font-size: 0.75rem; color: var(--text-muted);">
+                      <i class="fa-solid fa-circle-info" style="color: var(--accent-blue);"></i> Envio direto por Socket Raw (porta 9100). Ideal para Zebra na rede cabeada ou Wi-Fi.
+                    </div>
+                  </div>
+
+                  <!-- Tab 2: Windows Spooler -->
+                  <div id="print-method-pane-windows" class="print-method-pane" style="display: none;">
+                    <div class="form-group" style="margin-bottom: 0.4rem;">
+                      <label class="form-label" for="etq-select-windows-printer" style="font-size: 0.78rem;">Impressora Windows:</label>
+                      <select id="etq-select-windows-printer" class="form-control">
+                        <option value="">Carregando impressoras do Windows...</option>
+                      </select>
+                    </div>
+                    <div class="form-text-mini" style="font-size: 0.75rem; color: var(--text-muted);">
+                      <i class="fa-solid fa-circle-info" style="color: var(--accent-emerald);"></i> Envia ZPL para a fila de impressão do Windows (driver Zebra ou Generic / Text Only).
+                    </div>
+                  </div>
+
+                  <!-- Tab 3: Navegador -->
+                  <div id="print-method-pane-navegador" class="print-method-pane" style="display: none;">
+                    <div class="form-text-mini" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                      <i class="fa-solid fa-circle-info" style="color: var(--accent-purple);"></i> Abre o diálogo de impressão térmica (Ctrl+P) formatado com @page 90mm x 30mm.
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -5126,6 +5429,100 @@
       </div>
     </div>
   </div>
+
+  <!-- ==================== MODAL: PRODUTO AVULSO / MANUAL PARA ETIQUETAS ==================== -->
+  <div class="modal-backdrop" id="modal-etiqueta-manual">
+    <div class="modal-container" style="max-width: 520px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-tag"></i> Adicionar Item Avulso para Etiquetar
+        </div>
+        <button class="modal-close" onclick="fecharModalProdutoManualEtiqueta()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Gere etiquetas rápidas de gôndola para itens promocionais, hortifrúti, padaria ou produtos sem cadastro imediato.
+        </p>
+
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" for="manual-desc">Descrição do Produto: *</label>
+          <input type="text" id="manual-desc" class="form-control" placeholder="Ex: BANANA PRATA KG ou REFRIG COCA COLA 2L" maxlength="70" required>
+        </div>
+
+        <div class="form-row" style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem;">
+          <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label class="form-label" for="manual-cod">Código Interno:</label>
+            <input type="text" id="manual-cod" class="form-control" placeholder="Ex: 9901">
+          </div>
+          <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label class="form-label" for="manual-emb">Unidade:</label>
+            <input type="text" id="manual-emb" class="form-control" value="UN" placeholder="UN, KG, CX">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0.75rem;">
+          <label class="form-label" for="manual-codbar">Código de Barras (EAN-13 ou Code 128):</label>
+          <input type="text" id="manual-codbar" class="form-control" placeholder="Ex: 7891234567890">
+        </div>
+
+        <div class="form-row" style="display: flex; gap: 0.75rem;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="manual-preco">Preço de Venda (R$): *</label>
+            <input type="number" step="0.01" id="manual-preco" class="form-control" placeholder="0.00" required>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="manual-preco-promo">Preço Oferta (R$):</label>
+            <input type="number" step="0.01" id="manual-preco-promo" class="form-control" placeholder="Opcional">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="manual-copies">Qtd. Etiquetas:</label>
+            <input type="number" min="1" max="999" id="manual-copies" class="form-control" value="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="fecharModalProdutoManualEtiqueta()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="confirmarAdicionarItemManual()">
+          <i class="fa-solid fa-plus"></i> Inserir na Fila
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: VISUALIZADOR DE CÓDIGO ZPL ==================== -->
+  <div class="modal-backdrop" id="modal-etiqueta-zpl">
+    <div class="modal-container" style="max-width: 680px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-code"></i> Código ZPL II Gerado (Zebra 9x3)
+        </div>
+        <button class="modal-close" onclick="fecharModalZpl()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+          Comandos ZPL II nativos prontos para envio a qualquer impressora térmica Zebra (GC420t, GT800, ZD220, ZD230, ZT230, etc.).
+        </p>
+        <textarea id="modal-zpl-code-area" readonly style="width: 100%; height: 280px; font-family: monospace; font-size: 0.82rem; background: var(--bg-surface-elevated); color: var(--accent-emerald); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; resize: vertical;"></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="fecharModalZpl()">Fechar</button>
+        <button type="button" class="btn btn-primary" onclick="copiarZplParaTransferencia()">
+          <i class="fa-solid fa-copy"></i> Copiar Código ZPL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Printable Area for Thermal Browser Print (Only displayed in print mode) -->
+  <div id="etiqueta-printable-container" class="etiqueta-printable-area"></div>
 
   <!-- Toast Notifications Container -->
   <div class="toast-container" id="toast-container"></div>
