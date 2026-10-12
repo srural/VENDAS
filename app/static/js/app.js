@@ -10169,6 +10169,18 @@ function updateEtiquetaPreview() {
   if (marca) infoLinha.push(marca.slice(0, 10));
   if (local) infoLinha.push(`LOC: ${local.slice(0, 8)}`);
 
+  // Quebra da descrição do produto (suporta 2 linhas elegantes para não invadir o espaço inferior)
+  const descRaw = (currentItem.Descricao_Produto || '').trim();
+  let descLine1 = descRaw;
+  let descLine2 = '';
+  if (descRaw.length > 30) {
+    const splitIdx = descRaw.lastIndexOf(' ', 30);
+    if (splitIdx > 12) {
+      descLine1 = descRaw.substring(0, splitIdx);
+      descLine2 = descRaw.substring(splitIdx + 1);
+    }
+  }
+
   // Cálculo de Preço por Unidade (Kg/Lt)
   let textoUnitario = `À VISTA / ${emb}`;
   if (showUnitPrice) {
@@ -10182,8 +10194,15 @@ function updateEtiquetaPreview() {
     }
   }
 
-  // Renderiza Código de Barras SVG
-  const barcodeSvgLines = generateBarcodeSvgLines(codBar, 20, 52, 160, 22);
+  // Coordenadas corrigidas do Código de Barras (estritamente abaixo da descrição e do código)
+  // X: 25 | Y: 132 | Largura: 340 | Altura: 82
+  const barcodeX = 25;
+  const barcodeY = 132;
+  const barcodeWidth = 340;
+  const barcodeHeight = 82;
+  const barcodeSvgLines = generateBarcodeSvgLines(codBar, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+  const barcodeTextX = barcodeX + (barcodeWidth / 2);
+  const barcodeTextY = barcodeY + barcodeHeight + 25;
 
   // Monta o SVG em proporção exata 90x30 mm (viewBox: 0 0 900 300)
   mockup.innerHTML = `
@@ -10191,61 +10210,71 @@ function updateEtiquetaPreview() {
       <!-- Margem e Fundo -->
       <rect x="0" y="0" width="900" height="300" fill="#ffffff" />
 
-      <!-- Topo: Nome do Supermercado & Data -->
-      ${showHeader ? `<text x="25" y="32" font-size="24" font-weight="700" fill="#111827" letter-spacing="0.5">${escapeHtml(headerText.slice(0, 32))}</text>` : ''}
-      ${showDate ? `<text x="875" y="32" font-size="20" font-weight="600" fill="#4b5563" text-anchor="end">EMIS: ${dateFormatted}</text>` : ''}
+      <!-- Topo: Nome do Supermercado & Data (Y = 10 a 38) -->
+      ${showHeader ? `<text x="25" y="30" font-size="22" font-weight="700" fill="#111827" letter-spacing="0.5">${escapeHtml(headerText.slice(0, 32))}</text>` : ''}
+      ${showDate ? `<text x="875" y="30" font-size="18" font-weight="600" fill="#4b5563" text-anchor="end">EMIS: ${dateFormatted}</text>` : ''}
 
       <!-- Linha divisória fina -->
-      <line x1="25" y1="46" x2="875" y2="46" stroke="#9ca3af" stroke-width="2" />
+      <line x1="25" y1="42" x2="875" y2="42" stroke="#9ca3af" stroke-width="2" />
 
-      <!-- Descrição do Produto (destaque) -->
-      <text x="25" y="80" font-size="32" font-weight="800" fill="#000000" letter-spacing="-0.3">
-        ${escapeHtml(currentItem.Descricao_Produto.slice(0, 42))}
-      </text>
-
-      <!-- Linha de Referência (Código, Unidade, Marca, Local) -->
-      <text x="25" y="112" font-size="20" font-weight="600" fill="#374151">
-        ${escapeHtml(infoLinha.join('  |  '))}
-      </text>
-
-      <!-- Código de Barras (Inferior Esquerdo) -->
-      <g transform="translate(10, 20)">
-        ${barcodeSvgLines}
-        <!-- Dígitos legíveis abaixo das barras -->
-        <text x="180" y="148" font-size="20" font-family="monospace" font-weight="700" fill="#111827" text-anchor="middle" letter-spacing="3">
-          ${escapeHtml(codBar)}
+      <!-- Descrição do Produto (Y = 50 a 96) -->
+      ${descLine2 ? `
+        <text x="25" y="68" font-size="24" font-weight="800" fill="#000000" letter-spacing="-0.3">
+          ${escapeHtml(descLine1)}
         </text>
-      </g>
+        <text x="25" y="93" font-size="24" font-weight="800" fill="#000000" letter-spacing="-0.3">
+          ${escapeHtml(descLine2.slice(0, 32))}
+        </text>
+        <!-- Linha de Referência (Código, Unidade, Marca, Local) -->
+        <text x="25" y="116" font-size="17" font-weight="600" fill="#374151">
+          ${escapeHtml(infoLinha.join('  |  '))}
+        </text>
+      ` : `
+        <text x="25" y="74" font-size="28" font-weight="800" fill="#000000" letter-spacing="-0.3">
+          ${escapeHtml(descLine1.slice(0, 42))}
+        </text>
+        <!-- Linha de Referência (Código, Unidade, Marca, Local) -->
+        <text x="25" y="106" font-size="19" font-weight="600" fill="#374151">
+          ${escapeHtml(infoLinha.join('  |  '))}
+        </text>
+      `}
 
-      <!-- Caixa do Preço (Inferior Direito) -->
+      <!-- Código de Barras (Inferior Esquerdo - Y: 132 a 245) - TOTALMENTE ABAIXO DO TEXTO -->
+      ${barcodeSvgLines}
+      <!-- Dígitos legíveis estritamente abaixo das barras -->
+      <text x="${barcodeTextX}" y="${barcodeTextY}" font-size="22" font-family="'Courier New', Courier, monospace" font-weight="800" fill="#111827" text-anchor="middle" letter-spacing="4">
+        ${escapeHtml(codBar)}
+      </text>
+
+      <!-- Caixa do Preço (Inferior Direito - Y: 114 a 284) -->
       ${isPromo ? `
         <!-- Modo OFERTA ESPECIAL -->
-        <rect x="495" y="105" width="380" height="175" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="4" />
-        <rect x="495" y="105" width="380" height="38" rx="4" fill="#dc2626" />
-        <text x="685" y="132" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">★ OFERTA ESPECIAL ★</text>
+        <rect x="485" y="114" width="390" height="170" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="4" />
+        <rect x="485" y="114" width="390" height="36" rx="4" fill="#dc2626" />
+        <text x="680" y="139" font-size="21" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">★ OFERTA ESPECIAL ★</text>
         
-        <text x="515" y="168" font-size="22" font-weight="600" fill="#6b7280">DE: R$ ${(precoNormal || 0).toFixed(2).replace('.', ',')}</text>
-        <line x1="510" y1="162" x2="670" y2="162" stroke="#dc2626" stroke-width="3" />
+        <text x="502" y="174" font-size="22" font-weight="600" fill="#6b7280">DE: R$ ${(precoNormal || 0).toFixed(2).replace('.', ',')}</text>
+        <line x1="498" y1="168" x2="660" y2="168" stroke="#dc2626" stroke-width="3" />
 
-        <text x="515" y="222" font-size="30" font-weight="800" fill="#dc2626">POR R$</text>
-        <text x="635" y="235" font-size="82" font-weight="900" fill="#dc2626" letter-spacing="-2">${inteiros}</text>
-        <text x="635" y="180" font-size="38" font-weight="800" fill="#dc2626">,${centavos}</text>
+        <text x="502" y="226" font-size="28" font-weight="800" fill="#dc2626">POR R$</text>
+        <text x="625" y="238" font-size="78" font-weight="900" fill="#dc2626" letter-spacing="-2">${inteiros}</text>
+        <text x="${625 + (inteiros.length * 44)}" y="188" font-size="36" font-weight="800" fill="#dc2626">,${centavos}</text>
 
-        <text x="685" y="268" font-size="18" font-weight="700" fill="#374151" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
+        <text x="680" y="268" font-size="18" font-weight="700" fill="#374151" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
       ` : `
         <!-- Modo PADRÃO GÔNDOLA -->
-        <rect x="525" y="108" width="350" height="172" rx="6" fill="#f9fafb" stroke="#111827" stroke-width="3" />
+        <rect x="490" y="114" width="385" height="170" rx="6" fill="#f9fafb" stroke="#111827" stroke-width="3" />
         
         <!-- Símbolo R$ -->
-        <text x="542" y="152" font-size="32" font-weight="800" fill="#111827">R$</text>
+        <text x="510" y="160" font-size="30" font-weight="800" fill="#111827">R$</text>
         
         <!-- Preço Gigante -->
-        <text x="595" y="210" font-size="106" font-weight="900" fill="#000000" letter-spacing="-3">${inteiros}</text>
-        <text x="${595 + (inteiros.length * 56)}" y="150" font-size="46" font-weight="900" fill="#000000">,${centavos}</text>
+        <text x="565" y="222" font-size="100" font-weight="900" fill="#000000" letter-spacing="-3">${inteiros}</text>
+        <text x="${565 + (inteiros.length * 52)}" y="162" font-size="44" font-weight="900" fill="#000000">,${centavos}</text>
 
         <!-- Rodapé do Preço: Preço por Kg / Unidade -->
-        <rect x="527" y="244" width="346" height="34" fill="#f3f4f6" />
-        <text x="700" y="268" font-size="20" font-weight="700" fill="#1f2937" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
+        <rect x="492" y="248" width="381" height="34" fill="#f3f4f6" />
+        <text x="682" y="271" font-size="19" font-weight="700" fill="#1f2937" text-anchor="middle">${escapeHtml(textoUnitario)}</text>
       `}
     </svg>
   `;
@@ -10260,20 +10289,21 @@ function generateBarcodeSvgLines(code, startX, startY, width, height) {
     hash |= 0;
   }
 
-  // Gera sequência pseudo-real de barras
+  // Gera sequência realista de barras
   const bits = [];
-  // Guard pattern
+  // Guard pattern início
   bits.push(1, 0, 1);
   for (let i = 0; i < 40; i++) {
     const bit = ((hash >> (i % 31)) & 1) ^ (i % 3 === 0 ? 1 : 0);
     bits.push(bit);
   }
-  // Guard pattern center & end
+  // Guard pattern centro
   bits.push(0, 1, 0, 1, 0, 1);
   for (let i = 0; i < 40; i++) {
     const bit = ((hash >> (i % 29)) & 1) ^ (i % 2 === 0 ? 1 : 0);
     bits.push(bit);
   }
+  // Guard pattern fim
   bits.push(1, 0, 1);
 
   const barWidth = width / bits.length;
@@ -10282,7 +10312,7 @@ function generateBarcodeSvgLines(code, startX, startY, width, height) {
 
   for (let i = 0; i < bits.length; i++) {
     if (bits[i] === 1) {
-      svg += `<rect x="${curX.toFixed(1)}" y="0" width="${(barWidth * 1.1).toFixed(1)}" height="${height * 2.8}" fill="#000000" />`;
+      svg += `<rect x="${curX.toFixed(1)}" y="0" width="${(barWidth * 1.15).toFixed(1)}" height="${height}" fill="#000000" />`;
     }
     curX += barWidth;
   }
