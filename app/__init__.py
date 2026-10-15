@@ -8,6 +8,7 @@ def create_app():
     app = Flask(__name__, static_folder='static', template_folder='templates')
     app.secret_key = os.environ.get('SECRET_KEY', 'vendas_secret_key_postgres_18_chave_segura')
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
     
     @app.after_request
     def add_header(response):

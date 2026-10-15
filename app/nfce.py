@@ -179,6 +179,9 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     ET.SubElement(ender_emit, "cPais").text = "1058"
     ET.SubElement(ender_emit, "xPais").text = "BRASIL"
 
+    ie_clean = ''.join(filter(str.isdigit, str(company.get("InscEst") or company.get("IE") or "")))
+    ET.SubElement(emit, "IE").text = ie_clean if ie_clean else "123456789110"
+
     from app.nfe_engine import clean_crt
     crt_val = clean_crt(company.get("RegimeTrib") or company.get("CRT"), fallback="1")
     ET.SubElement(emit, "CRT").text = crt_val

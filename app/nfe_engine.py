@@ -1004,6 +1004,19 @@ def validate_nfe_structure(order_data, company_data, items, config_data=None):
     cfg_cert = config_data.get("Certificado", {})
     company = company_data or {}
 
+    # 0. Verificação de Conflito Fiscal: Pedido já acobertado por NFC-e (Modelo 65)
+    sat_chave = str(order_data.get("Sat") or "").strip()
+    cfo_ped = str(order_data.get("Cfo") or "").upper().strip()
+    is_nfce = (len(sat_chave) == 44 and sat_chave[20:22] == "65") or ("NFC" in cfo_ped and sat_chave)
+    if is_nfce:
+        errors.append(f"Impedimento SEFAZ: Este pedido já possui Cupom Fiscal NFC-e emitido (Chave: {sat_chave}). Não é permitido emitir NF-e (Modelo 55) para o mesmo pedido.")
+        checks.append({
+            "categoria": "Conflito de Documento Fiscal",
+            "campo": "NFC-e já emitida",
+            "detalhe": f"Pedido já faturado com NFC-e Modelo 65 (Chave: {sat_chave}). Emissão de NF-e 55 bloqueada.",
+            "status": "ERROR"
+        })
+
     # 1. Identificação do Ambiente e UF
     amb_config = str(order_data.get("Ambiente") or cfg_nfe.get("Ambiente") or "2").strip()
     amb_int = int(amb_config) if amb_config in ("1", "2") else 2

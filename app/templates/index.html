@@ -378,6 +378,44 @@
 
         <!-- ==================== MODULE: PDV / FRENTE DE CAIXA ==================== -->
         <section class="module-view" id="view-pdv">
+          <!-- Mobile App Header (Visível no Modo Celular) -->
+          <div class="pdv-mobile-app-header" id="pdv-mobile-app-header">
+            <div class="pdv-mob-header-left">
+              <button type="button" class="pdv-mob-btn-icon" onclick="togglePdvMobileAppMode()" title="Sair do Modo App">
+                <i class="fa-solid fa-arrow-left"></i>
+              </button>
+              <div class="pdv-mob-brand-text">
+                <strong>PDV Mobile</strong>
+                <span id="pdv-mob-store-subtitle">Frente de Caixa</span>
+              </div>
+            </div>
+
+            <div class="pdv-mob-header-right">
+              <div class="pdv-mob-client-tag" onclick="focusPdvClientSearchMobile()" title="Cliente / Consumidor">
+                <i class="fa-solid fa-user"></i>
+                <span id="pdv-mob-client-tag-name">Consumidor</span>
+              </div>
+              <button type="button" class="pdv-mob-btn-icon" onclick="openPdvConfigModal()" title="Configurações">
+                <i class="fa-solid fa-gear"></i>
+              </button>
+              <button type="button" class="pdv-mob-btn-icon" onclick="togglePdvMobileAppMode()" title="Voltar ao layout Desktop" style="color: var(--accent-rose);">
+                <i class="fa-solid fa-desktop"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mobile App Segmented Tabs (Modo Lista) -->
+          <div class="pdv-mobile-nav-tabs" id="pdv-mobile-nav-tabs">
+            <button type="button" class="pdv-mob-tab active" id="pdv-mob-tab-cart" onclick="setMobilePdvTab('cart')">
+              <i class="fa-solid fa-list-check"></i>
+              <span>Itens / Carrinho (<strong id="pdv-mob-tab-cart-count">0</strong>)</span>
+            </button>
+            <button type="button" class="pdv-mob-tab" id="pdv-mob-tab-summary" onclick="setMobilePdvTab('summary')">
+              <i class="fa-solid fa-receipt"></i>
+              <span>Resumo / Pagamento</span>
+            </button>
+          </div>
+
           <!-- POS Toolbar Header -->
           <div class="toolbar-card pos-header-card">
             <div class="pos-config-group">
@@ -415,6 +453,9 @@
                 </button>
                 <button type="button" class="btn-toggle" id="btn-pdv-mode-table" onclick="setPdvViewMode('table')">
                   <i class="fa-solid fa-barcode"></i> Leitor / Lista
+                </button>
+                <button type="button" class="btn-toggle btn-toggle-mobile" id="btn-pdv-mode-mobile" onclick="togglePdvMobileAppMode()" title="Modo App Celular (Enquadramento vertical para smartphone)">
+                  <i class="fa-solid fa-mobile-screen-button"></i> Modo Celular (App)
                 </button>
               </div>
 
@@ -533,6 +574,26 @@
                   <span class="badge badge-group" id="pdv-items-count">0 itens</span>
                 </div>
 
+                <!-- Identificação do Cliente no Modo Celular -->
+                <div class="pdv-mob-summary-client-box">
+                  <div class="pdv-mob-summary-client-row">
+                    <div class="pdv-mob-summary-client-info">
+                      <span class="pdv-mob-summary-client-lbl"><i class="fa-solid fa-user"></i> Cliente da Venda:</span>
+                      <strong class="pdv-mob-summary-client-val" id="pdv-mob-summary-client-val">1 - CONSUMIDOR FINAL</strong>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleMobileClientSearch()" title="Alterar Cliente">
+                      <i class="fa-solid fa-user-pen"></i> Alterar
+                    </button>
+                  </div>
+                  <div id="pdv-mob-client-search-wrapper" style="display: none; margin-top: 0.65rem; position: relative;">
+                    <div class="search-input-wrapper">
+                      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                      <input type="text" id="pdv-mob-client-input" class="search-input" placeholder="Buscar cliente por nome, CPF ou código..." oninput="debouncePdvMobileClientSearch(this.value)">
+                    </div>
+                    <div id="pdv-mob-client-results" class="pos-results-overlay" style="display: none; position: static; max-height: 200px; margin-top: 4px; width: 100%; border-radius: var(--radius-md);"></div>
+                  </div>
+                </div>
+
                 <div class="pos-totals-list">
                   <div class="pos-total-row">
                     <span>Subtotal R$:</span>
@@ -564,6 +625,30 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Mobile App Sticky Bottom Checkout Bar -->
+          <div class="pdv-mobile-bottom-bar" id="pdv-mobile-bottom-bar">
+            <div class="pdv-mob-bot-summary" onclick="setMobilePdvTab('cart')" title="Toque para ver o carrinho">
+              <div class="pdv-mob-bot-cart-icon">
+                <i class="fa-solid fa-cart-shopping"></i>
+                <span class="pdv-mob-bot-badge" id="pdv-mob-bot-qty">0</span>
+              </div>
+              <div class="pdv-mob-bot-text">
+                <span class="pdv-mob-bot-lbl">Total da Venda</span>
+                <strong class="pdv-mob-bot-val" id="pdv-mob-bot-total">R$ 0,00</strong>
+              </div>
+            </div>
+            <div class="pdv-mob-bot-actions">
+              <button type="button" class="btn btn-danger pdv-mob-cancel-btn" onclick="cancelPdvSale()" title="Cancelar venda e limpar carrinho">
+                <i class="fa-solid fa-trash-can"></i>
+                <span class="pdv-mob-cancel-text">Cancelar</span>
+              </button>
+              <button type="button" class="btn btn-emerald pdv-mob-checkout-btn" onclick="openPaymentModal()" title="Finalizar venda agora">
+                <span>FINALIZAR</span>
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
             </div>
           </div>
         </section>
@@ -3255,16 +3340,16 @@
 
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.25rem;">
         <!-- Total Banner -->
-        <div style="background: var(--bg-surface-elevated); border: 2px solid var(--accent-emerald); padding: 1.25rem; border-radius: var(--radius-md); text-align: center;">
-          <div style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">VALOR TOTAL DA VENDA</div>
-          <div id="pay-modal-total-display" style="font-size: 2.25rem; font-weight: 800; color: var(--accent-emerald); margin-top: 0.25rem;">R$ 0,00</div>
+        <div class="pay-total-banner" style="background: var(--bg-surface-elevated); border: 2px solid var(--accent-emerald); padding: 1.25rem; border-radius: var(--radius-md); text-align: center;">
+          <div class="pay-total-lbl" style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">VALOR TOTAL DA VENDA</div>
+          <div id="pay-modal-total-display" class="pay-total-val" style="font-size: 2.25rem; font-weight: 800; color: var(--accent-emerald); margin-top: 0.25rem;">R$ 0,00</div>
         </div>
 
         <!-- Forma de Pagamento -->
-        <div>
+        <div class="pay-methods-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
             <label class="form-label" style="font-weight: 700; margin: 0; font-size: 0.9rem;">
-              <i class="fa-solid fa-wallet" style="color: var(--accent-blue);"></i> PRINCIPAIS FORMAS DE PAGAMENTO:
+              <i class="fa-solid fa-wallet" style="color: var(--accent-blue);"></i> FORMA DE PAGAMENTO:
             </label>
             <span class="badge badge-active" id="pay-selected-badge" style="font-size: 0.8rem;">
               <i class="fa-solid fa-check"></i> DINHEIRO
@@ -3295,11 +3380,11 @@
           </div>
 
           <!-- Seção de Outras Formas Cadastradas no Banco -->
-          <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-surface-elevated); border: 1px dashed var(--border-color-strong); border-radius: var(--radius-md);">
+          <div class="pay-other-methods-box" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-surface-elevated); border: 1px dashed var(--border-color-strong); border-radius: var(--radius-md);">
             <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">
               <i class="fa-solid fa-list-ul"></i> Outras Formas do Cadastro (Prazo, Boleto, Convênio, etc.):
             </label>
-            <select id="pay-select-outras-formas" class="filter-select" style="width: 100%;" onchange="onOtherPaymentMethodChange(this)">
+            <select id="pay-select-outras-formas" class="filter-select pay-other-select" style="width: 100%;" onchange="onOtherPaymentMethodChange(this)">
               <option value="">-- Selecione outra forma de pagamento cadastrada --</option>
               <!-- Carregado via JS -->
             </select>
@@ -3308,24 +3393,24 @@
 
         <!-- Cash Details & Troco -->
         <div id="pay-cash-inputs" style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom: 0;">
             <label for="pay-valor-recebido" class="form-label" style="font-weight: 600;">VALOR RECEBIDO (R$):</label>
-            <input type="number" id="pay-valor-recebido" class="form-control form-control-lg" step="0.01" min="0" placeholder="0.00" oninput="calcPdvChange()" style="font-size: 1.25rem; font-weight: 700;">
+            <input type="number" id="pay-valor-recebido" inputmode="decimal" class="form-control form-control-lg" step="0.01" min="0" placeholder="0.00" oninput="calcPdvChange()" style="font-size: 1.25rem; font-weight: 700;">
           </div>
         </div>
 
         <div id="pay-change-panel" style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <label class="form-label" style="font-weight: 600; color: var(--text-muted);">TROCO DO CLIENTE:</label>
+          <label class="form-label" style="font-weight: 600; color: var(--text-muted); margin: 0;">TROCO DO CLIENTE:</label>
           <input type="text" id="pay-troco-display" class="form-control" readonly value="R$ 0,00" style="font-size: 1.25rem; font-weight: 700; color: var(--accent-blue); background: transparent; border: none; padding: 0;">
         </div>
       </div>
 
-      <div class="modal-footer" style="justify-content: space-between;">
+      <div class="modal-footer" id="pdv-payment-modal-footer" style="justify-content: space-between;">
         <button type="button" class="btn btn-secondary" id="btn-pdv-pay-cancel" onclick="closePaymentModal()">
-          <i class="fa-solid fa-xmark"></i> Cancelar (Esc)
+          <i class="fa-solid fa-arrow-left"></i> Voltar / Cancelar
         </button>
 
-        <div style="display: flex; gap: 0.5rem;">
+        <div class="pay-action-buttons" style="display: flex; gap: 0.5rem;">
           <button type="button" class="btn btn-secondary" id="btn-pdv-pay-simple" onclick="submitPdvSale(false)">
             <i class="fa-solid fa-receipt"></i> Venda Simples
           </button>
@@ -3540,11 +3625,13 @@
               <h3 class="receipt-title" id="rec-doc-title" style="margin: 0; font-size: 12px; font-weight: 900; text-transform: uppercase;">CUPOM DE VENDA</h3>
               <div class="rec-ped-highlight-num" style="margin: 0; font-size: 13.5px; font-weight: 900; letter-spacing: 0.5px;">PEDIDO Nº <span id="rec-ped-num-val">#0000</span></div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 1px 0;">
-              <p class="receipt-subtitle" id="rec-doc-subtitle" style="margin: 0;">Comprovante de Venda</p>
-              <div class="rec-ped-highlight-date" style="font-size: 9.5px;">DATA / HORA: <span id="rec-ped-date-val">00/00/0000 00:00:00</span></div>
+            <div class="rec-date-row" style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0 2px 0; white-space: nowrap;">
+              <span style="font-size: 11px; font-weight: 900; text-transform: uppercase;">DATA / HORA:</span>
+              <div class="rec-ped-highlight-date" style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px;"><span id="rec-ped-date-val">00/00/0000 00:00:00</span></div>
             </div>
-            <p class="receipt-subtitle" id="rec-doc-extra" style="margin: 1px 0 0 0; font-size: 8.5px; color: var(--text-muted);">Documento de Simples Conferência</p>
+            <p class="receipt-subtitle" style="margin: 1px 0 0 0; font-size: 8.5px; color: var(--text-muted); text-align: center;">
+              <span id="rec-doc-subtitle">Comprovante de Venda</span> - <span id="rec-doc-extra">Documento de Simples Conferência</span>
+            </p>
             <div class="receipt-divider">------------------------------------------------</div>
           </div>
 
@@ -4304,7 +4391,7 @@
           <button type="button" class="btn btn-secondary" onclick="closeFrmNotaValOverlay()">
             <i class="fa-solid fa-pen-to-square"></i> Voltar e Corrigir Campos
           </button>
-          <button type="button" class="btn btn-emerald" onclick="closeFrmNotaValOverlay(); transmitirNfeFrmNota();" style="font-weight: 700;">
+          <button type="button" class="btn btn-emerald" id="btn-frmnota-val-transmitir" onclick="closeFrmNotaValOverlay(); transmitirNfeFrmNota();" style="font-weight: 700;">
             <i class="fa-solid fa-paper-plane"></i> Transmitir NF-e Agora
           </button>
         </div>
@@ -4336,7 +4423,7 @@
           <button type="button" class="btn btn-secondary btn-sm" onclick="validarNfeFrmNota()">
             <i class="fa-solid fa-clipboard-check" style="color: var(--accent-amber);"></i> Validar Regras SEFAZ
           </button>
-          <button type="button" class="btn btn-emerald btn-sm" onclick="transmitirNfeFrmNota()" style="font-weight: 700;">
+          <button type="button" class="btn btn-emerald btn-sm" id="btn-frmnota-toolbar-transmitir" onclick="transmitirNfeFrmNota()" style="font-weight: 700;">
             <i class="fa-solid fa-paper-plane"></i> Transmitir NF-e (Direto SEFAZ)
           </button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="imprimirDanfeFrmNota()">

@@ -1561,6 +1561,16 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
     if custom_data and isinstance(custom_data, dict):
         order.update(custom_data)
 
+    # Bloqueio de duplicidade fiscal: impedir emissão de NF-e 55 para pedidos já faturados com NFC-e 65
+    sat_chave = str(order.get("Sat") or "").strip()
+    cfo_ped = str(order.get("Cfo") or "").upper().strip()
+    nfe_info = order_details.get("nfe") or {}
+    nro_chave_nfe = str(nfe_info.get("NroChave") or "").strip()
+
+    if (len(sat_chave) == 44 and sat_chave[20:22] == "65") or (len(nro_chave_nfe) == 44 and nro_chave_nfe[20:22] == "65") or ("NFC" in cfo_ped and sat_chave):
+        chave_usada = sat_chave if (len(sat_chave) == 44 and sat_chave[20:22] == "65") else (nro_chave_nfe or sat_chave)
+        raise ValueError(f"Impedimento para emissão de NF-e 55: O Pedido #{cod_ped} já foi emitido como Cupom Fiscal NFC-e (Chave: {chave_usada}). A legislação fiscal proíbe emitir NF-e Modelo 55 para o mesmo pedido.")
+
     items = order_details["itens"]
     company = order_details["empresa"]
     id_emp = order.get("id_empresa") or company.get("id_empresa") or 1

@@ -682,6 +682,36 @@ def get_danfe_html(cod_ped):
         protocolo_existente = (nfe_info and nfe_info.get("Protocolo")) or "135180587979473"
 
         if chave_existente and len(str(chave_existente)) == 44:
+            if str(chave_existente)[20:22] == "65":
+                return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Pedido com NFC-e Emitida</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 2.5rem; text-align: center; }}
+        .card {{ max-width: 600px; margin: 0 auto; background: #1e293b; border: 1px solid #0284c7; border-radius: 12px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
+        h2 {{ color: #38bdf8; margin-top: 0; }}
+        p {{ color: #cbd5e1; line-height: 1.6; font-size: 0.95rem; }}
+        .btn {{ display: inline-block; margin: 0.5rem; padding: 0.6rem 1.2rem; background: #0284c7; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; }}
+        .btn-sec {{ background: #475569; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>ℹ️ Pedido Emitido via Cupom Fiscal NFC-e</h2>
+        <p>O Pedido <strong>#{cod_ped}</strong> foi emitido como <strong>Cupom Fiscal NFC-e (Modelo 65)</strong>.</p>
+        <p style="margin: 1rem 0;">Chave de Acesso:</p>
+        <p><code style="font-size: 0.95rem; color: #38bdf8; background: #0f172a; padding: 6px 12px; border-radius: 6px; word-break: break-all;">{chave_existente}</code></p>
+        <p style="color: #94a3b8; font-size: 0.85rem;">A legislação da SEFAZ não permite emitir nem gerar DANFE de NF-e (Modelo 55) para pedidos já faturados com NFC-e.</p>
+        <div style="margin-top: 1.5rem;">
+            <a href="/api/pedidos/{cod_ped}/cupom-html" class="btn" target="_blank">Imprimir Cupom NFC-e</a>
+            <a href="javascript:window.close()" class="btn btn-sec">Fechar Janela</a>
+        </div>
+    </div>
+</body>
+</html>""", 200, {'Content-Type': 'text/html; charset=utf-8'}
+
             amb_nota = (nfe_info and nfe_info.get("Ambiente")) or order.get("Ambiente") or cfg.get("Nfe", {}).get("Ambiente", 2)
             nfe_res = {
                 "chave_nfe": str(chave_existente),

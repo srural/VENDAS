@@ -1418,10 +1418,13 @@ onReady(() => {
   updatePdvClock();
   loadPdvPhotoCatalog();
 
-
-
-
-  // Global Hotkeys Listener (F2, F4, F8, F9, F10)
+  // Restaurar modo Celular (App) se salvo no localStorage ou se acessado em smartphone
+  try {
+    const savedMobile = localStorage.getItem('pdv_mobile_app_mode');
+    if (savedMobile === '1' || (savedMobile === null && window.innerWidth <= 600)) {
+      togglePdvMobileAppMode(true);
+    }
+  } catch (e) {}
   document.addEventListener('keydown', (e) => {
     if (currentModule !== 'pdv') return;
     if (e.key === 'F2') {
@@ -1615,6 +1618,16 @@ function selectPdvClient(id, name, doc) {
   }
   const overlay = document.getElementById('pdv-client-results-overlay');
   if (overlay) overlay.style.display = 'none';
+  const mobCliTag = document.getElementById('pdv-mob-client-tag-name');
+  if (mobCliTag) {
+    const isConsumidor = id === 1 || !name || name.toUpperCase() === 'CONSUMIDOR' || name.toUpperCase() === 'CONSUMIDOR FINAL';
+    mobCliTag.innerText = isConsumidor ? 'Consumidor' : name.split(' ')[0];
+  }
+  const mobSummaryCli = document.getElementById('pdv-mob-summary-client-val');
+  if (mobSummaryCli) {
+    const isConsumidor = id === 1 || !name || name.toUpperCase() === 'CONSUMIDOR' || name.toUpperCase() === 'CONSUMIDOR FINAL';
+    mobSummaryCli.innerText = isConsumidor ? '1 - CONSUMIDOR FINAL' : `#${id} - ${name}`;
+  }
   showToast(`Cliente selecionado: ${name}`, 'success');
   
   const barInput = document.getElementById('pdv-barcode-input');
@@ -1636,6 +1649,10 @@ function resetPdvClient() {
     overlay.innerHTML = '';
     overlay.style.display = 'none';
   }
+  const mobCliTag = document.getElementById('pdv-mob-client-tag-name');
+  if (mobCliTag) mobCliTag.innerText = 'Consumidor';
+  const mobSummaryCli = document.getElementById('pdv-mob-summary-client-val');
+  if (mobSummaryCli) mobSummaryCli.innerText = '1 - CONSUMIDOR FINAL';
   currentPdvClientSearchResults = [];
   pdvClientHighlightedIdx = -1;
 }
@@ -1954,8 +1971,12 @@ function renderPdvCart() {
           <div style="font-size: 0.75rem; color: var(--text-muted);">${item.CodBar ? 'EAN: ' + item.CodBar : ''}</div>
           ${descInfo}
         </td>
-        <td style="text-align: right;">
-          <input type="number" class="form-control" style="width: 75px; text-align: right; display: inline-block; padding: 0.25rem 0.4rem; font-size: 0.85rem;" value="${item.Qtd}" step="1" min="1" onchange="updatePdvItemQty(${idx}, this.value)">
+        <td style="text-align: right; white-space: nowrap;">
+          <div class="pdv-qty-touch-stepper">
+            <button type="button" class="stepper-btn" onclick="stepPdvItemQty(${idx}, -1)" title="Diminuir"><i class="fa-solid fa-minus"></i></button>
+            <input type="number" class="form-control stepper-inp" value="${item.Qtd}" step="1" min="1" onchange="updatePdvItemQty(${idx}, this.value)">
+            <button type="button" class="stepper-btn" onclick="stepPdvItemQty(${idx}, 1)" title="Aumentar"><i class="fa-solid fa-plus"></i></button>
+          </div>
         </td>
         <td style="text-align: right;">
           <input type="number" class="form-control" style="width: 85px; text-align: right; display: inline-block; padding: 0.25rem 0.4rem; font-size: 0.85rem;" value="${item.ValorUnit.toFixed(2)}" step="0.01" min="0" onchange="updatePdvItemPrice(${idx}, this.value)">
@@ -1990,6 +2011,13 @@ function calcPdvTotals() {
   setElementText('pdv-total-display', `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setElementText('pay-modal-total-display', `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   
+  // Atualiza indicadores do Modo Celular (App)
+  const totalQty = pdvCart.reduce((sum, item) => sum + (parseFloat(item.Qtd) || 1), 0);
+  const totalFormatted = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  setElementText('pdv-mob-tab-cart-count', pdvCart.length);
+  setElementText('pdv-mob-bot-qty', totalQty);
+  setElementText('pdv-mob-bot-total', totalFormatted);
+
   calcPdvChange();
 }
 
@@ -2007,13 +2035,20 @@ function calcPdvChange() {
 }
 
 function cancelPdvSale() {
-  if (!pdvCart.length) return;
+  if (!pdvCart.length) {
+    showToast('O carrinho já está vazio.', 'info', 2000);
+    return;
+  }
   if (!confirm('Deseja realmente cancelar a venda e limpar o carrinho de compras?')) return;
   pdvCart = [];
   document.getElementById('pdv-desconto-input').value = '0.00';
+  closePaymentModal();
   renderPdvCart();
   resetPdvClient();
-  showToast('Venda cancelada', 'error');
+  if (typeof pdvMobileAppMode !== 'undefined' && pdvMobileAppMode) {
+    setMobilePdvTab('cart');
+  }
+  showToast('Venda cancelada com sucesso.', 'info', 2500);
 }
 
 let pdvSelectedPayMethod = 'DINHEIRO';
@@ -2585,7 +2620,7 @@ function executeThermalReceiptPrint(openModal = false) {
     .receipt-ped-highlight-box { margin: 3px 0 !important; padding: 2px 3px !important; border: 1px dashed #000 !important; text-align: center !important; }
     .rec-ped-highlight-num { font-size: 13px !important; font-weight: 900 !important; margin-bottom: 1px !important; }
     .rec-ped-highlight-num span { font-size: 14px !important; font-weight: 900 !important; }
-    .rec-ped-highlight-date { font-size: 9.5px !important; font-weight: bold !important; }
+    .rec-ped-highlight-date { font-size: 13px !important; font-weight: 900 !important; -webkit-text-stroke: 0.3px #000 !important; letter-spacing: 0.5px !important; }
     .receipt-divider { border-top: 1px dashed #000 !important; height: 1px !important; font-size: 0 !important; line-height: 0 !important; margin: 3px 0 !important; overflow: hidden !important; color: transparent !important; }
     .receipt-client-info { font-size: 10.5px !important; line-height: 1.25 !important; margin: 2px 0 !important; text-align: left !important; }
     .receipt-client-info p { margin: 1px 0 !important; }
@@ -2734,6 +2769,122 @@ function setPdvViewMode(mode) {
       cartCard.style.minHeight = '420px';
       cartCard.style.maxHeight = '580px';
     }
+  }
+}
+
+let pdvMobileAppMode = false;
+let pdvCurrentMobileTab = 'cart';
+
+function togglePdvMobileAppMode(forceState = null) {
+  if (forceState !== null) {
+    pdvMobileAppMode = !!forceState;
+  } else {
+    pdvMobileAppMode = !pdvMobileAppMode;
+  }
+
+  document.body.classList.toggle('pdv-mobile-app-mode', pdvMobileAppMode);
+  try {
+    localStorage.setItem('pdv_mobile_app_mode', pdvMobileAppMode ? '1' : '0');
+  } catch (e) {}
+
+  const btnMobile = document.getElementById('btn-pdv-mode-mobile');
+  if (btnMobile) {
+    btnMobile.classList.toggle('active', pdvMobileAppMode);
+  }
+
+  if (pdvMobileAppMode) {
+    setMobilePdvTab('cart');
+    showToast('Modo Celular (Lista) ativado!', 'success', 2500);
+  } else {
+    document.body.classList.remove('mob-tab-cart', 'mob-tab-summary');
+    if (typeof setPdvViewMode === 'function') setPdvViewMode(pdvViewMode || 'split');
+    showToast('Modo Celular desativado. Retornando ao layout padrão.', 'info', 2500);
+  }
+}
+
+function setMobilePdvTab(tab) {
+  if (tab !== 'cart' && tab !== 'summary') tab = 'cart';
+  pdvCurrentMobileTab = tab;
+  document.body.classList.remove('mob-tab-cart', 'mob-tab-summary');
+  document.body.classList.add('mob-tab-' + tab);
+
+  const tabs = document.querySelectorAll('.pdv-mob-tab');
+  tabs.forEach(t => t.classList.remove('active'));
+
+  const activeBtn = document.getElementById('pdv-mob-tab-' + tab);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  if (tab === 'cart') {
+    renderPdvCart();
+  }
+}
+
+function stepPdvItemQty(idx, delta) {
+  if (pdvCart && pdvCart[idx]) {
+    const currentQty = parseFloat(pdvCart[idx].Qtd) || 1.0;
+    const newQty = Math.max(1.0, currentQty + delta);
+    updatePdvItemQty(idx, newQty);
+  }
+}
+
+function focusPdvClientSearchMobile() {
+  setMobilePdvTab('summary');
+  toggleMobileClientSearch(true);
+}
+
+function toggleMobileClientSearch(forceOpen = null) {
+  const wrap = document.getElementById('pdv-mob-client-search-wrapper');
+  if (!wrap) return;
+  const shouldOpen = forceOpen !== null ? !!forceOpen : wrap.style.display === 'none';
+  wrap.style.display = shouldOpen ? 'block' : 'none';
+  if (shouldOpen) {
+    const inp = document.getElementById('pdv-mob-client-input');
+    if (inp) {
+      setTimeout(() => {
+        inp.focus();
+        searchPdvMobileClients(inp.value);
+      }, 100);
+    }
+  }
+}
+
+let pdvMobClientSearchTimer = null;
+function debouncePdvMobileClientSearch(val) {
+  clearTimeout(pdvMobClientSearchTimer);
+  pdvMobClientSearchTimer = setTimeout(() => searchPdvMobileClients(val), 180);
+}
+
+async function searchPdvMobileClients(q) {
+  try {
+    const term = (q || '').trim();
+    const res = await fetch(`/api/pdv/clientes?q=${encodeURIComponent(term)}`);
+    const resultsContainer = document.getElementById('pdv-mob-client-results');
+    if (!res.ok || !resultsContainer) return;
+    const clients = await res.json();
+    
+    let html = `
+      <div class="pos-result-item" onclick="selectPdvClient(1, 'CONSUMIDOR FINAL', ''); toggleMobileClientSearch(false);">
+        <div style="font-weight: 700;"><i class="fa-solid fa-user-check"></i> 1 - CONSUMIDOR FINAL</div>
+        <div style="font-size: 0.72rem; color: var(--text-muted);">Padrão</div>
+      </div>
+    `;
+
+    clients.forEach(c => {
+      if (c.CodEntidade === 1) return;
+      const doc = c.CPF || c.CGC || '';
+      const safeName = (c.Nome || '').replace(/'/g, "\\'");
+      html += `
+        <div class="pos-result-item" onclick="selectPdvClient(${c.CodEntidade}, '${safeName}', '${doc}'); toggleMobileClientSearch(false);">
+          <div style="font-weight: 700;">#${c.CodEntidade} - ${escapeHtml(c.Nome)}</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted);">${doc ? 'Doc: ' + doc : ''} ${c.Fantasia ? ' • ' + escapeHtml(c.Fantasia) : ''}</div>
+        </div>
+      `;
+    });
+
+    resultsContainer.innerHTML = html;
+    resultsContainer.style.display = 'block';
+  } catch (e) {
+    console.error('Erro na busca mobile de clientes:', e);
   }
 }
 
@@ -3376,15 +3527,19 @@ function renderOrdersTable(orders) {
 
   tbody.innerHTML = orders.map(o => {
     const totalStr = `R$ ${floatOrZero(o.Total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const hasNfe = !!(o.NroChave || o.Sat);
+    const satChave = String(o.NroChave || o.Sat || '').trim();
+    const isNfce = (satChave.length === 44 && satChave.substring(20, 22) === '65') || String(o.Cfo || '').toUpperCase().includes('NFC');
+    const isNfe55 = (satChave.length === 44 && satChave.substring(20, 22) === '55') || (satChave && !isNfce);
     const amb = parseInt(o.NfeAmbiente || o.Ambiente || (window.currentPdvConfig && window.currentPdvConfig.Nfe && window.currentPdvConfig.Nfe.Ambiente) || 2);
     
     let nfeBadge = '';
-    if (hasNfe) {
+    if (isNfce) {
+      nfeBadge = `<span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3);" title="Cupom Fiscal NFC-e Emitido (Chave: ${satChave})"><i class="fa-solid fa-receipt"></i> NFC-e Emitida</span>`;
+    } else if (isNfe55) {
       if (amb === 1) {
-        nfeBadge = `<span class="badge badge-active" title="NF-e Emitida em Produção Oficial SEFAZ (Chave: ${o.NroChave || o.Sat})"><i class="fa-solid fa-check-double"></i> NF-e Emitida</span>`;
+        nfeBadge = `<span class="badge badge-active" title="NF-e 55 Emitida em Produção Oficial SEFAZ (Chave: ${satChave})"><i class="fa-solid fa-check-double"></i> NF-e Emitida</span>`;
       } else {
-        nfeBadge = `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);" title="NF-e em Homologação / Simulação (Chave: ${o.NroChave || o.Sat})"><i class="fa-solid fa-flask"></i> Homologação</span>`;
+        nfeBadge = `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);" title="NF-e em Homologação / Simulação (Chave: ${satChave})"><i class="fa-solid fa-flask"></i> Homologação</span>`;
       }
     } else {
       nfeBadge = `<span class="badge badge-warning"><i class="fa-solid fa-clock"></i> Sem NF-e</span>`;
@@ -3411,10 +3566,11 @@ function renderOrdersTable(orders) {
             <button class="btn btn-secondary btn-sm" onclick="imprimirCupomOrder(${o.CodPed})" title="Imprimir Comprovante / Cupom do Pedido">
               <i class="fa-solid fa-receipt"></i>
             </button>
-            <button class="btn btn-emerald btn-sm" onclick="openNfeEmissaoModal(${o.CodPed})" title="Abrir Tela de Emissão de NF-e 55 (FrmNota)">
-              <i class="fa-solid fa-file-invoice"></i> NF-e
-            </button>
-            ${o.NroChave ? `<button class="btn btn-secondary btn-sm" onclick="imprimirDanfeOrder(${o.CodPed})" title="Imprimir DANFE NF-e (PDF)"><i class="fa-solid fa-file-pdf" style="color: var(--accent-rose);"></i></button>` : ''}
+            ${isNfce
+              ? `<button class="btn btn-secondary btn-sm" onclick="showToast('Este pedido já possui Cupom Fiscal NFC-e emitido. Não é permitido emitir NF-e 55.', 'warning')" style="opacity: 0.6; cursor: not-allowed;" title="Bloqueado: Pedido já faturado com NFC-e (Mod 65)"><i class="fa-solid fa-ban"></i> NF-e</button>`
+              : `<button class="btn btn-emerald btn-sm" onclick="openNfeEmissaoModal(${o.CodPed})" title="Abrir Tela de Emissão de NF-e 55 (FrmNota)"><i class="fa-solid fa-file-invoice"></i> NF-e</button>`
+            }
+            ${isNfe55 ? `<button class="btn btn-secondary btn-sm" onclick="imprimirDanfeOrder(${o.CodPed})" title="Imprimir DANFE NF-e (PDF)"><i class="fa-solid fa-file-pdf" style="color: var(--accent-rose);"></i></button>` : ''}
             <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.CodPed})" title="Excluir Pedido">
               <i class="fa-solid fa-trash"></i>
             </button>
@@ -5758,11 +5914,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPdvConfigAll();
 });
 
-/* ==================== EMISSÃO DE NF-E MODELO 55 (FRMNOTA.FRM) ==================== */
 let currentFrmNotaCodPed = null;
+let currentFrmNotaIsNfce = false;
 
 async function openNfeEmissaoModal(codPed, autoValidar = false) {
   currentFrmNotaCodPed = codPed;
+  currentFrmNotaIsNfce = false;
   const modal = document.getElementById('nfe-emissao-modal');
   if (!modal) return;
 
@@ -5779,6 +5936,10 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     const nfe = data.nfe || {};
     const company = data.empresa || {};
     const cfgNfe = data.config_nfe || {};
+
+    const satChave = String(nfe.NroChave || ped.Sat || '').trim();
+    const isNfce = (satChave.length === 44 && satChave.substring(20, 22) === '65') || String(ped.Cfo || '').toUpperCase().includes('NFC');
+    currentFrmNotaIsNfce = isNfce;
 
     // Populate Cabeçalho & Cliente
     setElVal('FrmNota_CodPed', ped.CodPed);
@@ -5839,7 +6000,14 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     const statusIcon = document.getElementById('frmnota-status-icon');
     const chaveBadge = document.getElementById('frmnota-chave-badge');
 
-    if (nfe && nfe.NroChave) {
+    if (isNfce) {
+      if (statusText) statusText.innerHTML = `<span style="color: #0284c7; font-weight: 700;"><i class="fa-solid fa-receipt"></i> Pedido já faturado com Cupom Fiscal NFC-e (Mod 65)! Emissão de NF-e 55 bloqueada.</span>`;
+      if (statusIcon) { 
+        statusIcon.className = 'fa-solid fa-ban'; 
+        statusIcon.style.color = 'var(--accent-rose)'; 
+      }
+      if (chaveBadge) chaveBadge.innerText = `NFC-e: ${satChave}`;
+    } else if (nfe && nfe.NroChave) {
       const isProd = (String(nfe.Ambiente || ped.Ambiente || cfgNfe.Ambiente || '2') === '1');
       if (statusText) statusText.innerText = `Status: NF-e Transmitida & Autorizada (${isProd ? 'Produção Oficial SEFAZ' : 'Homologação / Simulação'})! (Prot: ${nfe.Protocolo || '100'})`;
       if (statusIcon) { 
@@ -5852,6 +6020,21 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
       if (statusText) statusText.innerText = `Status: Digitação da NF-e (Pronta para Emissão em ${isProdConfig ? 'Produção Oficial' : 'Homologação'})`;
       if (statusIcon) { statusIcon.className = 'fa-solid fa-circle-info'; statusIcon.style.color = 'var(--accent-blue)'; }
       if (chaveBadge) chaveBadge.innerText = `Chave: Gerada na Emissão (${isProdConfig ? 'Produção' : 'Homologação'})`;
+    }
+
+    const btnToolbarTrans = document.getElementById('btn-frmnota-toolbar-transmitir');
+    if (btnToolbarTrans) {
+      if (isNfce) {
+        btnToolbarTrans.disabled = true;
+        btnToolbarTrans.style.opacity = '0.5';
+        btnToolbarTrans.style.cursor = 'not-allowed';
+        btnToolbarTrans.title = 'Bloqueado: Pedido já faturado com NFC-e (Mod 65)';
+      } else {
+        btnToolbarTrans.disabled = false;
+        btnToolbarTrans.style.opacity = '1';
+        btnToolbarTrans.style.cursor = 'pointer';
+        btnToolbarTrans.title = 'Transmitir NF-e (Direto SEFAZ)';
+      }
     }
 
     // Populate Items Table
@@ -6020,10 +6203,28 @@ function renderFrmNotaValOverlay(codPed, data) {
   } else {
     if (alertsBox) alertsBox.style.display = 'none';
   }
+
+  const btnTransVal = document.getElementById('btn-frmnota-val-transmitir');
+  if (btnTransVal) {
+    if (data.valid && !currentFrmNotaIsNfce) {
+      btnTransVal.disabled = false;
+      btnTransVal.style.opacity = '1';
+      btnTransVal.style.cursor = 'pointer';
+    } else {
+      btnTransVal.disabled = true;
+      btnTransVal.style.opacity = '0.5';
+      btnTransVal.style.cursor = 'not-allowed';
+      btnTransVal.title = currentFrmNotaIsNfce ? 'Pedido já possui NFC-e emitida' : 'Corrija as inconsistências para habilitar a transmissão';
+    }
+  }
 }
 
 async function transmitirNfeFrmNota() {
   if (!currentFrmNotaCodPed) return;
+  if (currentFrmNotaIsNfce) {
+    showToast('Bloqueio SEFAZ: Este pedido já possui Cupom Fiscal NFC-e emitido. Não é permitido emitir NF-e 55.', 'warning', 5000);
+    return;
+  }
   showToast('Conectando ao WebService SEFAZ 4.00 e transmitindo NF-e...', 'info');
 
   const payload = getFrmNotaFormData();

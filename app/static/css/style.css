@@ -1322,9 +1322,10 @@ body {
 }
 
 .rec-ped-highlight-date {
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 900;
   color: #000;
+  letter-spacing: 0.5px;
 }
 
 .receipt-divider {
@@ -1644,9 +1645,11 @@ body {
   }
 
   body.print-receipt-mode .rec-ped-highlight-date {
-    font-size: 9.5px !important;
-    font-weight: bold !important;
+    font-size: 13px !important;
+    font-weight: 900 !important;
     color: #000000 !important;
+    -webkit-text-stroke: 0.3px #000 !important;
+    letter-spacing: 0.5px !important;
   }
 
   body.print-receipt-mode .receipt-homolog-banner {
@@ -3281,6 +3284,809 @@ textarea.form-control {
     font-family: Arial, sans-serif !important;
     overflow: hidden !important;
   }
+}
+
+/* ==========================================================================
+   PDV MOBILE APP MODE (ENQUADRAMENTO VERTICAL PARA SMARTPHONE / CELULAR)
+   ========================================================================== */
+
+/* Botão seletor no toolbar desktop */
+.btn-toggle-mobile {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1)) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: var(--accent-emerald) !important;
+  font-weight: 700 !important;
+}
+
+.btn-toggle-mobile:hover,
+.btn-toggle-mobile.active {
+  background: linear-gradient(135deg, var(--accent-emerald), #059669) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-emerald) !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
+}
+
+/* Elementos mobile ficam ocultos por padrão no desktop */
+.pdv-mobile-app-header,
+.pdv-mobile-nav-tabs,
+.pdv-mobile-bottom-bar {
+  display: none;
+}
+
+/* Stepper de quantidade touch para mobile e desktop */
+.pdv-qty-touch-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 1px;
+}
+
+.pdv-qty-touch-stepper .stepper-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.pdv-qty-touch-stepper .stepper-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--accent-blue);
+}
+
+.pdv-qty-touch-stepper .stepper-inp {
+  width: 44px !important;
+  height: 24px !important;
+  text-align: center !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+/* ==========================================================================
+   ESTILOS ATIVOS QUANDO O MODO CELULAR ESTÁ HABILITADO
+   ========================================================================== */
+body.pdv-mobile-app-mode {
+  overflow-x: hidden;
+  background: #090d16 !important;
+}
+
+/* Oculta menus e topbar desktop para sensação 100% app nativo */
+body.pdv-mobile-app-mode .sidebar,
+body.pdv-mobile-app-mode .topbar,
+body.pdv-mobile-app-mode .period-shortcuts,
+body.pdv-mobile-app-mode .sidebar-toggle-mini-btn {
+  display: none !important;
+}
+
+body.pdv-mobile-app-mode .main-content {
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+  min-height: 100vh !important;
+}
+
+/* Enquadramento vertical do PDV (Simulador de Celular no PC / Fullscreen no Celular) */
+body.pdv-mobile-app-mode #view-pdv {
+  display: flex !important;
+  flex-direction: column !important;
+  max-width: 450px;
+  margin: 0 auto !important;
+  min-height: 100vh !important;
+  background: var(--bg-surface) !important;
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+  padding: 0 0 80px 0 !important;
+  position: relative;
+  box-sizing: border-box;
+}
+
+@media (max-width: 500px) {
+  body.pdv-mobile-app-mode #view-pdv {
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+/* Oculta a barra de cabeçalho desktop horizontal do PDV */
+body.pdv-mobile-app-mode .pos-header-card {
+  display: none !important;
+}
+
+/* Cabeçalho Superior do App Mobile */
+body.pdv-mobile-app-mode .pdv-mobile-app-header {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  backdrop-filter: blur(12px);
+}
+
+.pdv-mob-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pdv-mob-btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pdv-mob-btn-icon:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.pdv-mob-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.pdv-mob-brand-text strong {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.pdv-mob-brand-text span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.pdv-mob-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pdv-mob-client-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 9999px;
+  color: var(--accent-blue);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Abas de Navegação Segmentadas no App Mobile */
+body.pdv-mobile-app-mode .pdv-mobile-nav-tabs {
+  display: flex !important;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 53px;
+  z-index: 110;
+}
+
+.pdv-mob-tab {
+  flex: 1;
+  padding: 0.5rem 0.4rem;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pdv-mob-tab.active {
+  background: var(--accent-blue);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+/* Ajustes no Grid Principal do PDV no Modo Mobile */
+body.pdv-mobile-app-mode .pos-main-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.6rem !important;
+  padding: 0.6rem 0.75rem !important;
+  width: 100% !important;
+}
+
+body.pdv-mobile-app-mode .pos-cart-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.6rem !important;
+}
+
+body.pdv-mobile-app-mode .pos-summary-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Barra de Entrada de Código / Busca no Mobile */
+body.pdv-mobile-app-mode .pos-entry-card {
+  padding: 0.65rem 0.85rem !important;
+  border-radius: var(--radius-md) !important;
+}
+
+body.pdv-mobile-app-mode .pos-entry-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.45rem !important;
+}
+
+body.pdv-mobile-app-mode .pos-entry-grid .form-group {
+  margin-bottom: 0 !important;
+}
+
+/* Painel de Fotos no Modo Mobile */
+body.pdv-mobile-app-mode .pdv-photo-panel {
+  padding: 0.65rem 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+}
+
+body.pdv-mobile-app-mode .pdv-photo-grid {
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 0.55rem !important;
+  max-height: calc(100vh - 280px) !important;
+  overflow-y: auto !important;
+  padding-right: 2px;
+}
+
+body.pdv-mobile-app-mode .pdv-product-card {
+  padding: 0.45rem !important;
+  border-radius: var(--radius-md) !important;
+  gap: 0.35rem !important;
+}
+
+body.pdv-mobile-app-mode .pdv-product-img-wrapper {
+  height: 90px !important;
+}
+
+body.pdv-mobile-app-mode .pdv-product-name {
+  font-size: 0.8rem !important;
+  -webkit-line-clamp: 2 !important;
+  min-height: 2.2em !important;
+}
+
+body.pdv-mobile-app-mode .pdv-product-price-badge {
+  font-size: 0.75rem !important;
+  padding: 0.2rem 0.45rem !important;
+}
+
+/* Carrinho no Modo Mobile */
+body.pdv-mobile-app-mode .pos-table-card {
+  border-radius: var(--radius-md) !important;
+  padding: 0.5rem !important;
+  min-height: 250px !important;
+  max-height: calc(100vh - 250px) !important;
+  overflow-y: auto !important;
+}
+
+body.pdv-mobile-app-mode .pos-cart-table th,
+body.pdv-mobile-app-mode .pos-cart-table td {
+  padding: 0.45rem 0.35rem !important;
+  font-size: 0.8rem !important;
+}
+
+/* No Modo Mobile App, NUNCA exibir venda por fotos/imagem (somente Modo Lista / Leitor) */
+body.pdv-mobile-app-mode #pdv-photo-panel {
+  display: none !important;
+}
+
+/* Ocultar colunas Item e Cód. na tabela do carrinho para enquadramento perfeito na tela vertical */
+body.pdv-mobile-app-mode .pos-cart-table th:nth-child(1),
+body.pdv-mobile-app-mode .pos-cart-table td:nth-child(1),
+body.pdv-mobile-app-mode .pos-cart-table th:nth-child(2),
+body.pdv-mobile-app-mode .pos-cart-table td:nth-child(2) {
+  display: none !important;
+}
+
+/* Controla Exibição Conforme Aba Ativa no Mobile (Aba 1: Lista / Carrinho | Aba 2: Resumo) */
+body.pdv-mobile-app-mode.mob-tab-cart #pdv-barcode-entry-card {
+  display: block !important;
+}
+body.pdv-mobile-app-mode.mob-tab-cart #pdv-cart-table-card {
+  display: flex !important;
+  min-height: 280px !important;
+  max-height: calc(100vh - 270px) !important;
+}
+body.pdv-mobile-app-mode.mob-tab-cart .pos-summary-container {
+  display: none !important;
+}
+
+body.pdv-mobile-app-mode.mob-tab-summary #pdv-barcode-entry-card {
+  display: none !important;
+}
+body.pdv-mobile-app-mode.mob-tab-summary #pdv-cart-table-card {
+  display: none !important;
+}
+body.pdv-mobile-app-mode.mob-tab-summary .pos-summary-container {
+  display: block !important;
+}
+
+/* Barra Fixa Inferior de Checkout (Dock de App Mobile) */
+body.pdv-mobile-app-mode .pdv-mobile-bottom-bar {
+  display: flex !important;
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 100% !important;
+  max-width: 450px !important;
+  background: var(--bg-surface-elevated) !important;
+  border-top: 1px solid var(--border-color) !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4) !important;
+  padding: 0.6rem 0.85rem !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  z-index: 1000 !important;
+  backdrop-filter: blur(12px) !important;
+  box-sizing: border-box;
+}
+
+@media (max-width: 500px) {
+  body.pdv-mobile-app-mode .pdv-mobile-bottom-bar {
+    max-width: 100% !important;
+    left: 0 !important;
+    transform: none !important;
+  }
+}
+
+.pdv-mob-bot-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+
+.pdv-mob-bot-cart-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  position: relative;
+}
+
+.pdv-mob-bot-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--accent-rose);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-surface-elevated);
+}
+
+.pdv-mob-bot-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.pdv-mob-bot-lbl {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.pdv-mob-bot-val {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--accent-emerald);
+}
+
+.pdv-mob-bot-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.pdv-mob-cancel-btn {
+  padding: 0.65rem 0.85rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-md) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  transition: all var(--transition-fast) !important;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdv-mob-cancel-btn:hover,
+.pdv-mob-cancel-btn:active {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.pdv-mob-checkout-btn {
+  padding: 0.65rem 1.15rem !important;
+  font-size: 0.92rem !important;
+  font-weight: 800 !important;
+  border-radius: var(--radius-md) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4) !important;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .pdv-mob-cancel-btn .pdv-mob-cancel-text {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   PADRONIZAÇÃO DA TELA DE TOTALIZAÇÃO NO MODO CELULAR (APP STANDARD)
+   ========================================================================== */
+
+/* 1. Modal de Pagamento e Totalização no Modo Celular */
+body.pdv-mobile-app-mode #pdv-payment-modal {
+  padding: 0 !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-container {
+  width: 100% !important;
+  max-width: 450px !important;
+  max-height: 94vh !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid var(--border-color-strong) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: auto !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 500px) {
+  body.pdv-mobile-app-mode #pdv-payment-modal .modal-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-header {
+  padding: 0.9rem 1.15rem !important;
+  background: var(--bg-surface-elevated) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-title {
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-body {
+  padding: 1rem !important;
+  gap: 0.85rem !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Banner de Totalização com Gradiente Esmeralda no Modo Celular */
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-total-banner {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  border: none !important;
+  padding: 1.15rem 1rem !important;
+  border-radius: var(--radius-lg) !important;
+  text-align: center !important;
+  box-shadow: 0 4px 18px rgba(5, 150, 105, 0.35) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-total-lbl {
+  font-size: 0.75rem !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-total-val,
+body.pdv-mobile-app-mode #pdv-payment-modal #pay-modal-total-display {
+  font-size: 2.2rem !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  margin-top: 0.15rem !important;
+  letter-spacing: -0.5px !important;
+}
+
+/* Formas de Pagamento em Grade 2 Colunas Touch */
+body.pdv-mobile-app-mode #pdv-payment-modal .payment-methods-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 0.65rem !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-method-card {
+  padding: 0.85rem 0.6rem !important;
+  min-height: 72px !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-method-card i {
+  font-size: 1.6rem !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-method-card span {
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-other-methods-box {
+  margin-top: 0.65rem !important;
+  padding: 0.65rem 0.85rem !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-surface-elevated) !important;
+  border: 1px dashed var(--border-color-strong) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .pay-other-select {
+  width: 100% !important;
+  height: 42px !important;
+  font-size: 0.9rem !important;
+}
+
+/* Valor Recebido e Troco no Modo Celular */
+body.pdv-mobile-app-mode #pdv-payment-modal #pay-cash-inputs input {
+  height: 52px !important;
+  font-size: 1.45rem !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  border-radius: var(--radius-md) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal #pay-change-panel {
+  padding: 0.75rem 1rem !important;
+  border-radius: var(--radius-md) !important;
+  text-align: center !important;
+  align-items: center !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal #pay-troco-display {
+  font-size: 1.45rem !important;
+  font-weight: 900 !important;
+  color: var(--accent-blue) !important;
+  text-align: center !important;
+}
+
+/* Footer do Modal Mobile: Botões Verticais de Toque Confortável */
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-footer {
+  padding: 0.85rem 1rem !important;
+  flex-direction: column-reverse !important;
+  gap: 0.55rem !important;
+  background: var(--bg-surface-elevated) !important;
+  border-top: 1px solid var(--border-color) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal .modal-footer .pay-action-buttons {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.55rem !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal #btn-pdv-pay-nfce {
+  width: 100% !important;
+  padding: 0.9rem 1rem !important;
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  justify-content: center !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.45) !important;
+  letter-spacing: 0.5px;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal #btn-pdv-pay-simple {
+  width: 100% !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  justify-content: center !important;
+  border-radius: var(--radius-md) !important;
+}
+
+body.pdv-mobile-app-mode #pdv-payment-modal #btn-pdv-pay-cancel {
+  width: 100% !important;
+  padding: 0.6rem 1rem !important;
+  font-size: 0.85rem !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+/* 2. Aba de Totalização / Resumo no PDV Mobile */
+.pdv-mob-summary-client-box {
+  display: none;
+}
+
+body.pdv-mobile-app-mode .pdv-mob-summary-client-box {
+  display: block !important;
+  background: var(--bg-surface-elevated) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.75rem 0.9rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.pdv-mob-summary-client-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.pdv-mob-summary-client-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+
+.pdv-mob-summary-client-lbl {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pdv-mob-summary-client-val {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.pdv-mobile-app-mode .pos-totals-card {
+  border-radius: var(--radius-lg) !important;
+  padding: 1.1rem !important;
+  box-shadow: var(--shadow-sm) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+body.pdv-mobile-app-mode .pos-grand-total {
+  padding: 1.25rem 1rem !important;
+  border-radius: var(--radius-lg) !important;
+  margin: 0.5rem 0 !important;
+  box-shadow: 0 4px 18px rgba(5, 150, 105, 0.35) !important;
+}
+
+body.pdv-mobile-app-mode .pos-grand-total .lbl {
+  font-size: 0.78rem !important;
+  letter-spacing: 0.08em !important;
+}
+
+body.pdv-mobile-app-mode .pos-grand-total .val {
+  font-size: 2.3rem !important;
+  font-weight: 900 !important;
+}
+
+body.pdv-mobile-app-mode .pos-btn-xl {
+  padding: 1rem 1rem !important;
+  font-size: 1.05rem !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4) !important;
+}
+
+body.pdv-mobile-app-mode .pos-discount-input {
+  font-size: 1.1rem !important;
+  height: 44px !important;
+  border-radius: var(--radius-md) !important;
+}
+
+/* 3. Modal de Comprovante (Receipt) também adaptado ao frame mobile */
+body.pdv-mobile-app-mode #pdv-receipt-modal .modal-container {
+  width: 100% !important;
+  max-width: 450px !important;
+  max-height: 94vh !important;
+  margin: auto !important;
+  border-radius: var(--radius-xl) !important;
+}
+
+@media (max-width: 500px) {
+  body.pdv-mobile-app-mode #pdv-receipt-modal .modal-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+}
+
+body.pdv-mobile-app-mode #pdv-receipt-modal .modal-footer {
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+body.pdv-mobile-app-mode #pdv-receipt-modal .modal-footer > div {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+body.pdv-mobile-app-mode #pdv-receipt-modal .modal-footer button {
+  width: 100% !important;
+  padding: 0.75rem !important;
+  justify-content: center !important;
 }
 
 

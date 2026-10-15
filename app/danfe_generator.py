@@ -1143,11 +1143,11 @@ def render_cupom_termico_html(order_data):
         <span style="font-size: 12px; font-weight: 900; text-transform: uppercase;">CUPOM DE VENDA</span>
         <span style="font-size: 13.5px; font-weight: 900; letter-spacing: 0.5px;">PEDIDO Nº #{cod_ped}</span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 9.5px; margin: 1px 0;">
-        <span>Comprovante de Venda</span>
-        <span>DATA / HORA: {full_data}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 3px 0 2px 0; white-space: nowrap;">
+        <span style="font-size: 11px; font-weight: 900; text-transform: uppercase;">DATA / HORA:</span>
+        <span style="font-size: 13px; font-weight: 900; letter-spacing: 0.5px; -webkit-text-stroke: 0.3px #000;">{full_data}</span>
       </div>
-      <p style="font-size: 8.5px; margin: 1px 0; text-align: center; color: #333;">Documento de Simples Conferência</p>
+      <p style="font-size: 8.5px; margin: 1px 0; text-align: center; color: #333;">Comprovante de Venda - Documento de Simples Conferência</p>
       <div class="divider"></div>
     </div>
 
