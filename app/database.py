@@ -1112,6 +1112,15 @@ def create_pdv_sale(sale_data):
         "Ambiente": sale_data.get("Ambiente")
     }
 
+    from app.config_manager import get_pdv_config
+    cfg = get_pdv_config(id_emp) or {}
+    token_csc = str(cfg.get("Nfce", {}).get("CodigoSeg", "") or "").strip()
+    habilitar_nfce = str(cfg.get("Nfce", {}).get("HabilitarNfce", "1") or "1").strip() != "0"
+
+    emitir_nfce_flag = sale_data.get("EmitirNFCe", True)
+    if emitir_nfce_flag and (not token_csc or not habilitar_nfce):
+        raise ValueError("A emissão de NFC-e está desabilitada no PDV porque o Token de Segurança CSC não está configurado.")
+
     nfce_res = None
     chave_nfe = ""
     if emitir_nfce_flag:

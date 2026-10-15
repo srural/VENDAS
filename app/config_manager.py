@@ -105,7 +105,7 @@ def get_pdv_config(id_empresa=None):
         },
         "Nfce": {
             "CodigoID": "000001", "CodigoSeg": "1317bbaf-264c-41d9-9c71-c75215211f2a",
-            "SerieNfce": "1", "NroNfce": "16", "Ambiente": "2", "Chave": ""
+            "SerieNfce": "1", "NroNfce": "16", "Ambiente": "2", "Chave": "", "HabilitarNfce": "1"
         },
         "Nfe": {
             "SerieNfe": "1", "NroNfe": "1", "Ambiente": "2", "Chave": ""

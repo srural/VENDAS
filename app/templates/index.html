@@ -1683,6 +1683,18 @@
               </h3>
               <form id="form-config-nfce-page" onsubmit="saveNfceConfigPage(event)">
                 <div class="form-grid">
+                  <div class="form-group col-12" style="background: var(--bg-surface-elevated, rgba(255,255,255,0.03)); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                    <div class="form-check" style="display: flex; align-items: center; gap: 0.6rem;">
+                      <input type="checkbox" id="Cfg_Page_Nfce_HabilitarNfce" name="Nfce.HabilitarNfce" value="1" onchange="onNfcePageHabilitarChange()">
+                      <label for="Cfg_Page_Nfce_HabilitarNfce" style="color: var(--text-primary); font-weight: 700; margin: 0; cursor: pointer;">
+                        <i class="fa-solid fa-receipt" style="color: var(--accent-emerald);"></i> Habilitar Emissão de Cupom Fiscal NFC-e no PDV
+                      </label>
+                    </div>
+                    <div id="Cfg_Page_Nfce_TokenWarning" style="font-size: 0.8rem; color: var(--accent-amber); margin-top: 0.35rem; display: none;">
+                      <i class="fa-solid fa-triangle-exclamation"></i> O <strong>Token de Segurança CSC (CodigoSeg)</strong> não está preenchido. Preencha o Token abaixo para habilitar a opção de NFC-e.
+                    </div>
+                  </div>
+
                   <div class="form-group col-4">
                     <label>Série NFC-e (SerieNfce) *</label>
                     <input type="text" id="Cfg_Page_Nfce_Serie" name="Nfce.SerieNfce" class="form-control" value="1" required>
@@ -1700,11 +1712,11 @@
                   </div>
                   <div class="form-group col-4">
                     <label>ID do Token CSC (CodigoID) *</label>
-                    <input type="text" id="Cfg_Page_Nfce_CodigoID" name="Nfce.CodigoID" class="form-control" placeholder="000001" value="000001" required>
+                    <input type="text" id="Cfg_Page_Nfce_CodigoID" name="Nfce.CodigoID" class="form-control" placeholder="000001" value="000001">
                   </div>
                   <div class="form-group col-8">
-                    <label>Chave / Token de Segurança CSC (CodigoSeg) *</label>
-                    <input type="text" id="Cfg_Page_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a" value="1317bbaf-264c-41d9-9c71-c75215211f2a" required>
+                    <label>Chave / Token de Segurança CSC (CodigoSeg)</label>
+                    <input type="text" id="Cfg_Page_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a" value="1317bbaf-264c-41d9-9c71-c75215211f2a" oninput="checkNfcePageTokenState()">
                   </div>
                   <div class="form-group col-12">
                     <label>Chave de Acesso Padrão / Última NFC-e Emitida</label>
@@ -3410,7 +3422,7 @@
           <i class="fa-solid fa-arrow-left"></i> Voltar / Cancelar
         </button>
 
-        <div class="pay-action-buttons" style="display: flex; gap: 0.5rem;">
+        <div class="pay-action-buttons" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <button type="button" class="btn btn-secondary" id="btn-pdv-pay-simple" onclick="submitPdvSale(false)">
             <i class="fa-solid fa-receipt"></i> Venda Simples
           </button>
@@ -3418,6 +3430,9 @@
           <button type="button" class="btn btn-emerald btn-lg" id="btn-pdv-pay-nfce" onclick="submitPdvSale(true)" style="padding: 0.6rem 1.25rem; font-weight: 700;">
             <i class="fa-solid fa-check"></i> Emitir NFC-e (F9)
           </button>
+          <span id="pdv-pay-nfce-disabled-hint" style="display: none; font-size: 0.78rem; color: var(--accent-amber); font-weight: 600;">
+            <i class="fa-solid fa-triangle-exclamation"></i> NFC-e desabilitada (Token CSC não configurado)
+          </span>
         </div>
       </div>
     </div>
@@ -3523,6 +3538,18 @@
           <!-- TAB 3: NFC-E / FISCAL -->
           <div class="tab-content" id="tab-cfg-nfce">
             <div class="form-grid">
+              <div class="form-group col-12" style="background: var(--bg-surface-elevated, rgba(255,255,255,0.03)); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                <div class="form-check" style="display: flex; align-items: center; gap: 0.6rem;">
+                  <input type="checkbox" id="cfg_Nfce_HabilitarNfce" name="Nfce.HabilitarNfce" value="1" onchange="onNfceHabilitarChange()">
+                  <label for="cfg_Nfce_HabilitarNfce" style="color: var(--text-primary); font-weight: 700; margin: 0; cursor: pointer;">
+                    <i class="fa-solid fa-receipt" style="color: var(--accent-emerald);"></i> Habilitar Emissão de Cupom Fiscal NFC-e no PDV
+                  </label>
+                </div>
+                <div id="cfg_Nfce_TokenWarning" style="font-size: 0.8rem; color: var(--accent-amber); margin-top: 0.35rem; display: none;">
+                  <i class="fa-solid fa-triangle-exclamation"></i> O <strong>Token de Segurança CSC (CodigoSeg)</strong> não está preenchido. Preencha o Token abaixo para habilitar a opção de NFC-e.
+                </div>
+              </div>
+
               <div class="form-group col-4">
                 <label>Série NFC-e (SerieNfce)</label>
                 <input type="text" id="cfg_Nfce_SerieNfce" name="Nfce.SerieNfce" class="form-control" value="1">
@@ -3540,7 +3567,7 @@
 
               <div class="form-group col-12">
                 <label>Token de Segurança CSC (CodigoSeg)</label>
-                <input type="text" id="cfg_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a">
+                <input type="text" id="cfg_Nfce_CodigoSeg" name="Nfce.CodigoSeg" class="form-control" placeholder="1317bbaf-264c-41d9-9c71-c75215211f2a" oninput="checkNfceTokenState()">
               </div>
 
               <div class="form-group col-6">

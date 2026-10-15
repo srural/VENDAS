@@ -2166,6 +2166,37 @@ function onOtherPaymentMethodChange(selectEl) {
   }
 }
 
+function isNfceTokenConfigured() {
+  const token = (window.currentPdvConfig && window.currentPdvConfig.Nfce && window.currentPdvConfig.Nfce.CodigoSeg) 
+             || (document.getElementById('cfg_Nfce_CodigoSeg') ? document.getElementById('cfg_Nfce_CodigoSeg').value : '')
+             || (document.getElementById('Cfg_Page_Nfce_CodigoSeg') ? document.getElementById('Cfg_Page_Nfce_CodigoSeg').value : '');
+  const habilitada = !window.currentPdvConfig || !window.currentPdvConfig.Nfce || window.currentPdvConfig.Nfce.HabilitarNfce !== '0';
+  return !!(token && token.trim() && habilitada);
+}
+
+function updatePdvNfceButtonState() {
+  const btnNfce = document.getElementById('btn-pdv-pay-nfce') || document.querySelector('#pdv-payment-modal .btn-emerald');
+  const hintEl = document.getElementById('pdv-pay-nfce-disabled-hint');
+  const tokenOk = isNfceTokenConfigured();
+
+  if (btnNfce) {
+    if (!tokenOk) {
+      btnNfce.disabled = true;
+      btnNfce.style.opacity = '0.45';
+      btnNfce.style.cursor = 'not-allowed';
+      btnNfce.title = 'NFC-e desabilitada: O Token CSC não está preenchido nas configurações do PDV.';
+    } else {
+      btnNfce.disabled = false;
+      btnNfce.style.opacity = '1';
+      btnNfce.style.cursor = 'pointer';
+      btnNfce.title = 'Emitir NFC-e e finalizar venda (F9)';
+    }
+  }
+  if (hintEl) {
+    hintEl.style.display = tokenOk ? 'none' : 'inline-block';
+  }
+}
+
 function openPaymentModal() {
   if (!pdvCart.length) {
     showToast('O carrinho está vazio. Adicione produtos antes de finalizar.', 'error');
@@ -2183,6 +2214,9 @@ function openPaymentModal() {
   calcPdvTotals();
   loadPdvPaymentMethods();
   selectPdvPaymentMethod('DINHEIRO', 'DINHEIRO', 'DINHEIRO');
+
+  // Atualiza estado do botão de NFC-e conforme preenchimento do Token CSC
+  updatePdvNfceButtonState();
 
   document.getElementById('pdv-payment-modal').classList.add('active');
   if (valRecEl) {
@@ -2206,6 +2240,12 @@ async function submitPdvSale(emitirNfceFlag = true) {
   }
   if (!pdvCart || !pdvCart.length) {
     showToast('O carrinho de compras está vazio!', 'warning');
+    return;
+  }
+
+  // Se solicitada emissão de NFC-e mas o Token CSC não estiver preenchido, bloqueia
+  if (emitirNfceFlag && !isNfceTokenConfigured()) {
+    showToast('A emissão de NFC-e está desabilitada porque o Token CSC não está configurado no PDV. Configure o Token para emitir ou utilize Venda Simples.', 'warning', 5000);
     return;
   }
 
@@ -3136,10 +3176,20 @@ async function loadPdvConfig() {
 
     // [Nfce]
     const n = cfg.Nfce || {};
+    window.currentPdvConfig = cfg;
     setElVal('cfg_Nfce_SerieNfce', n.SerieNfce || '1');
     setElVal('cfg_Nfce_NroNfce', n.NroNfce || '1');
     setElVal('cfg_Nfce_CodigoID', n.CodigoID || '');
     setElVal('cfg_Nfce_CodigoSeg', n.CodigoSeg || '');
+
+    const tokenVal = (n.CodigoSeg || '').trim();
+    const chkHabilitar = document.getElementById('cfg_Nfce_HabilitarNfce');
+    if (chkHabilitar) {
+      chkHabilitar.checked = Boolean(tokenVal && n.HabilitarNfce !== '0');
+      chkHabilitar.disabled = !tokenVal;
+    }
+    checkNfceTokenState();
+    updatePdvNfceButtonState();
 
     // [boleto]
     const b = cfg.boleto || {};
@@ -3152,8 +3202,71 @@ async function loadPdvConfig() {
   }
 }
 
+function checkNfceTokenState() {
+  const tokenInput = document.getElementById('cfg_Nfce_CodigoSeg');
+  const tokenVal = (tokenInput ? tokenInput.value : '').trim();
+  const chkHabilitar = document.getElementById('cfg_Nfce_HabilitarNfce');
+  const warningEl = document.getElementById('cfg_Nfce_TokenWarning');
+
+  if (!tokenVal) {
+    if (chkHabilitar) {
+      chkHabilitar.checked = false;
+      chkHabilitar.disabled = true;
+    }
+    if (warningEl) warningEl.style.display = 'block';
+  } else {
+    if (chkHabilitar) {
+      chkHabilitar.disabled = false;
+      if (chkHabilitar.dataset.manuallyUnchecked !== 'true') {
+        chkHabilitar.checked = true;
+      }
+    }
+    if (warningEl) warningEl.style.display = 'none';
+  }
+}
+
+function onNfceHabilitarChange() {
+  const chk = document.getElementById('cfg_Nfce_HabilitarNfce');
+  if (chk) {
+    chk.dataset.manuallyUnchecked = chk.checked ? 'false' : 'true';
+  }
+}
+
+function checkNfcePageTokenState() {
+  const tokenInput = document.getElementById('Cfg_Page_Nfce_CodigoSeg');
+  const tokenVal = (tokenInput ? tokenInput.value : '').trim();
+  const chkHabilitar = document.getElementById('Cfg_Page_Nfce_HabilitarNfce');
+  const warningEl = document.getElementById('Cfg_Page_Nfce_TokenWarning');
+
+  if (!tokenVal) {
+    if (chkHabilitar) {
+      chkHabilitar.checked = false;
+      chkHabilitar.disabled = true;
+    }
+    if (warningEl) warningEl.style.display = 'block';
+  } else {
+    if (chkHabilitar) {
+      chkHabilitar.disabled = false;
+      if (chkHabilitar.dataset.manuallyUnchecked !== 'true') {
+        chkHabilitar.checked = true;
+      }
+    }
+    if (warningEl) warningEl.style.display = 'none';
+  }
+}
+
+function onNfcePageHabilitarChange() {
+  const chk = document.getElementById('Cfg_Page_Nfce_HabilitarNfce');
+  if (chk) {
+    chk.dataset.manuallyUnchecked = chk.checked ? 'false' : 'true';
+  }
+}
+
 async function savePdvConfig(e) {
   e.preventDefault();
+  const tokenCscVal = getElVal('cfg_Nfce_CodigoSeg').trim();
+  const isHabilitada = Boolean(tokenCscVal && getElCheck('cfg_Nfce_HabilitarNfce'));
+
   const payload = {
     Config: {
       Porta: getElVal('cfg_Config_Porta'),
@@ -3176,7 +3289,8 @@ async function savePdvConfig(e) {
       SerieNfce: getElVal('cfg_Nfce_SerieNfce'),
       NroNfce: getElVal('cfg_Nfce_NroNfce'),
       CodigoID: getElVal('cfg_Nfce_CodigoID'),
-      CodigoSeg: getElVal('cfg_Nfce_CodigoSeg')
+      CodigoSeg: getElVal('cfg_Nfce_CodigoSeg'),
+      HabilitarNfce: isHabilitada ? '1' : '0'
     },
     boleto: {
       Banco: getElVal('cfg_boleto_Banco'),
@@ -3194,6 +3308,11 @@ async function savePdvConfig(e) {
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'Erro ao salvar');
+
+    if (window.currentPdvConfig) {
+      window.currentPdvConfig = Object.assign(window.currentPdvConfig, payload);
+    }
+    updatePdvNfceButtonState();
 
     showToast(result.message || 'Configurações salvas com sucesso no banco de dados (tabela CfgPdv)!', 'success');
     closePdvConfigModal();
@@ -5592,6 +5711,8 @@ async function loadPdvConfigAll() {
     const cfg = await res.json();
     if (!res.ok) return;
 
+    window.currentPdvConfig = cfg;
+
     // NF-e
     if (cfg.Nfe) {
       if (document.getElementById('Cfg_Page_Nfe_Serie')) document.getElementById('Cfg_Page_Nfe_Serie').value = cfg.Nfe.SerieNfe || '1';
@@ -5615,6 +5736,15 @@ async function loadPdvConfigAll() {
       if (document.getElementById('Cfg_Page_Nfce_CodigoID')) document.getElementById('Cfg_Page_Nfce_CodigoID').value = cfg.Nfce.CodigoID || '000001';
       if (document.getElementById('Cfg_Page_Nfce_CodigoSeg')) document.getElementById('Cfg_Page_Nfce_CodigoSeg').value = cfg.Nfce.CodigoSeg || '';
       if (document.getElementById('Cfg_Page_Nfce_Chave')) document.getElementById('Cfg_Page_Nfce_Chave').value = cfg.Nfce.Chave || '';
+
+      const pageTokenVal = (cfg.Nfce.CodigoSeg || '').trim();
+      const pageChk = document.getElementById('Cfg_Page_Nfce_HabilitarNfce');
+      if (pageChk) {
+        pageChk.checked = Boolean(pageTokenVal && cfg.Nfce.HabilitarNfce !== '0');
+        pageChk.disabled = !pageTokenVal;
+      }
+      checkNfcePageTokenState();
+      updatePdvNfceButtonState();
     }
 
     // Certificado
@@ -5814,6 +5944,10 @@ async function saveNfceConfigPage(e) {
     const el = document.getElementById(id);
     return el ? el.value : fallback;
   };
+  const tokenVal = getVal('Cfg_Page_Nfce_CodigoSeg', '').trim();
+  const pageChk = document.getElementById('Cfg_Page_Nfce_HabilitarNfce');
+  const isHab = Boolean(tokenVal && (!pageChk || pageChk.checked));
+
   const payload = {
     Nfce: {
       SerieNfce: getVal('Cfg_Page_Nfce_Serie', '1'),
@@ -5821,10 +5955,15 @@ async function saveNfceConfigPage(e) {
       Ambiente: getVal('Cfg_Page_Nfce_Ambiente', '2'),
       CodigoID: getVal('Cfg_Page_Nfce_CodigoID', '000001'),
       CodigoSeg: getVal('Cfg_Page_Nfce_CodigoSeg', ''),
+      HabilitarNfce: isHab ? '1' : '0',
       Chave: getVal('Cfg_Page_Nfce_Chave', '')
     }
   };
   await postPdvConfigSave(payload, 'Parâmetros de NFC-e (Modelo 65) salvos com sucesso!');
+  if (window.currentPdvConfig) {
+    window.currentPdvConfig.Nfce = Object.assign(window.currentPdvConfig.Nfce || {}, payload.Nfce);
+  }
+  updatePdvNfceButtonState();
 }
 
 async function saveCertConfigPage(e) {
