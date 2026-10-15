@@ -337,53 +337,116 @@ def generate_protocolo_sefaz(uf="135"):
     rand_seq = str(random.randint(1000, 9999))
     return f"{uf}{now_str}{rand_seq}"
 
-def format_sefaz_datetime(dt_val=None, hora_val=None):
-    now = datetime.datetime.now()
-    now_iso = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
-    if not dt_val:
-        return now_iso
-    
-    s = str(dt_val).strip()
-    if not s or s.lower() == 'none':
-        return now_iso
-    
-    if "T" in s and len(s) >= 19:
-        if len(s) == 19:
-            return f"{s}-03:00"
-        return s
+UF_TZ_OFFSET = {
+    "AC": "-05:00",
+    "AM": "-04:00", "MT": "-04:00", "MS": "-04:00", "RO": "-04:00", "RR": "-04:00",
+}
 
-    hora_str = ""
+def get_sefaz_tz_offset(uf="SP"):
+    if not uf:
+        return "-03:00"
+    return UF_TZ_OFFSET.get(str(uf).upper().strip(), "-03:00")
+
+def format_sefaz_datetime(dt_val=None, hora_val=None, uf="SP", is_emissao=True, min_dt=None):
+    """
+    Formata data e hora no padrão exigido pela SEFAZ (AAAA-MM-DDTHH:MM:SS-03:00).
+    Aplica proteção ativa contra a Rejeição 703 (Data-Hora de Emissão posterior ao horário de recebimento):
+    1. Calcula o horário seguro atual da máquina com margem de segurança de 2 minutos retroativos (safe_now = now - 2 min),
+       evitando rejeições por descompasso entre o relógio local do computador e os servidores NTP da SEFAZ (tolerância oficial de 5 min).
+    2. Se a data de emissão for hoje (ou no futuro), a hora nunca poderá ultrapassar o horário seguro atual.
+       Se a hora do pedido for futura em relação ao relógio local, ajusta automaticamente para o horário atual seguro.
+    3. Para dhSaiEnt (data/hora de saída), garante que não seja anterior à data/hora de emissão (min_dt).
+    """
+    now = datetime.datetime.now()
+    # Margem de segurança de 2 minutos para absorver desvio entre o relógio local e o servidor da SEFAZ
+    safe_now = now - datetime.timedelta(minutes=2)
+    tz_offset = get_sefaz_tz_offset(uf)
+
+    # 1. Extrair data
+    target_date = safe_now.date()
+    has_custom_date = False
+
+    if dt_val:
+        s = str(dt_val).strip()
+        if s and s.lower() != 'none':
+            if "T" in s:
+                try:
+                    iso_clean = s.split("+")[0].split("-0")[0].split("-03")[0].split("-04")[0].split("-05")[0].split("Z")[0]
+                    parsed_iso = datetime.datetime.fromisoformat(iso_clean)
+                    target_date = parsed_iso.date()
+                    if not hora_val:
+                        hora_val = parsed_iso.strftime("%H:%M:%S")
+                    has_custom_date = True
+                except Exception:
+                    pass
+
+            if not has_custom_date:
+                m_br = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})', s)
+                if m_br:
+                    d, m, y = m_br.groups()
+                    try:
+                        target_date = datetime.date(int(y), int(m), int(d))
+                        has_custom_date = True
+                    except Exception:
+                        pass
+                else:
+                    m_iso = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})', s)
+                    if m_iso:
+                        y, m, d = m_iso.groups()
+                        try:
+                            target_date = datetime.date(int(y), int(m), int(d))
+                            has_custom_date = True
+                        except Exception:
+                            pass
+
+    # 2. Extrair hora
+    target_time = safe_now.time()
     if hora_val:
         h = str(hora_val).strip()
-        if re.match(r'^\d{2}:\d{2}:\d{2}$', h):
-            hora_str = h
-        elif re.match(r'^\d{2}:\d{2}$', h):
-            hora_str = f"{h}:00"
-    
-    if not hora_str:
-        hora_str = now.strftime("%H:%M:%S")
+        m_time = re.match(r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$', h)
+        if m_time:
+            hh, mm, ss = m_time.groups()
+            try:
+                target_time = datetime.time(int(hh), int(mm), int(ss or 0))
+            except Exception:
+                pass
 
-    m_br = re.match(r'^(\d{2})/(\d{2})/(\d{4})', s)
-    if m_br:
-        d, m, y = m_br.groups()
-        return f"{y}-{m}-{d}T{hora_str}-03:00"
+    # Se a data for futura em relação ao relógio do computador, limita a hoje
+    if target_date > now.date():
+        target_date = safe_now.date()
+        target_time = safe_now.time()
 
-    m_iso = re.match(r'^(\d{4})-(\d{2})-(\d{2})', s)
-    if m_iso:
-        y, m, d = m_iso.groups()
-        return f"{y}-{m}-{d}T{hora_str}-03:00"
+    # Combinar data e hora
+    candidate_dt = datetime.datetime.combine(target_date, target_time)
 
-    return now_iso
+    # 3. Proteção anti-Rejeição 703
+    # dhEmi não pode estar no futuro da SEFAZ
+    if candidate_dt > safe_now:
+        candidate_dt = safe_now
+
+    # 4. Para dhSaiEnt (saída), garantir que não seja anterior a dhEmi (min_dt)
+    if min_dt:
+        try:
+            s_min = str(min_dt).split("+")[0].split("-0")[0].split("Z")[0]
+            if "T" in s_min:
+                min_dt_parsed = datetime.datetime.fromisoformat(s_min[:19])
+                if candidate_dt < min_dt_parsed:
+                    candidate_dt = min_dt_parsed
+        except Exception:
+            pass
+
+    return candidate_dt.strftime(f"%Y-%m-%dT%H:%M:%S{tz_offset}")
 
 def build_nfe_55_xml(order, company, items, chave_nfe, protocolo=None, envelope_proc=True):
     """
     Builds a compliant SEFAZ NF-e 4.00 (Modelo 55 - Nota Fiscal Eletrônica) XML structure
     incorporating all fields from FrmNota (Header, Transport, Volumes, Taxes, Custom Obs)
     """
-    hora_ped = order.get("Hora")
-    dh_emiss = format_sefaz_datetime(order.get("Emissao") or order.get("DataEmiss"), hora_ped)
-    dh_saida = format_sefaz_datetime(order.get("Saida") or order.get("DtSaida") or order.get("Emissao") or order.get("DataEmiss"), hora_ped)
     c_mun_emp = clean_ibge_mun(company.get("CodigoIBGE") or company.get("CodMun"), "3550308")
+    uf_sigla = company.get("Uf") or company.get("UF") or (c_mun_emp[:2] if len(c_mun_emp) >= 2 else "SP")
+    hora_ped = order.get("Hora")
+    dh_emiss = format_sefaz_datetime(order.get("Emissao") or order.get("DataEmiss"), hora_ped, uf=uf_sigla, is_emissao=True)
+    dh_saida = format_sefaz_datetime(order.get("Saida") or order.get("DtSaida") or order.get("Emissao") or order.get("DataEmiss"), hora_ped, uf=uf_sigla, is_emissao=False, min_dt=dh_emiss)
 
     from app.nfce import sanitize_sefaz_string
 

@@ -1491,7 +1491,10 @@ def update_nfe_order_details(cod_ped, data):
                     "Transportadora" = COALESCE(%s, "Transportadora"),
                     "ValorFrete" = COALESCE(%s, "ValorFrete"),
                     "Desconto" = COALESCE(%s, "Desconto"),
-                    "Obs" = COALESCE(%s, "Obs")
+                    "Obs" = COALESCE(%s, "Obs"),
+                    "DataEmiss" = COALESCE(%s, "DataEmiss"),
+                    "DtSaida" = COALESCE(%s, "DtSaida"),
+                    "Hora" = COALESCE(%s, "Hora")
                 WHERE "CodPed" = %s
             ''', (
                 data.get("Cfo"),
@@ -1499,6 +1502,9 @@ def update_nfe_order_details(cod_ped, data):
                 data.get("ValorFrete"),
                 data.get("Desconto"),
                 data.get("ObsRodape") or data.get("Obs"),
+                data.get("Emissao") or data.get("DataEmiss"),
+                data.get("Saida") or data.get("DtSaida"),
+                data.get("Hora"),
                 cod_ped
             ))
 
@@ -1560,6 +1566,12 @@ def emit_nfe_from_order(cod_ped, custom_data=None):
     order = order_details["pedido"]
     if custom_data and isinstance(custom_data, dict):
         order.update(custom_data)
+        if custom_data.get("Emissao"):
+            order["DataEmiss"] = custom_data["Emissao"]
+        if custom_data.get("Saida"):
+            order["DtSaida"] = custom_data["Saida"]
+        if custom_data.get("Hora"):
+            order["Hora"] = custom_data["Hora"]
 
     # Bloqueio de duplicidade fiscal: impedir emissão de NF-e 55 para pedidos já faturados com NFC-e 65
     sat_chave = str(order.get("Sat") or "").strip()

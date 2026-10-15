@@ -130,9 +130,13 @@ def build_nfce_xml(sale, company, items, chave_nfe, protocolo, serie="1", nnf=1,
     Builds a compliant SEFAZ NFC-e 4.00 XML structure using CfgPdv parameters
     """
     now = datetime.datetime.now()
-    dh_emiss = now.strftime("%Y-%m-%dT%H:%M:%S-03:00")
-    amb_val = str(ambiente or sale.get("Ambiente") or "2")
+    safe_now = now - datetime.timedelta(minutes=2)
     c_mun_emp = clean_ibge_mun(company.get("CodigoIBGE") or company.get("CodMun"), "3550308")
+    uf_sigla = company.get("Uf") or company.get("UF") or (c_mun_emp[:2] if len(c_mun_emp) >= 2 else "SP")
+    from app.nfe_engine import get_sefaz_tz_offset
+    tz_offset = get_sefaz_tz_offset(uf_sigla)
+    dh_emiss = safe_now.strftime(f"%Y-%m-%dT%H:%M:%S{tz_offset}")
+    amb_val = str(ambiente or sale.get("Ambiente") or "2")
 
     # Root NFe
     nfe = ET.Element("NFe", xmlns="http://www.portalfiscal.inf.br/nfe")

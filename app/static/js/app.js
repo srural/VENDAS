@@ -5947,9 +5947,15 @@ async function openNfeEmissaoModal(codPed, autoValidar = false) {
     setElVal('FrmNota_NroNfe', ped.NroNfe || cfgNfe.NroNfe || '1');
     setElVal('FrmNota_SerieNfe', ped.SerieNfe || cfgNfe.SerieNfe || '1');
     setElVal('FrmNota_Cfo', ped.Cfo || '5102 - VENDA DE MERCADORIA ADQUIRIDA OU RECEBIDA DE TERCEIROS');
-    setElVal('FrmNota_Emissao', ped.DataEmiss || new Date().toLocaleDateString('pt-BR'));
-    setElVal('FrmNota_Saida', ped.DtSaida || ped.DataEmiss || new Date().toLocaleDateString('pt-BR'));
-    setElVal('FrmNota_Hora', ped.Hora || new Date().toLocaleTimeString('pt-BR'));
+    const hojeStr = new Date().toLocaleDateString('pt-BR');
+    const horaAtual = new Date().toLocaleTimeString('pt-BR');
+    setElVal('FrmNota_Emissao', ped.DataEmiss || hojeStr);
+    setElVal('FrmNota_Saida', ped.DtSaida || ped.DataEmiss || hojeStr);
+    if (!ped.Hora || (ped.DataEmiss && ped.DataEmiss === hojeStr)) {
+      setElVal('FrmNota_Hora', horaAtual);
+    } else {
+      setElVal('FrmNota_Hora', ped.Hora || horaAtual);
+    }
 
     setElVal('FrmNota_CodEntidade', ped.Entidade || ped.CodEntidade || '');
     setElVal('FrmNota_NomeCliente', ped.NomeCliente || ped.Nome || '');
@@ -6225,6 +6231,13 @@ async function transmitirNfeFrmNota() {
     showToast('Bloqueio SEFAZ: Este pedido já possui Cupom Fiscal NFC-e emitido. Não é permitido emitir NF-e 55.', 'warning', 5000);
     return;
   }
+
+  // Sincroniza o campo de Hora com o horário atual do computador antes de transmitir à SEFAZ
+  const horaEl = document.getElementById('FrmNota_Hora');
+  if (horaEl) {
+    horaEl.value = new Date().toLocaleTimeString('pt-BR');
+  }
+
   showToast('Conectando ao WebService SEFAZ 4.00 e transmitindo NF-e...', 'info');
 
   const payload = getFrmNotaFormData();
@@ -6264,6 +6277,7 @@ function getFrmNotaFormData() {
     Cfo: document.getElementById('FrmNota_Cfo') ? document.getElementById('FrmNota_Cfo').value : '',
     Emissao: document.getElementById('FrmNota_Emissao') ? document.getElementById('FrmNota_Emissao').value : '',
     Saida: document.getElementById('FrmNota_Saida') ? document.getElementById('FrmNota_Saida').value : '',
+    Hora: document.getElementById('FrmNota_Hora') ? document.getElementById('FrmNota_Hora').value : '',
     ModFrete: document.getElementById('FrmNota_ModFrete') ? document.getElementById('FrmNota_ModFrete').value : '9',
     NomeTransp: document.getElementById('FrmNota_NomeTransp') ? document.getElementById('FrmNota_NomeTransp').value : '',
     CnpjsTransp: document.getElementById('FrmNota_CnpjsTransp') ? document.getElementById('FrmNota_CnpjsTransp').value : '',
